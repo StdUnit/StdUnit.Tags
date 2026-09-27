@@ -18,12 +18,19 @@
 
 
 
-这是一个面向工业交互场景的类库：
+这是一个面向工业交互场景的类库家族：
 
 * 免费开源: 整个类库家族都是MIT授权，而且相关依赖链也都是(或近乎是)MIT授权。
 * 高度模块化: 每种硬件实现，以`nuget`包为单元，各自独立。
 * 易于扩展：照抄这里内置的设备实现，实现你自己的通讯封装，然后编写一个`.AddYourOwnSupport()`扩展方法挂接上去。比如，在我的树莓派上，我基于它造了一个监控GPIO、和 Linux ProcInfo、MemInfo等系统信息的网页程序。
 * 跨平台：依托于`dotnet`跨平台的能力，让你的代码跑到各种设备上。
+
+这不是`framework`，而是一个`library`家族。我们希望它能被灵活地组合到各种场景，而不是仅仅被当做一个项目模板。它的核心是一组统一的、可扩展的通信类库的抽象，以及在此基础之上提供的开箱即用的交互方式。目前，我们只提供一种交互方式：严格的串行轮询(有意地模仿了 PLC 的扫描机制)。
+
+0. 执行外部意图
+1. 读入数据 
+2. 处理逻辑
+3. 刷写底层
 
 > **在正式发布1.0版本之前，这个包只会发布在我的测试源上**。
 > 如果你使用`nuget`管理，请参照[示例](https://github.com/newbienewbie/Itminus.Tags.WPFDemo/blob/867a5063bc65ec16f77692d4c56ce9da5a38dc3c/nuget.config#L3-L8)，指定包源为 https://baget.stdunit.com/v3/index.json ；
@@ -39,81 +46,28 @@
 
 你可以仅使用这个类库中的通信功能；不过我们更推荐你采用它默认的交互方式，**你只管提供描述(`xml`)，我们负责让它跑起来**。
 
-其中，你提供的描述类似于：
-```xml
-<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="Schemas/tagsproject.xsd"
-         xmlns:s7="tags:s7">
-	<!-- 通道，可以配置多个-->
-	<Channel name="S7-1" driver="S7" >
-		<s7:IpAddr>172.16.10.20</s7:IpAddr>
-		<s7:Rack>0</s7:Rack>
-		<s7:Slot>1</s7:Slot>
-	</Channel>
-
-	<!-- 测点配置，可以配置多个 -->
-	<TagGrp name="IoBox" isEntry="true" isEnabled="true" channel="S7-1" scanInterval="0">
-		<TagGrp name="通用状态">
-			<TagCbnt name="PLC" address="DB200.100" access="RO">
-				<Tag name="心跳请求" address="$$100.0" type="BIT" access="RO"></Tag>
-				<Tag name="状态码" address="$$102.0" type="INT16" access="RW" endian="BigEndian"></Tag>
-			</TagCbnt>
-			<TagCbnt name="MST" address="DB201.100" access="R1W">
-				<Tag name="心跳响应" address="$$100.0" type="BIT" access="R1W"></Tag>
-				<Tag name="扫描周期" address="$$102.0" type="FLOAT" access="R1W"></Tag>
-			</TagCbnt>
-		</TagGrp>
-	</TagGrp>
-
-	<!-- 逻辑配置，可以配置0~N个 -->
-	<!--<Logicet>Samples.Plugin1.dll</Logicet>-->
-</Project>
+我们提供了模板来快速创建脚手架
+```bash
+dotnet new install Itminus.Tags.Templates
 ```
 
-> 说明：
-> 
-> - 如果你喜欢简洁一些，也可以省掉上面XML的命名空间和Schema。代价是不再有智能提示和运行前校验。
-> - 文档根元素是 `<Project>`。`xsi:noNamespaceSchemaLocation` 指向还原包后自动注入的 XSD
->   （`Itminus.Tags.Core` 的 buildTransitive targets 会把 `Schemas/tagsproject.xsd` 以链接项注入项目树），
->   编辑器即可获得智能提示/校验；驱动专属子元素（`<s7:IpAddr>` 等）带驱动命名空间前缀。
-> - 运行期解析不校验根元素名与命名空间——不带前缀的老格式（`<root>` + `<IpAddr>`）在不启用
->   `EnableXmlSchemaValidation()` 时照常加载。
-
-我们的启动代码类似于：
-```c#
-// 项目启停控制器
-var ctrl = sp.GetRequiredService<ITagsProjectCtrl>();
-
-var dir ="D:/manufacture/pl01/";	// 提供项目运行目录，其中有通信点表和可能用到的插件
-XElement? root = null;			// 空表示使用默认的`index.xml`来配置项目
-
-await ctrl.StartPollAsync(dir, root, hook: async(proj, sp, ct) =>{
-    // 添加心跳信号逻辑
-    proj.Logicets.Add(new HeartBeatLogicet(
-        proj.Channels,
-        proj.Tags,
-        loggerFactory.CreateLogger<HeartBeatLogicet>()
-    ));
-	// ... 添加更多业务逻辑
-
-    // ...可选但推荐：如注册 proj.TurnStarted 或者 projCrashed 事件处理
-});
+然后即可以创建相关模板项目：
+```bash
+dotnet new tags.wpf # 这会创建一个 WPF 模板项目
+dotnet new tags.web # 这会创建一个 ASP.NET Core 项目
 ```
 
 优势：
-- 硬件无关抽象：理论上，你可以在家里用[S7模拟器](https://github.com/newbienewbie/S7SvrSim)编写自动化测试，验证你的逻辑，最后到现场前再切换到`OpcUa`设备上(或者反过来)。
-- 支持逻辑组件插件(dll)
-- 支持通过MCP方式暴露给AI：把测点项目描述作为上下文，AI可以轻松操作点位
+- 硬件无关抽象：理论上，你可以在家里用[S7模拟器](https://github.com/newbienewbie/S7SvrSim)编写自动化测试，验证你的逻辑，最后到现场前再切换到`OpcUa`设备上(或者反过来)。或者你不想用任何模拟器的话，可以直接使用“测点即文件”的功能，用文件系统来测试你的`S7`、`OpcUa`逻辑。
 - “测点即文件”: 添加`Itminus.Tags.SimpleFiles`支持，可以把测点树映射为文件树，让你轻松读写和变更配置。配合`R1W`+`IsScaned`，可以尽可能减少文件系统的访问次数。
+- 支持逻辑组件插件(dll)
+- 支持通过MCP方式暴露给AI：把测点项目描述作为上下文，让AI可以轻松操作你的设备
 
 ## 文档
 
-开发者示例: 
-1. 本仓库自带的[Samples](https://github.com/newbienewbie/Itminus.Tags/tree/dev/samples): 主要用于开发验证+喂狗
-2. 供新手熟悉功能[WPFDemo](https://github.com/newbienewbie/Itminus.Tags.WPFDemo): 按分支演示功能。
-
-具体文档可以查看：[tags.doc](http://tags.doc.stdunit.com) 
-
+0. 我为本类库编写了教程，部署在[tags.doc](http://tags.doc.stdunit.com)。
+1. 供新手熟悉功能[WPFDemo](https://github.com/newbienewbie/Itminus.Tags.WPFDemo): 按分支演示功能。
+2. 本仓库自带的[Samples](https://github.com/newbienewbie/Itminus.Tags/tree/dev/samples): 主要用于开发验证+喂狗。
 
 ## 文件夹结构
 
