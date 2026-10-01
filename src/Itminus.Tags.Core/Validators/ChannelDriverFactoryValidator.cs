@@ -36,7 +36,9 @@ public class ChannelDriverFactoryValidator : ITagsProjectValidator
         foreach (var channel in root.Elements("Channel"))
         {
             var driver = channel.Attribute("driver")?.Value;
-            if (string.IsNullOrEmpty(driver))
+            // 本来这个地方是 string.IsNullOrEmpty
+            // 但是 net472 引用程序集无可空标注，编译器看不到 [NotNullWhen(false)]，无法收缩类型（会报 CS8603）
+            if (driver is null || driver.Length == 0)
             {
                 continue; // driver 缺失由 XSD 校验（ChannelType 的 driver 为必填）负责
             }
