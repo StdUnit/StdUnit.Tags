@@ -270,7 +270,7 @@ internal class TagsProject : ITagsProject
         }
         var intentChannel = this._entryWriteIntentChannels.GetOrAdd(entry, _ => this.CreateIntentChannel());
         var writer = intentChannel.Writer;
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var item = new IntentCompletion(intent, tcs);
         task = tcs.Task;
         var written = writer.TryWrite(item);

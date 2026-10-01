@@ -17,8 +17,10 @@ public delegate ValueTask TagGrpWriteIntent(ITagGrp entry, CancellationToken ct)
 /// 外部写入入口组变更意图的委托 + 委托完成的TaskCompletionSource。
 /// </summary>
 /// <param name="Intent"></param>
-/// <param name="Completion"></param>
-public record IntentCompletion(TagGrpWriteIntent Intent, TaskCompletionSource Completion);
+/// <param name="Completion">
+/// 这里之所以使用泛型版本的 <see cref="TaskCompletionSource{TResult}"/>，是因为netframework版本不支持非泛型的 <see cref="TaskCompletionSource"/>
+/// </param>
+public record IntentCompletion(TagGrpWriteIntent Intent, TaskCompletionSource<int> Completion);
 
 
 /// <summary>

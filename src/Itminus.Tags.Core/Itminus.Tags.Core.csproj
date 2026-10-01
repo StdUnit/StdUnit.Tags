@@ -1,10 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+	<TargetFrameworks>net8.0;net472</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <!-- 把核心Schemas/tagsproject.xsd交给源生成器（Itminus.Tags.SchemaGenerator）
@@ -12,9 +13,7 @@
        驱动 schema 由各驱动项目（Itminus.Tags.S7 等）各自生成并提供（ITagsProjectSchemaProvider）。 -->
   <ItemGroup>
     <AdditionalFiles Include="Schemas\tagsproject.xsd" />
-    <ProjectReference Include="..\Itminus.Tags.SchemaGenerator\Itminus.Tags.SchemaGenerator.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Itminus.Tags.SchemaGenerator\Itminus.Tags.SchemaGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!-- NuGet 打包：
@@ -24,12 +23,8 @@
           本包只注入核心 schema。驱动命名空间的编辑器映射由消费方配置（xml.schemas / catalog），
           不放在 Core 内（Core 不依赖具体驱动项目）。 -->
   <ItemGroup>
-    <None Include="Schemas\Itminus.Tags.Core.targets"
-          Pack="true"
-          PackagePath="buildTransitive/Itminus.Tags.Core.targets" />
-    <None Include="Schemas\tagsproject.xsd"
-          Pack="true"
-          PackagePath="buildTransitive/Schemas/tagsproject.xsd" />
+    <None Include="Schemas\Itminus.Tags.Core.targets" Pack="true" PackagePath="buildTransitive/Itminus.Tags.Core.targets" />
+    <None Include="Schemas\tagsproject.xsd" Pack="true" PackagePath="buildTransitive/Schemas/tagsproject.xsd" />
   </ItemGroup>
 
   <Import Project="..\..\.paket\Paket.Restore.targets" />

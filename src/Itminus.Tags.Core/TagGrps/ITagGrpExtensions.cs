@@ -160,8 +160,14 @@ public static class ITagGrpExtensions
     {
         var results = new List<ITagChannel>();
 
-        // 通道代表一条物理连接，按引用去重（避免某个驱动重写 Equals 后导致两条连接被误判为同一条）
-        var seen = new HashSet<ITagChannel>(ReferenceEqualityComparer.Instance);
+        // 通道代表一条物理连接，
+        var seen = new HashSet<ITagChannel>(
+        #if !NETFRAMEWORK
+            // 按引用去重（避免某个驱动重写 Equals 后导致两条连接被误判为同一条）
+            // netframework 没有 ReferenceEqualityComparer.Instance，保持默认
+            ReferenceEqualityComparer.Instance 
+        #endif
+        );
 
         void Add(ITagChannel? channel)
         {
@@ -199,7 +205,7 @@ public static class ITagGrpExtensions
         Walk(entry);
         return results;
     }
-    #endregion
+#endregion
 
 
     #region

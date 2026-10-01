@@ -648,7 +648,7 @@ public class TagGrpRunnerTests
         {
             var ch = _channels.GetOrAdd(entry, _ => CreateIntentChannel());
             var writer = ch.Writer;
-            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
             var item = new IntentCompletion(intent, tcs);
             task = tcs.Task;
             var written = writer.TryWrite(item);

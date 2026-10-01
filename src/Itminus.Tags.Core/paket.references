@@ -1,1 +1,4 @@
-﻿
+﻿group NetFrameworkDeps
+	System.Threading.Tasks.Extensions
+	System.Threading.Channels 
+    IsExternalInit

@@ -5,7 +5,7 @@ source https://baget.stdunit.com/v3/index.json
 cache ./nuget-package-caches
 storage: none
 strategy: min
-framework: net8.0, net8.0-windows, netstandard2.0
+framework: net472,net8.0, net8.0-windows, netstandard2.0
 
 nuget Microsoft.Extensions.DependencyInjection >= 8.0 lowest_matching: true
 nuget Microsoft.Extensions.Logging >= 8.0 lowest_matching: true
@@ -57,6 +57,17 @@ group Mcp
     nuget System.IO.Pipelines >= 10.0.7 lowest_matching: true
     nuget System.Diagnostics.DiagnosticSource >= 10.0.10 lowest_matching: true
 
+group NetFrameworkDeps
+    source https://api.nuget.org/v3/index.json
+    source https://baget.stdunit.com/v3/index.json
+    cache ./nuget-package-caches
+    storage: none
+    strategy: min
+    framework: net472
+    nuget System.Threading.Tasks.Extensions >= 4.5.4 lowest_matching: true
+    nuget IsExternalInit >= 1.0.3 lowest_matching: true
+    nuget System.Threading.Channels >= 8.0 lowest_matching: true
+
 group SchemaGenerator
     source https://api.nuget.org/v3/index.json
     source https://baget.stdunit.com/v3/index.json
@@ -70,3 +81,4 @@ group SchemaGenerator
     # 否则编译消费项目时报 CS9057（analyzer 引用更高版本编译器）。
     # 用独立 group 隔离，避免主 group 的 Microsoft.CodeAnalysis.CSharp.Scripting >= 5.0（ComScanner 用）拉高版本。
     nuget Microsoft.CodeAnalysis.CSharp >= 4.8 lowest_matching: true
+
