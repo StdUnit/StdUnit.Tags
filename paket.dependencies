@@ -64,7 +64,7 @@ group NetFrameworkDeps
     storage: none
     strategy: min
     framework: net472
-    nuget System.Threading.Tasks.Extensions >= 4.5.4 lowest_matching: true
+    nuget System.Threading.Tasks.Extensions >= 4.6.3 lowest_matching: true
     nuget IsExternalInit >= 1.0.3 lowest_matching: true
     nuget System.Threading.Channels >= 8.0 lowest_matching: true
 

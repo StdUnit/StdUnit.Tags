@@ -11,7 +11,7 @@ internal static class LogicetProviderUtils
     /// </summary>
     internal static (ILogicet?, Exception?) CreateLogicet(IServiceProvider sp, Type type, IReadOnlyList<ITagChannel> channels, ITagGrp tags)
     {
-        if (!type.IsAssignableTo(typeof(ILogicet)))
+        if (!typeof(ILogicet).IsAssignableFrom(type))
         {
             throw new InvalidOperationException($"传入的类型必须是 {nameof(ILogicet)}, 实际是{type.Name}");
         }

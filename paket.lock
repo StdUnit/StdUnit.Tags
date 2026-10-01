@@ -781,11 +781,11 @@ RESTRICTION: == net472
 NUGET
   remote: https://api.nuget.org/v3/index.json
     IsExternalInit (1.0.3)
-    System.Runtime.CompilerServices.Unsafe (4.5.3)
+    System.Runtime.CompilerServices.Unsafe (6.1.2)
     System.Threading.Channels (8.0)
       System.Threading.Tasks.Extensions (>= 4.5.4)
-    System.Threading.Tasks.Extensions (4.5.4)
-      System.Runtime.CompilerServices.Unsafe (>= 4.5.3)
+    System.Threading.Tasks.Extensions (4.6.3)
+      System.Runtime.CompilerServices.Unsafe (>= 6.1.2)
 
 GROUP SchemaGenerator
 STORAGE: NONE

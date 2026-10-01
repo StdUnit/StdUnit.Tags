@@ -1,3 +1,10 @@
 ﻿Microsoft.Extensions.Logging
-McMaster.NETCore.Plugins
+Microsoft.Extensions.DependencyInjection
+
+McMaster.NETCore.Plugins framework: net8.0,net8.0-windows
 FSharp.Core
+
+
+group NetFrameworkDeps
+    System.Threading.Channels
+    IsExternalInit
