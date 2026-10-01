@@ -120,4 +120,44 @@ public class DefaultTagGrpRunnerRetryStrategyTests
         Assert.True(Math.Abs((delay - half).TotalMilliseconds) <= tolerance.TotalMilliseconds,
             $"中点处的延迟 {delay:hh\\:mm\\:ss\\.fff} 应接近 {half:hh\\:mm\\:ss\\.fff}");
     }
+
+    [Fact]
+    public void GetDelay_AlwaysWithinConfiguredRange()
+    {
+        // Arrange
+        var strategy = new DefaultTagGrpRunnerRetryStrategy
+        {
+            MinDelay = TimeSpan.FromMilliseconds(300),
+            MaxDelay = TimeSpan.FromSeconds(20),
+            GrowthRate = 1.2,
+            Midpoint = 4,
+        };
+
+        // Act & Assert — 收敛（clamp）后的值必须始终落在 [MinDelay, MaxDelay] 内
+        foreach (var n in Enumerable.Range(1, 60))
+        {
+            var delay = strategy.GetDelay(n);
+            Assert.True(delay >= strategy.MinDelay,
+                $"n={n} 的延迟 {delay:hh\\:mm\\:ss\\.fff} 不应小于 MinDelay={strategy.MinDelay:hh\\:mm\\:ss\\.fff}");
+            Assert.True(delay <= strategy.MaxDelay,
+                $"n={n} 的延迟 {delay:hh\\:mm\\:ss\\.fff} 不应大于 MaxDelay={strategy.MaxDelay:hh\\:mm\\:ss\\.fff}");
+        }
+    }
+
+    [Fact]
+    public void GetDelay_WhenMinDelayGreaterThanMaxDelay_DoesNotThrow()
+    {
+        // 旧实现用 Math.Clamp(v, min, max)：min > max 时会抛 ArgumentException。
+        // net472 没有 Math.Clamp，改为手写收敛后，这种错误配置不再是异常路径。
+        // 这里把“不抛异常且返回 MinDelay”这一现状钉住。
+        var strategy = new DefaultTagGrpRunnerRetryStrategy
+        {
+            MinDelay = TimeSpan.FromSeconds(10),
+            MaxDelay = TimeSpan.FromSeconds(1),
+        };
+
+        var delay = strategy.GetDelay(1);
+
+        Assert.Equal(strategy.MinDelay, delay);
+    }
 }

@@ -470,6 +470,50 @@ public class TagGrpRunnerTests
     }
 
     [Fact]
+    public async Task StartAsync_ProcessMultipleIntents_CompletesAllWithSequentialIndex()
+    {
+        // Arrange
+        var entry = new MockTagGrp(new TagGrpDescriptor { Name = "intent-entry", ScanInterval = 20 })
+        {
+            Channel = new FakedChannel(new TagChannelDescriptor { Name = "fake-channel" }),
+            IsEnabled = true
+        };
+        var project = new MockProject();
+        var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance);
+
+        using var cts = new CancellationTokenSource();
+        var executed = new List<int>();
+
+        project.WriteIntent("intent-entry", (grp, ct) =>
+        {
+            executed.Add(1);
+            return ValueTask.CompletedTask;
+        }, out var first);
+        project.WriteIntent("intent-entry", (grp, ct) =>
+        {
+            executed.Add(2);
+            return ValueTask.CompletedTask;
+        }, out var second);
+
+        runner.TurnProcess += (_, _) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        };
+
+        // Act
+        await RunUntilCancelled(runner, entry, cts.Token);
+
+        // Assert — 同一轮次排空的多个意图都应执行且按 FIFO 顺序完成；
+        // 完成值是在本次排空批次中的 0 基序号（IntentCompletion.Completion 为 TaskCompletionSource<int>）
+        Assert.Equal(new[] { 1, 2 }, executed);
+        Assert.True(first.IsCompletedSuccessfully, "第1个 intentTask 应成功完成");
+        Assert.True(second.IsCompletedSuccessfully, "第2个 intentTask 应成功完成");
+        Assert.Equal(0, await (Task<int>)first);
+        Assert.Equal(1, await (Task<int>)second);
+    }
+
+    [Fact]
     public async Task StartAsync_ConsecutiveFailures_GrowDelay()
     {
         // Arrange — 使用一个记录调用次数的假策略

@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Itminus.Tags.Tests.Fakes;
 using Xunit;
 
@@ -164,5 +166,48 @@ public class CollectChannelsTests
         var result = grp.CollectChannels();
 
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public void CollectChannels_DeduplicatesByReference_NotByValueEquality()
+    {
+        // 通道代表一条物理连接：即使驱动重写了 Equals/GetHashCode，两个不同的通道实例
+        // 也不应被误判为同一条连接（否则第二个通道永远不会被 runner 建连）。
+        // 这正是 CollectChannels 按引用去重的原因。
+        //
+        // net8.0 用标准库 ReferenceEqualityComparer，net472 用 Compat.ReferenceEqualityComparer polyfill，
+        // 两者语义一致，因此本用例在两个目标框架下都应通过。
+        var ch1 = new ValueEqualChannel(new TagChannelDescriptor { Name = "S7-1" });
+        var ch2 = new ValueEqualChannel(new TagChannelDescriptor { Name = "S7-2" });
+        Assert.Equal(ch1, ch2); // 前提：值相等性成立，但二者不是同一实例
+
+        var entry = CreateGrp("entry", ch1, isEntry: true);
+        entry.AddTag(CreateGrp("a", ch2));
+
+        var result = entry.CollectChannels();
+
+        Assert.Equal(2, result.Count);
+        Assert.Same(ch1, result[0]);
+        Assert.Same(ch2, result[1]);
+    }
+
+    /// <summary>
+    /// 重写了 Equals/GetHashCode 的通道：任意两个实例在“值”上都相等，但不是同一条物理连接。
+    /// </summary>
+    private sealed class ValueEqualChannel : ITagChannel
+    {
+        public ValueEqualChannel(TagChannelDescriptor descriptor) => Descriptor = descriptor;
+
+        public TagChannelDescriptor Descriptor { get; }
+
+        public Task DisconnectAsync(CancellationToken ct) => Task.CompletedTask;
+
+        public void Dispose() { }
+
+        public Task EnsureConnectedAsync(bool force, CancellationToken ct) => Task.CompletedTask;
+
+        public override bool Equals(object? obj) => obj is ValueEqualChannel;
+
+        public override int GetHashCode() => 0;
     }
 }

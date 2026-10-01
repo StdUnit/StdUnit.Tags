@@ -160,12 +160,13 @@ public static class ITagGrpExtensions
     {
         var results = new List<ITagChannel>();
 
-        // 通道代表一条物理连接，
+        // 通道代表一条物理连接，按引用去重（避免某个驱动重写 Equals 后导致两条连接被误判为同一条）
         var seen = new HashSet<ITagChannel>(
-        #if !NETFRAMEWORK
-            // 按引用去重（避免某个驱动重写 Equals 后导致两条连接被误判为同一条）
-            // netframework 没有 ReferenceEqualityComparer.Instance，保持默认
-            ReferenceEqualityComparer.Instance 
+        #if NETFRAMEWORK
+            // net472 标准库没有 ReferenceEqualityComparer，用仓库内的 polyfill（语义与标准库一致）
+            Compat.ReferenceEqualityComparer.Instance
+        #else
+            ReferenceEqualityComparer.Instance
         #endif
         );
 
