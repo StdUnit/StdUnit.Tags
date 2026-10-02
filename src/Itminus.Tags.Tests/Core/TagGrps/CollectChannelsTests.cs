@@ -175,7 +175,7 @@ public class CollectChannelsTests
         // 也不应被误判为同一条连接（否则第二个通道永远不会被 runner 建连）。
         // 这正是 CollectChannels 按引用去重的原因。
         //
-        // net8.0 用标准库 ReferenceEqualityComparer，net472 用 Compat.ReferenceEqualityComparer polyfill，
+        // net8.0 用标准库 ReferenceEqualityComparer，net472 用 Compat.ReferenceEqualityComparerCompat polyfill，
         // 两者语义一致，因此本用例在两个目标框架下都应通过。
         var ch1 = new ValueEqualChannel(new TagChannelDescriptor { Name = "S7-1" });
         var ch2 = new ValueEqualChannel(new TagChannelDescriptor { Name = "S7-2" });

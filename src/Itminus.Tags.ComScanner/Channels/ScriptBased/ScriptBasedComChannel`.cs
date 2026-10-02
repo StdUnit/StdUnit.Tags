@@ -60,7 +60,7 @@ public class ScriptBasedComChannel<T> : ComChannelBase<T>
                 var tempPath = Path.GetTempPath();
                 var tempFileName = Path.Combine(tempPath, $"Itminus.Tags.COM.{Guid.NewGuid()}.csx");
                 var encoding = System.Text.Encoding.UTF8;
-                await File.WriteAllTextAsync(tempFileName, this.ReadScript, encoding, ct);
+                await Compat.FileAsyncCompat.WriteAllTextAsync(tempFileName, this.ReadScript, encoding, ct);
                 this._oldScriptPath = tempFileName;
                 scriptOptions = scriptOptions
                     .WithEmitDebugInformation(true)

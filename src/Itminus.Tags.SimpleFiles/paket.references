@@ -1,1 +1,4 @@
-﻿
+# net8.0 的 System.Text.Json 由共享框架提供，显式引用会造成降级，故仅 net472 引用。
+System.Text.Json framework: net472
+
+IsExternalInit framework: net472

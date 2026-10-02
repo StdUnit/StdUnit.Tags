@@ -55,8 +55,8 @@ internal class MockTagsProject : ITagsProject
         }
 
         // 阻塞直到被取消，模拟正在运行的测点项目
-        var tcs = new TaskCompletionSource();
-        ct.Register(() => tcs.TrySetResult());
+        var tcs = new TaskCompletionSource<bool>();
+        ct.Register(() => tcs.TrySetResult(true));
         return tcs.Task;
     }
 

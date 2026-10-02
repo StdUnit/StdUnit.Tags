@@ -1,8 +1,4 @@
-﻿using System.Text;
-
-
-
-namespace Itminus.Tags.S7;
+﻿namespace Itminus.Tags.S7;
 
 /// <summary>
 /// S7 字符串测点缓存器
@@ -43,7 +39,7 @@ public class S7StrTagCbntor : S7TagCbntorBase
         {
             var span = this.Cache.Span.Slice(CacheOffset);
             var size = span[1];
-            var str = Encoding.ASCII.GetString(span.Slice(2, size));
+            var str = Compat.AsciiTextCompat.GetString(span.Slice(2, size));
             return str;
         }
         set
@@ -56,7 +52,7 @@ public class S7StrTagCbntor : S7TagCbntorBase
                 throw new ArgumentException($"字符串长度超过限制，最大{this.Maxlen}，实际{str.Length}");
             }
 
-            var read = Encoding.ASCII.GetBytes(str, span.Slice(2));
+            var read = Compat.AsciiTextCompat.GetBytes(str, span.Slice(2));
             span[0] = this.Maxlen;
             span[1] = (byte)read;
 

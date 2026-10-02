@@ -88,10 +88,47 @@ dotnet new tags.web # 这会创建一个 ASP.NET Core 项目
 	- `Itminus.Tags.BlazorLib.Core`: Blazor 类库，包含核心功能抽象，以及一个极简的监控页面。
 	- `Itminus.Tags.BlazorLib`: 包含一些常用硬件设备的实现。
 	- `Itminus.Tags.McpServer`: 这是一个把`Itminus.Tags`暴露成 [Model Context Protocol Server](https://modelcontextprotocol.io/) 的类库。
-	- `Itminus.Tags.Tests`: 上述所有子项目的测试
+	- `Itminus.Tags.Tests`: 上述子项目的测试（多目标 `net8.0` + `net472`）
+	- `Itminus.Tags.Tests.NetCoreOnly`: **仅 `net8.0`** 的测试项目，专门存放无法面向 net472 的测试（Blazor / ASP.NET Core 等）。目前为空项，占位预留。
 - `samples/`: 示例代码
 - `paket.dependencies`: 用 [`paket`](https://github.com/fsprojects/Paket)管理的依赖声明
 - `paket.lock`: 依赖锁定文件
+
+## 目标框架
+
+本项目家族同时支持 `net8.0` 与 `net472`（.NET Framework 4.7.2），以便逐步迁移中的旧系统也能用上同一套抽象：
+
+| 子项目 | 目标框架 |
+|---|---|
+| `Itminus.Tags.Core` / `Itminus.Tags` | `net8.0` + `net472` |
+| `Itminus.Tags.RxExtensions` / `Itminus.Tags.R3Extensions` | `net8.0` + `net472` |
+| `Itminus.Tags.S7` / `ModbusTcp` / `Hjzk` / `ZLan` / `OpcUaClient` / `ComScanner` / `SimpleFiles` | `net8.0` + `net472` |
+| `Itminus.Tags.McpServer` | `net8.0` + `net472`（经 `ModelContextProtocol` 核心包的 `netstandard2.0` 资产） |
+| `Itminus.Tags.BlazorLib` / `BlazorLib.Core` | 仅 `net8.0` |
+| `Itminus.Tags.SchemaGenerator` | `netstandard2.0`（源生成器） |
+
+两个框架的能力差异（目前只有一处，即插件化的隔离与卸载）：见 [netfx 的插件化限制](#netfx-的插件化限制)。
+
+> 实现约定：跨框架差异一律收在**调用点**（`#if NETFRAMEWORK`）或项目内 `Compat/` 目录的单点垫片里，
+> 且**有标准库时优先使用标准库**（例如 `ReferenceEqualityComparer` 只在 net472 下用仓库内的等价实现）。
+> 不要把差异扩散到公共 API（如 `#if` 修饰公开成员），否则会给库使用者制造两套签名。
+
+### net472 下的测试
+
+`Itminus.Tags.Tests` 同时面向 `net472`，因此 CI 在两个框架下都会跑测试。
+MCP 测试已在 `McpServer` 支持 net472 后合并回主测试项目（走 `ModelContextProtocol` 核心包的 `netstandard2.0` 资产）。
+仅 `net8.0` 的测试（如 Blazor / ASP.NET Core 方向）另放 `Itminus.Tags.Tests.NetCoreOnly`。
+
+两个只在 net472 出现、且需要知道的坑（已在代码注释中标注）：
+
+- **测试宿主会做影子拷贝**：.NET Framework 的测试宿主默认对程序集做 shadow copy，
+  使 `Assembly.Location` 指向 `%TEMP%` 下的临时目录，**而且每个程序集落在不同的子目录**，
+  依赖「程序集所在目录」定位 XML 夹具的用例会失败。
+  已统一改用 `AppContext.BaseDirectory`（夹具定位走 `TestPaths`，与库自身的默认项目根目录约定一致），
+  **无需**关闭 AppDomain 或改任何宿主设置。
+- **引用程序集没有可空标注**：net472 的 BCL 没有 `[NotNullWhen(false)]` 之类的标注，
+  于是 `if (string.IsNullOrEmpty(x)) return ...; return x;` 在 net472 下会报 CS8603/CS8601/CS8604（net8.0 不报）。
+  这是假阳性，改用语言级判空（`x is null || x.Length == 0`）即可，**不要用 `NoWarn` 压掉**。
 
 ## LICENSING
 

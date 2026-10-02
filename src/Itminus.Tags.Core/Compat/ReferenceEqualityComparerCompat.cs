@@ -16,14 +16,14 @@ namespace Itminus.Tags.Compat;
 /// 行为与标准库一致：<c>Equals</c> 走 <see cref="object.ReferenceEquals"/>，
 /// 哈希走 <see cref="RuntimeHelpers.GetHashCode"/>（恒为标识哈希，不受重写的 <c>GetHashCode</c> 影响）。
 /// </summary>
-internal sealed class ReferenceEqualityComparer : IEqualityComparer<object>
+internal sealed class ReferenceEqualityComparerCompat : IEqualityComparer<object>
 {
-    private ReferenceEqualityComparer()
+    private ReferenceEqualityComparerCompat()
     {
     }
 
     /// <summary>单例，形态与标准库的 <c>Instance</c> 保持一致。</summary>
-    public static ReferenceEqualityComparer Instance { get; } = new ReferenceEqualityComparer();
+    public static ReferenceEqualityComparerCompat Instance { get; } = new ReferenceEqualityComparerCompat();
 
     bool IEqualityComparer<object>.Equals(object? x, object? y) => ReferenceEquals(x, y);
 

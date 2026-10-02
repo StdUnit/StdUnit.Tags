@@ -8,6 +8,10 @@ using System.Xml.Linq;
 using Itminus.Tags.SimpleFiles;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+// net472 没有 File.ReadAllTextAsync / WriteAllTextAsync（.NET Core 2.0+）。
+// 本文件大量用到它们，故把 File 别名到测试垫片：两个目标框架下写法一致，
+// 具体差异（#if）收在 Itminus.Tags.Tests.Compat.TestFileCompat 里一处。
+using File = Itminus.Tags.Tests.Compat.TestFileCompat;
 
 namespace Itminus.Tags.Tests.SimpleFilesTags;
 

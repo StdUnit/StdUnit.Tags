@@ -41,7 +41,7 @@ public class TagsProjectCtrlTests
     public async Task StartPollAsync_CreatesProjectAndInvokesHook()
     {
         var (ctrl, sp) = CreateCtrl();
-        var hookInvoked = new TaskCompletionSource();
+        var hookInvoked = new TaskCompletionSource<bool>();
         ITagsProject? capturedProject = null;
 
         // 后台启动，因为 StartPollAsync 会阻塞在 RunAsync 上
@@ -51,7 +51,7 @@ public class TagsProjectCtrlTests
             hook: (proj, sp, ct) =>
             {
                 capturedProject = proj;
-                hookInvoked.TrySetResult();
+                hookInvoked.TrySetResult(true);
                 return Task.CompletedTask;
             }));
 

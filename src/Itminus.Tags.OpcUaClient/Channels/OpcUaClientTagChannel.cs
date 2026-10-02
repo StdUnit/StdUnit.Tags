@@ -217,9 +217,9 @@ public class OpcUaClientTagChannel : ITagChannel
         var isNotAllGood = resp.Results.Any(r => StatusCode.IsNotGood(r));
         if (isNotAllGood)
         {
-            var notgoods = resp.Results.Zip(writeValues)
-                .Where(r => StatusCode.IsNotGood(r.First))
-                .Select(r => new WriteValueErr(r.Second.NodeId, r.First))
+            var notgoods = resp.Results.Zip(writeValues, (status, wv) => new { Status = status, WriteValue = wv })
+                .Where(r => StatusCode.IsNotGood(r.Status))
+                .Select(r => new WriteValueErr(r.WriteValue.NodeId, r.Status))
                 .ToList();
             throw new Exception($"通道写入失败:通道={this.ChannelName()}。异常={string.Join(";", notgoods)}。");
         }

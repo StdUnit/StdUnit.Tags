@@ -113,13 +113,13 @@ internal class ModbusRegisterFloatCbntor : ModbusRegisterInt32Cbntor
     /// </summary>
     public override object? Value
     {
-        get => BitConverter.UInt32BitsToSingle(this.ReadBits());
+        get => Compat.FloatBitsCompat.ToSingle(this.ReadBits());
         set
         {
 #pragma warning disable CS8605 // Unboxing a possibly null value.
             var f = (float)value;
 #pragma warning restore CS8605 // Unboxing a possibly null value.
-            this.WriteBits(BitConverter.SingleToUInt32Bits(f));
+            this.WriteBits(Compat.FloatBitsCompat.ToBits(f));
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿group NetFrameworkDeps
-	System.Threading.Tasks.Extensions
-	System.Threading.Channels 
-    IsExternalInit
+﻿# net8.0 由共享框架提供这两个包；仅 net472 需要显式包引用（否则 CS0246）。
+System.Threading.Channels framework: net472
+System.Threading.Tasks.Extensions framework: net472
+
+IsExternalInit framework: net472

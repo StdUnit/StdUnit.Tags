@@ -70,7 +70,7 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
             }
             return;
         }
-        var text = await File.ReadAllTextAsync(path, ct);
+        var text = await Compat.FileAsyncCompat.ReadAllTextAsync(path, ct);
         var value = this.ParseValue(text);
         this._value = value;
         this.Timestamp = DateTime.UtcNow;
@@ -110,7 +110,7 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
     protected virtual async Task CreateAndWriteDefaultAsync(string path, CancellationToken ct)
     {
         var data = this.FormatValue(default);
-        await File.WriteAllTextAsync(path, data, ct);
+        await Compat.FileAsyncCompat.WriteAllTextAsync(path, data, ct);
         return;
     }
 
@@ -128,7 +128,7 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
             await this.CreateAndWriteDefaultAsync(path, ct);
         }
         var value = this.FormatValue(this._value);
-        await File.WriteAllTextAsync(path, value, ct);
+        await Compat.FileAsyncCompat.WriteAllTextAsync(path, value, ct);
         this.NotifyTagWritten(value);
         this.IsDirty = false;
     }

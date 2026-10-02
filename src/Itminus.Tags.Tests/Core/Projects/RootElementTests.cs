@@ -39,8 +39,7 @@ public class RootElementTests
             )
         );
 
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc);
+        var dir = TestPaths.OutputDirectory;
 
         // Act
         using var proj = sp.MakeProject(dir!, expectedRoot);
@@ -68,8 +67,7 @@ public class RootElementTests
             )
         );
 
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc);
+        var dir = TestPaths.OutputDirectory;
 
         // Act
         using var proj = sp.MakeProject(dir!, root);

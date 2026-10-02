@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net472</TargetFrameworks>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
 	<NuGetAudit>false</NuGetAudit>
 	<LangVersion>latest</LangVersion>
   <NoWarn>CS0067,CS1998</NoWarn>
+
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Itminus.Tags.ComScanner\Itminus.Tags.ComScanner.csproj" />
@@ -20,6 +21,13 @@
     <ProjectReference Include="..\Itminus.Tags\Itminus.Tags.csproj" />
     <ProjectReference Include="..\Itminus.Tags.SimpleFiles\Itminus.Tags.SimpleFiles.csproj" />
     <ProjectReference Include="..\Itminus.Tags.McpServer\Itminus.Tags.McpServer.csproj" />
+  </ItemGroup>
+
+  <!-- 仅供 net8.0 跑的测试（依赖 net8-only 的项目/运行期 API）已拆到 Itminus.Tags.Tests.NetCoreOnly。
+       McpServer 自 v1.x 起已支持 net472（走 ModelContextProtocol 的 netstandard2.0 资产），
+       因此 MCP 测试留在本项目、两个 TFM 都跑。 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <Compile Remove="Core\Logicets\LogicetPluginLifecycleTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Update="Core\TagUnions\index.xml">

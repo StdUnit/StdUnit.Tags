@@ -1,12 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.8.12023.21 stable
+VisualStudioVersion = 18.8.12023.21
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{ACD2C8C2-4A10-428B-860F-C37E44C1AAEA}"
 	ProjectSection(SolutionItems) = preProject
 		paket.dependencies = paket.dependencies
-		paket.lock = paket.lock
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
@@ -55,6 +54,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		src\Itminus.Tags.Core\Schemas\tagsproject.xsd = src\Itminus.Tags.Core\Schemas\tagsproject.xsd
 	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BC7B9A0A-80B1-47C1-BF70-D1393A0B4CCC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Itminus.Tags.Tests.NetCoreOnly", "src\Itminus.Tags.Tests.NetCoreOnly\Itminus.Tags.Tests.NetCoreOnly.csproj", "{A1C37BF0-5B93-4861-A936-5DD114C3C22B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -142,6 +145,10 @@ Global
 		{B0D583C1-2059-420E-875C-BC63167187B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B0D583C1-2059-420E-875C-BC63167187B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B0D583C1-2059-420E-875C-BC63167187B2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1C37BF0-5B93-4861-A936-5DD114C3C22B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1C37BF0-5B93-4861-A936-5DD114C3C22B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1C37BF0-5B93-4861-A936-5DD114C3C22B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1C37BF0-5B93-4861-A936-5DD114C3C22B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -151,6 +158,7 @@ Global
 		{E2692008-195A-C185-D028-DE241F2612A2} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{AD9C0AFC-1563-8496-7306-C3DA50242547} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{CFD0A797-F315-4012-A3A7-5FDC703B0A6A} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{A1C37BF0-5B93-4861-A936-5DD114C3C22B} = {BC7B9A0A-80B1-47C1-BF70-D1393A0B4CCC}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6FF52024-3F01-4AC2-B991-CEE89ACF9FFC}

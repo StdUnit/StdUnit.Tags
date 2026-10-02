@@ -27,7 +27,10 @@ public class TagsMcpResources
         if (resourceName is null)
             throw new InvalidOperationException("Embedded MCP guide resource 'guide.md' was not found in the assembly.");
 
-        await using var stream = assembly.GetManifestResourceStream(resourceName)
+        // 用同步 using 而非 await using：net472 的 Stream 不实现 IAsyncDisposable
+        // （该接口是 netstandard2.1 / .NET Core 3.0+；net472 需额外引入 Microsoft.Bcl.AsyncInterfaces）。
+        // 这里是一次性的内嵌资源读取，同步释放语义完全等价。
+        using var stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException($"Failed to open embedded MCP guide resource '{resourceName}'.");
 
         using var reader = new StreamReader(stream);

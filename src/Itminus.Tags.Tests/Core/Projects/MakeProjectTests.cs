@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Reflection;
 using System.Xml.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -43,7 +42,7 @@ public class MakeProjectTests
     }
 
     [Fact]
-    public void MakeProject_WithoutDir_UsesAssemblyLocationDir()
+    public void MakeProject_WithoutDir_UsesApplicationDirectory()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -51,7 +50,9 @@ public class MakeProjectTests
         services.AddSingleton<ITagsProjectFactory>(fakeFactory);
         var sp = services.BuildServiceProvider();
 
-        var expectedDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        // 项目根目录的默认值 = 应用程序目录（AppContext.BaseDirectory），
+        // 与测试夹具定位约定（TestPaths.OutputDirectory）一致。
+        var expectedDir = TestPaths.OutputDirectory;
         var root = new XElement("Project");
 
         // Act
@@ -63,7 +64,7 @@ public class MakeProjectTests
     }
 
     [Fact]
-    public void MakeProject_WithEmptyDir_UsesAssemblyLocationDir()
+    public void MakeProject_WithEmptyDir_UsesApplicationDirectory()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -71,7 +72,8 @@ public class MakeProjectTests
         services.AddSingleton<ITagsProjectFactory>(fakeFactory);
         var sp = services.BuildServiceProvider();
 
-        var expectedDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        // 同 MakeProject_WithoutDir_UsesApplicationDirectory：默认值 = 应用程序目录
+        var expectedDir = TestPaths.OutputDirectory;
         var root = new XElement("Project");
 
         // Act

@@ -131,13 +131,13 @@ public static class S7AddressParser
         // $$开头表示引用TagCbnt的AreaKind和BlockNumber，地址字符串中不包含AreaKind和BlockNumber信息
         if (addrspan[0] == '$' && addrspan[1] == '$')
         {
-            return ParseRelativeAddress(addrspan[2..]);
+            return ParseRelativeAddress(addrspan.Slice(2));
         }
 
         // MB. 开头表示MB区地址，地址字符串中不包含AreaKind和BlockNumber信息
         if (addrspan.Length >= 3 && addrspan[0] == 'M' && addrspan[1] == 'B' && addrspan[2] == '.')
         {
-            return ParseMBAddress(addrspan[3..]);
+            return ParseMBAddress(addrspan.Slice(3));
         }
 
         // DB开头表示DB区地址，地址字符串中包含AreaKind和BlockNumber信息
@@ -227,6 +227,32 @@ public static class S7AddressParser
     }
 
     /// <summary>
+    /// 解析整数。<br/>
+    /// net472 没有 <c>int.TryParse(ReadOnlySpan&lt;char&gt;)</c>（.NET Core 2.1+ 才加入），
+    /// 这里集中处理该差异，避免每个调用点铺 #if。
+    /// </summary>
+    private static bool TryParseInt(ReadOnlySpan<char> span, out int value)
+    {
+#if NETFRAMEWORK
+        return int.TryParse(span.ToString(), out value);
+#else
+        return int.TryParse(span, out value);
+#endif
+    }
+
+    /// <summary>
+    /// 解析字节，net472 差异同 <see cref="TryParseInt"/>。
+    /// </summary>
+    private static bool TryParseByte(ReadOnlySpan<char> span, out byte value)
+    {
+#if NETFRAMEWORK
+        return byte.TryParse(span.ToString(), out value);
+#else
+        return byte.TryParse(span, out value);
+#endif
+    }
+
+    /// <summary>
     /// 解析MB地址，输入类似于"2000.1"
     /// </summary>
     /// <param name="span"></param>
@@ -237,13 +263,13 @@ public static class S7AddressParser
         var useBit = index > 0;
         if (useBit)
         {
-            var startSpan = span[..(index + 1)];
-            if (!int.TryParse(startSpan, out var start))
+            var startSpan = span.Slice(0, index + 1);
+            if (!TryParseInt(startSpan, out var start))
             {
                 throw new Exception($"S7地址不合法: 无法解析起始地址");
             }
 
-            if (!byte.TryParse(span.Slice(index + 1), out var nthBit))
+            if (!TryParseByte(span.Slice(index + 1), out var nthBit))
             {
                 throw new Exception($"S7地址不合法: 无法解析位地址");
             }
@@ -259,7 +285,7 @@ public static class S7AddressParser
         }
         else
         {
-            if (!int.TryParse(span, out var start))
+            if (!TryParseInt(span, out var start))
             {
                 throw new Exception($"S7地址不合法: 无法解析起始地址");
             }
@@ -281,13 +307,13 @@ public static class S7AddressParser
         var useBit = index > 0;
         if (useBit)
         {
-            var startSpan = span[..index];
-            if (!int.TryParse(startSpan, out var start))
+            var startSpan = span.Slice(0, index);
+            if (!TryParseInt(startSpan, out var start))
             {
                 throw new Exception($"S7地址不合法: 无法解析起始地址");
             }
 
-            if (!byte.TryParse(span.Slice(index + 1), out var nthBit))
+            if (!TryParseByte(span.Slice(index + 1), out var nthBit))
             {
                 throw new Exception($"S7地址不合法: 无法解析位地址");
             }
@@ -304,7 +330,7 @@ public static class S7AddressParser
         }
         else
         {
-            if (!int.TryParse(span, out var start))
+            if (!TryParseInt(span, out var start))
             {
                 throw new Exception($"S7地址不合法: 无法解析起始地址");
             }

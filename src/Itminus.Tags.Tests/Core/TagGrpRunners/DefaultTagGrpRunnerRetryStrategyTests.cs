@@ -56,8 +56,10 @@ public class DefaultTagGrpRunnerRetryStrategyTests
                 $"延迟 {d:hh\\:mm\\:ss\\.fff} 不应超过 MaxDelay={maxDelay:hh\\:mm\\:ss\\.fff}");
         }
         // 最后的值应非常接近 MaxDelay（>= 90%）
-        var last = delays[^1];
-        Assert.True(last >= maxDelay * 0.9,
+        // 注：net472 的 TimeSpan 没有 operator *(TimeSpan, double)（.NET Core 2.0+ 才有），故直接在毫秒上乘。
+        var last = delays[delays.Count - 1];
+        var threshold = TimeSpan.FromMilliseconds(maxDelay.TotalMilliseconds * 0.9);
+        Assert.True(last >= threshold,
             $"最终延迟 {last:hh\\:mm\\:ss\\.fff} 应接近 {maxDelay:hh\\:mm\\:ss\\.fff}");
     }
 

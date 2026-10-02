@@ -9,6 +9,9 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
+// net472 没有 File.ReadAllTextAsync / WriteAllTextAsync（.NET Core 2.0+），见 Compat.TestFileCompat。
+using File = Itminus.Tags.Tests.Compat.TestFileCompat;
+
 namespace Itminus.Tags.Tests.SimpleFilesTags;
 
 /// <summary>

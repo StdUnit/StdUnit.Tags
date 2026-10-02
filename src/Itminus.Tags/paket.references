@@ -4,7 +4,6 @@ Microsoft.Extensions.DependencyInjection
 McMaster.NETCore.Plugins framework: net8.0,net8.0-windows
 FSharp.Core
 
-
-group NetFrameworkDeps
-    System.Threading.Channels
-    IsExternalInit
+# net8.0 相关框架由共享框架提供；net472 需要包引用，
+System.Threading.Channels framework: net472
+IsExternalInit framework: net472

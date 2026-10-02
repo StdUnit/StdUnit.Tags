@@ -14,7 +14,7 @@ internal class FloatDirectTag : MultipleBytesDirectTag<float>
 
     protected override void FillRegisters(float value, Span<ushort> registers)
     {
-        var bits = BitConverter.SingleToUInt32Bits(value);
+        var bits = Compat.FloatBitsCompat.ToBits(value);
         switch (this.TagDescriptor.EndianKind)
         {
             case EndianKinds.BigEndian:
@@ -38,6 +38,6 @@ internal class FloatDirectTag : MultipleBytesDirectTag<float>
             EndianKinds.LittleEndian => (uint)((registers[1] << 16) | registers[0]),
             _ => throw new InvalidOperationException($"不支持的字节序类型: {this.TagDescriptor.EndianKind}")
         };
-        return BitConverter.UInt32BitsToSingle(bits);
+        return Compat.FloatBitsCompat.ToSingle(bits);
     }
 }

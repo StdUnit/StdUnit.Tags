@@ -29,9 +29,7 @@ public class ProjTests
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
 
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc)!;
-        dir = Path.Combine(dir, "SimpleFilesTags", "DirectTags");
+        var dir = TestPaths.Fixture("SimpleFilesTags", "DirectTags");
 
         using var proj = factory.Create(dir);
 
@@ -90,9 +88,7 @@ public class ProjTests
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
 
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc)!;
-        dir = Path.Combine(dir, "SimpleFilesTags", "DirectTags");
+        var dir = TestPaths.Fixture("SimpleFilesTags", "DirectTags");
 
         using var proj = factory.Create(dir);
 

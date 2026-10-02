@@ -2,3 +2,5 @@
 System.Reactive
 System.IO.Pipelines
 Microsoft.CodeAnalysis.CSharp.Scripting
+
+IsExternalInit framework: net472

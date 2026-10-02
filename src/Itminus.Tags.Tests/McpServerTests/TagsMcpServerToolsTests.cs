@@ -18,6 +18,12 @@ namespace Itminus.Tags.Tests.McpServerTests;
 
 public class TagsMcpServerToolsTests : IAsyncDisposable
 {
+    /// <summary>
+    /// Unix 纪元。net472 没有 <c>DateTime.UnixEpoch</c>（.NET Core 2.1+ 才加入），故在此自定义，
+    /// 保证两个目标框架下断言同一个值。
+    /// </summary>
+    private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
     private readonly ServiceProvider _root;
     private readonly IServiceScope _scope;
     private readonly IServiceProvider _sp;
@@ -671,7 +677,7 @@ public class TagsMcpServerToolsTests : IAsyncDisposable
         var tag = new Mock<ITag>();
         tag.SetupGet(t => t.TagDescriptor).Returns(descriptor);
         tag.SetupGet(t => t.Value).Throws(new InvalidCastException("boom"));
-        tag.SetupGet(t => t.Timestamp).Returns(DateTime.UnixEpoch);
+        tag.SetupGet(t => t.Timestamp).Returns(UnixEpoch);
 
         var grp = new Mock<ITagGrp>();
         grp.Setup(g => g.Descendant("g1/boom")).Returns(new TagUnion.TagUnit(tag.Object));
@@ -684,7 +690,7 @@ public class TagsMcpServerToolsTests : IAsyncDisposable
 
         Assert.Same(descriptor, result.Descriptor);
         Assert.Null(result.Value);
-        Assert.Equal(DateTime.UnixEpoch, result.Timestamp);
+        Assert.Equal(UnixEpoch, result.Timestamp);
         Assert.Equal("boom", result.Error);
     }
 

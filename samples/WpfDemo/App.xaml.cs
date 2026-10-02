@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.IO;
-using System.Reflection;
 using System.Windows;
 using WpfDemo.Tags.Logicets;
 
@@ -37,8 +36,11 @@ public partial class App : Application
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             var logger = loggerFactory.CreateLogger<App>();
 
-            var dir = Directory.GetParent(Assembly.GetExecutingAssembly().Location);
-            await ctrl.StartPollAsync(Path.Combine(dir!.FullName, "Tags"), null, (proj, sp, ct) =>
+            // 项目根目录：用应用程序目录（与 Itminus.Tags 在 dir 为空时的默认约定一致）。
+            // 不要用 Assembly.GetExecutingAssembly().Location —— 那是当前程序集所在目录，
+            // 与应用程序目录在影子拷贝/插件加载等场景下会分叉。
+            var dir = AppContext.BaseDirectory;
+            await ctrl.StartPollAsync(Path.Combine(dir, "Tags"), null, (proj, sp, ct) =>
             {
                 proj.Logicets.Add(new HeartBeatLogicet(
                     proj.Channels,

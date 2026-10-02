@@ -87,7 +87,8 @@ namespace Itminus.Tags.Tests.S7Tags
             Assert.Equal(newVal1, got);
             Assert.Equal(new byte[] { (byte)maxLen, (byte)4 }, ((TagCbnt<byte>)cbnt).Cache.Span.Slice(2, 2).ToArray());
             var span = ((TagCbnt<byte>)cbnt).Cache.Span.Slice(2 + 2, 4);
-            var roundtrip = Encoding.ASCII.GetString(span);
+            // net472 无 Encoding.GetString(ReadOnlySpan<byte>)（.NET Core 2.1+），先拷贝成数组
+            var roundtrip = Encoding.ASCII.GetString(span.ToArray());
             Assert.Equal(newVal1, roundtrip);
             Assert.Equal(4, strTag.Strlen);
             Assert.Equal(10, strTag.Maxlen);
