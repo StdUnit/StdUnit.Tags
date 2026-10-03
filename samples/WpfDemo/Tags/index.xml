@@ -7,8 +7,8 @@
 
 	<!-- 通道，可以配置多个-->
 	<Channel name="S7-1" driver="S7" >
-		<s7:IpAddr>172.16.10.20</s7:IpAddr>
-		<!--<s7:IpAddr>localhost</s7:IpAddr>-->
+		<!--<s7:IpAddr>172.16.10.20</s7:IpAddr>-->
+		<s7:IpAddr>localhost</s7:IpAddr>
 		<s7:Rack>0</s7:Rack>
 		<s7:Slot>1</s7:Slot>
 	</Channel>
@@ -25,7 +25,7 @@
 
 
 	<Channel name="file" driver="SimpleFiles">
-		<sf:BaseDir>D:/temp</sf:BaseDir>
+		<sf:BaseDir>D:/tmp</sf:BaseDir>
 	</Channel>
 
 	<!-- 测点配置，可以配置多个 -->
@@ -42,8 +42,8 @@
 
 		</TagGrp>
 		<TagGrp name="simpleFiles">
-			<Tag name="aa" address="D:/temp/aa" type="BIT" access="R1W" channel="file" autoCreateFile="true"/>
-			<Tag name="bb" address="D:/temp/bb" type="BYTE" access="R1W" channel="file" autoCreateFile="true"/>
+			<Tag name="aa" address="aa" type="BIT" access="R1W" channel="file" autoCreateFile="true"/>
+			<Tag name="bb" address="bb" type="BYTE" access="R1W" channel="file" autoCreateFile="true"/>
 		</TagGrp>
 	</TagGrp>
 	<TagGrp name="扫码枪" isEntry="true" isEnabled="false" scanInterval="10">

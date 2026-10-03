@@ -14,7 +14,7 @@ namespace WpfDemo;
 public partial class App : Application
 {
     public IServiceProvider? Root { get; private set; }
-    internal ITagsProjectCtrl? Ctrl { get; private set; }
+    internal ITagsProjectCtrl Ctrl { get; private set; } = null!;
 
     private void Application_Startup(object sender, StartupEventArgs e)
     {
