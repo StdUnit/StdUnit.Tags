@@ -116,7 +116,8 @@ public class TagsMcpServerTools
         TagGrpWriteIntent intent = (_, _) =>
         {
             tag.Value = convertedValue;
-            return ValueTask.CompletedTask;
+            // net472 的 ValueTask 没有 CompletedTask（该属性在 .NET Core 2.1+），用 default 等价。
+            return default;
         };
 
         if (!proj.WriteIntent(entry.TagName(), intent, out var task))
@@ -183,14 +184,17 @@ public class TagsMcpServerTools
         // Phase 2: issue one intent per entry, collect tasks
         var tasks = new List<Task>();
         var results = new List<string>();
-        foreach (var (entryName, writes) in perEntry)
+        // net472 的 KeyValuePair<,> 没有 Deconstruct（该方法是 .NET Core 2.0+），故显式取 Key/Value。
+        foreach (var kvp in perEntry)
         {
+            var entryName = kvp.Key;
+            var writes = kvp.Value;
             var tagsToWrite = writes.Select(w => (w.Tag, w.ConvertedValue)).ToList();
             TagGrpWriteIntent intent = (_, _) =>
             {
                 foreach (var (t, cv) in tagsToWrite)
                     t.Value = cv;
-                return ValueTask.CompletedTask;
+                return default;
             };
 
             if (!proj.WriteIntent(entryName, intent, out var task))

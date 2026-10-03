@@ -77,8 +77,9 @@ public class MockSerialPortHandle : ISerialPortHandle
 
     public string ReadLine()
     {
-        if (ReadLineQueue.TryDequeue(out var result))
-            return result;
+        // 不能写成 Queue<T>.TryDequeue —— 那是 .NET Core 2.0+ 的 API，net472 没有
+        if (ReadLineQueue.Count > 0)
+            return ReadLineQueue.Dequeue();
         if (FallbackToDefaultOnEmptyQueue)
             return string.Empty;
         throw new InvalidOperationException("MockSerialPortHandle: ReadLineQueue 为空。");

@@ -1,2 +1,6 @@
+IsExternalInit framework: net472
+
 group Mcp
     ModelContextProtocol
+
+

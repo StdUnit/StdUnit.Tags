@@ -35,9 +35,7 @@ public class OpcUaClientDirectTagTests
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
 
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc)!;
-        dir = Path.Combine(dir, "OpcUaClientTags", "DirectTags");
+var dir = TestPaths.Fixture("OpcUaClientTags", "DirectTags");
 
         using var proj = factory.Create(dir);
 

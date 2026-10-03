@@ -31,9 +31,7 @@ public class WriteIntentProjTests
         using var scope = _root.CreateScope();
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc);
-        dir = Path.Combine(dir!, "S7Tags");
+        var dir = TestPaths.Fixture("S7Tags");
 
         var entry = new XElement("TagGrp",
             new XAttribute("name", "g1"),
@@ -62,7 +60,7 @@ public class WriteIntentProjTests
         proj.WriteIntent("g1", (entry, ct) =>
         {
             xx = true;
-            return ValueTask.CompletedTask;
+            return default;
         }, out var task);
 
         // 刚注册完成，WriteIntent还未触发
@@ -80,9 +78,7 @@ public class WriteIntentProjTests
         using var scope = _root.CreateScope();
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc);
-        dir = Path.Combine(dir!, "S7Tags");
+        var dir = TestPaths.Fixture("S7Tags");
 
         var entry = new XElement("TagGrp",
             new XAttribute("name", "g1"),

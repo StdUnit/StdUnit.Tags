@@ -1,5 +1,6 @@
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Itminus.Tags.SimpleFiles;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -75,7 +76,7 @@ public class TagChannelTests
 
         var task = channel.EnsureConnectedAsync(false, CancellationToken.None);
 
-        Assert.True(task.IsCompletedSuccessfully);
+        Assert.True(task.Status == TaskStatus.RanToCompletion);
     }
 
     [Fact]
@@ -90,7 +91,7 @@ public class TagChannelTests
 
         var task = channel.DisconnectAsync(CancellationToken.None);
 
-        Assert.True(task.IsCompletedSuccessfully);
+        Assert.True(task.Status == TaskStatus.RanToCompletion);
     }
 
     [Fact]

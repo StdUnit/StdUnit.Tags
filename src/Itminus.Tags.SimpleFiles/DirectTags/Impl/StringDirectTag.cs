@@ -24,6 +24,6 @@ internal class StringDirectTag : SimpleFilesDirectTagBase<string>
     /// </summary>
     protected override Task CreateAndWriteDefaultAsync(string path, CancellationToken ct)
     {
-        return File.WriteAllTextAsync(path, string.Empty, ct);
+        return Compat.FileAsyncCompat.WriteAllTextAsync(path, string.Empty, ct);
     }
 }

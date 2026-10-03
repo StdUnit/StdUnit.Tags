@@ -36,9 +36,7 @@ namespace Itminus.Tags.Tests.Core.TagUnions
             using var scope = this._root.CreateScope();
             var sp = scope.ServiceProvider;
             var factory = sp.GetRequiredService<ITagsProjectFactory>();
-            var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-            var dir = System.IO.Path.GetDirectoryName(loc);
-            dir = Path.Combine(dir!, "Core", "TagUnions");
+            var dir = TestPaths.Fixture("Core", "TagUnions");
             var proj = factory.Create(dir);
 
             var groups = new List<string>();

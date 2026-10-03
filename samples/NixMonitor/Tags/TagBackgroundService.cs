@@ -1,4 +1,3 @@
-using System.Reflection;
 using Itminus.Tags;
 
 namespace NixMonitor.Tags;
@@ -17,13 +16,16 @@ class NixMonitorBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var dir = Directory.GetParent(Assembly.GetExecutingAssembly().Location);
+        // 项目根目录：用应用程序目录（与 Itminus.Tags 在 dir 为空时的默认约定一致）。
+        // 不要用 Assembly.GetExecutingAssembly().Location —— 那是当前程序集所在目录，
+        // 与应用程序目录在影子拷贝/插件加载等场景下会分叉。
+        var dir = AppContext.BaseDirectory;
         stoppingToken.Register(async () =>
         {
             _logger.LogInformation("Tags处理停止");
             await _ctrl.StopAsync();
         });
-        await _ctrl.StartPollAsync(Path.Combine(dir!.FullName, "Tags"), null, (proj, sp, ct) =>
+        await _ctrl.StartPollAsync(Path.Combine(dir, "Tags"), null, (proj, sp, ct) =>
         {
             proj.RunnerStarted += (grp, ch) =>
             {

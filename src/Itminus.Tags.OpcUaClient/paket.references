@@ -1,2 +1,4 @@
 OPCFoundation.NetStandard.Opc.Ua
 System.Diagnostics.DiagnosticSource
+
+IsExternalInit framework: net472

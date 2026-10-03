@@ -111,9 +111,12 @@ public abstract class ComChannelBase<T> : ITagChannel
 
                 // 打开串口
                 this.SerialPort = CreateSerialPort(this._opt);
-                if (!string.IsNullOrEmpty(this.NewLine))
+                // 不能写成 string.IsNullOrEmpty —— net472 引用程序集无可空标注，
+                // 编译器看不到 [NotNullWhen(false)]，无法收缩类型（会报 CS8601）。
+                var newLine = this.NewLine;
+                if (newLine is not null && newLine.Length > 0)
                 {
-                    this.SerialPort.NewLine = this.NewLine;
+                    this.SerialPort.NewLine = newLine;
                 }
                 this.SerialPort.Open();
 

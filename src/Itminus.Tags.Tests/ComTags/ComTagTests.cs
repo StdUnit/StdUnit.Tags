@@ -348,7 +348,7 @@ public class ComTagTests
         var tag = CreateWriteOnlyTag("wo-tag-nop", channel);
 
         var task = tag.ReadAsync(CancellationToken.None);
-        Assert.True(task.IsCompletedSuccessfully);
+        Assert.True(task.Status == TaskStatus.RanToCompletion);
     }
 
     #endregion

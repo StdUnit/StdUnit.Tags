@@ -2,6 +2,7 @@ using Itminus.Tags.S7;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -411,14 +412,19 @@ public class S7DirectTagNumericEndianTests
 
     private static byte[] GetBytes(float value, EndianKinds endian)
     {
+        // net472 无 BinaryPrimitives.WriteSingleBigEndian/LittleEndian（.NET 5+）。
+        // 这里先取出 float 的位模式（Unsafe.As 是零分配的位重解释，
+        // 不用 BitConverter.GetBytes —— 后者会堆分配，不适合作为本仓库的示范写法），
+        // 再按目标字节序写入。
         var bytes = new byte[4];
+        var bits = Unsafe.As<float, int>(ref value);
         if (endian == EndianKinds.BigEndian)
         {
-            BinaryPrimitives.WriteSingleBigEndian(bytes, value);
+            BinaryPrimitives.WriteInt32BigEndian(bytes, bits);
         }
         else
         {
-            BinaryPrimitives.WriteSingleLittleEndian(bytes, value);
+            BinaryPrimitives.WriteInt32LittleEndian(bytes, bits);
         }
         return bytes;
     }

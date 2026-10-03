@@ -37,9 +37,7 @@ public class ComScriptProjTests
         using var scope = this._root.CreateScope();
         var sp = scope.ServiceProvider;
         //var factory = sp.GetRequiredService<ITagsProjectFactory>();
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc);
-        dir = Path.Combine(dir!, "ComTags", "ComScriptTests");
+        var dir = TestPaths.Fixture("ComTags", "ComScriptTests");
         xmlpath = Path.Combine(dir, xmlpath);
         var root = XElement.Load(xmlpath);
         using var proj = sp.MakeProject(dir!, root);
@@ -139,9 +137,7 @@ public class ComScriptProjTests
         using var scope = this._root.CreateScope();
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc);
-        dir = Path.Combine(dir!, "ComTags", "ComScriptTests");
+        var dir = TestPaths.Fixture("ComTags", "ComScriptTests");
         xmlpath = Path.Combine(dir, xmlpath);
         var root = XElement.Load(xmlpath);
         using var proj = factory.Create(dir!, root);
@@ -212,9 +208,7 @@ public class ComScriptProjTests
         using var scope = this._root.CreateScope();
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc);
-        dir = Path.Combine(dir!, "ComTags", "ComScriptTests");
+        var dir = TestPaths.Fixture("ComTags", "ComScriptTests");
         xmlpath = Path.Combine(dir, xmlpath);
         var root = XElement.Load(xmlpath);
         using var proj = factory.Create(dir!, root);

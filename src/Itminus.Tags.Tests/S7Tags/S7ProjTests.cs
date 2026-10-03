@@ -32,9 +32,7 @@ public class S7ProjTests
         var scope = this._root.CreateScope();
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = System.IO.Path.GetDirectoryName(loc);
-        dir = Path.Combine(dir!, "S7Tags");
+        var dir = TestPaths.Fixture("S7Tags");
         using var proj = factory.Create(dir!);
 
         // Test Channels

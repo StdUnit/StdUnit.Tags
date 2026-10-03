@@ -1,6 +1,4 @@
-﻿using System.Text;
-
-namespace Itminus.Tags.S7;
+﻿namespace Itminus.Tags.S7;
 
 internal class StrDirectTag : ContinuousBytesBasedDirectTag<string>
 {
@@ -20,7 +18,7 @@ internal class StrDirectTag : ContinuousBytesBasedDirectTag<string>
     protected override string ConvertFromBytes(Span<byte> bytes)
     {
         var size = bytes[1];
-        var str = Encoding.ASCII.GetString(bytes.Slice(2, size));
+        var str = Compat.AsciiTextCompat.GetString(bytes.Slice(2, size));
         return str;
     }
     protected override void FillBytes(Span<byte> bytes, string value)
@@ -30,7 +28,7 @@ internal class StrDirectTag : ContinuousBytesBasedDirectTag<string>
         {
             throw new ArgumentException($"String exceeds the maximum length(MaxLen={Maxlen}, attempts={value})");
         }
-        var read = Encoding.ASCII.GetBytes(value, bytes.Slice(2));
+        var read = Compat.AsciiTextCompat.GetBytes(value, bytes.Slice(2));
         bytes[0] = this.Maxlen;
         bytes[1] = (byte)read;
     }

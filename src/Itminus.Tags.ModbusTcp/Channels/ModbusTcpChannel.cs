@@ -122,7 +122,7 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
         try
         {
             _tcpClient = new TcpClient();
-            await _tcpClient.ConnectAsync(IpAddr, Port, ct);
+            await Compat.TcpConnectionCompat.ConnectAsync(_tcpClient, IpAddr, Port, ct);
             var factory = new ModbusFactory();
             var mb = factory.CreateMaster(_tcpClient);
             mb.Transport.ReadTimeout = ReadTimeout;

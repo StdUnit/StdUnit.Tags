@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 
 namespace Itminus.Tags.S7;
-
 /// <summary>
 /// S7 Float 组合子：缓存 = PLC 内存原始字节（IEEE754），按 EndianKind 直读。
 /// </summary>
@@ -26,9 +25,7 @@ public class S7FloatTagCbntor : S7TagCbntorBase
         get
         {
             var span = this.Cache.Span.Slice(this.CacheOffset, 4);
-            return this.TagEndian() == EndianKinds.BigEndian
-                ? BinaryPrimitives.ReadSingleBigEndian(span)
-                : BinaryPrimitives.ReadSingleLittleEndian(span);
+            return Compat.FloatBitsCompat.Read(span, this.TagEndian() == EndianKinds.BigEndian);
         }
         set
         {
@@ -36,14 +33,7 @@ public class S7FloatTagCbntor : S7TagCbntorBase
             var data = (float)value;
 #pragma warning restore CS8605 // Unboxing a possibly null value.
             var dst = this.Cache.Span.Slice(this.CacheOffset, 4);
-            if (this.TagEndian() == EndianKinds.BigEndian)
-            {
-                BinaryPrimitives.WriteSingleBigEndian(dst, data);
-            }
-            else
-            {
-                BinaryPrimitives.WriteSingleLittleEndian(dst, data);
-            }
+            Compat.FloatBitsCompat.Write(dst, data, this.TagEndian() == EndianKinds.BigEndian);
             this.Timestamp = DateTime.Now;
             this.MarkDirty();
         }

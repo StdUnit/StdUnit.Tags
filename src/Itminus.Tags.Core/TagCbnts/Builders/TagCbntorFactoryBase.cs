@@ -28,11 +28,13 @@ public abstract class TagCbntorFactoryBase
 
 
     /// <summary>
-    /// 根据描述，创建Tag
+    /// 根据描述，创建Tag<br/>
+    /// 返回类型是 <see cref="ITagCbntor"/> 而非 <see cref="ITag"/>：本工厂产出的必然是组合内的测点子项。<br/>
+    /// 这也避免了派生类用协变返回类型重写——协变返回类型需要 .NET 5+ 运行时支持，net472 下会报 CS8830。
     /// </summary>
     /// <param name="tagDescriptor"></param>
     /// <returns></returns>
-    public abstract ITag CreateTag(TagDescriptor tagDescriptor);
+    public abstract ITagCbntor CreateTag(TagDescriptor tagDescriptor);
 
 
 }

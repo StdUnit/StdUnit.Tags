@@ -43,7 +43,11 @@ jobs:
       env:
         PYTHONUTF8: 1
       with:
-        files: ./TestResults/**/coverage.cobertura.xml
+        # `files` is a comma-separated list of explicit files, not a glob.
+        # Now that Tests multi-targets net8.0;net472 there are several
+        # coverage.cobertura.xml reports, so point the uploader at the folder
+        # (the CLI searches it recursively) instead of expanding a glob.
+        directory: ./TestResults
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: true
         verbose: true

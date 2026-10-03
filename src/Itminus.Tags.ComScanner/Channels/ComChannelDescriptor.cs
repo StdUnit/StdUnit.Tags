@@ -34,17 +34,21 @@ public class ComChannelDescriptor : TagChannelDescriptor
     public override XElement ToXElement()
     {
         var ele = base.ToXElement();
-        if (!string.IsNullOrEmpty(this.Option.NewLine))
+        // 下面几处的判空之所以不用 string.IsNullOrEmpty：net472 引用程序集无可空标注，
+        // 编译器看不到 [NotNullWhen(false)]，无法收缩类型（会报 CS8604）。
+        var newLine = this.Option.NewLine;
+        if (newLine is not null && newLine.Length > 0)
         {
-            ele.SetOrAddChild(nameof(Option.NewLine), this.Option.NewLine);
+            ele.SetOrAddChild(nameof(Option.NewLine), newLine);
         }
         if (!this.Option.ReadEntireLine)
         {
             ele.SetOrAddChild(nameof(Option.ReadEntireLine), this.Option.ReadEntireLine);
         }
-        if (!string.IsNullOrEmpty(this.Option.ReadScript))
+        var readScript = this.Option.ReadScript;
+        if (readScript is not null && readScript.Length > 0)
         {
-            ele.SetOrAddChild(nameof(Option.ReadScript), this.Option.ReadScript);
+            ele.SetOrAddChild(nameof(Option.ReadScript), readScript);
         }
         if (this.Option.ReadScriptDebugInformationEnabled)
         {

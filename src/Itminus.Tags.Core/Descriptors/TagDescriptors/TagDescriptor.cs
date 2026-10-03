@@ -80,7 +80,11 @@ public class TagDescriptor : ITagsDescriptor
     /// </summary>
     public TagAddress NormalizedAddress
     {
-        get => String.IsNullOrEmpty(_normalizedAddress) ? RawAddress : _normalizedAddress;
+        get => (
+            String.IsNullOrEmpty(_normalizedAddress) ? 
+                RawAddress : 
+                _normalizedAddress
+            ) ?? "";
         set
         {
             _normalizedAddress = value;

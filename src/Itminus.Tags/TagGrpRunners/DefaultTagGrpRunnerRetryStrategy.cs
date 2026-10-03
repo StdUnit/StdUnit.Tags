@@ -31,7 +31,12 @@ public class DefaultTagGrpRunnerRetryStrategy : ITagGrpRunnerRetryStrategy
         var ratio = 1.0 / (1.0 + Math.Exp(exponent));
 
         var totalMs = MinDelay.TotalMilliseconds + (MaxDelay - MinDelay).TotalMilliseconds * ratio;
-        var clamped = Math.Clamp(totalMs, MinDelay.TotalMilliseconds, MaxDelay.TotalMilliseconds);
+        // Math.Clamp 在 net472 下不可用，此处手动收敛到 [MinDelay, MaxDelay]。
+        var minMs = MinDelay.TotalMilliseconds;
+        var maxMs = MaxDelay.TotalMilliseconds;
+        var clamped = 
+            totalMs < minMs ?  minMs : 
+            totalMs > maxMs ? maxMs : totalMs;
         return TimeSpan.FromMilliseconds(clamped);
     }
 }

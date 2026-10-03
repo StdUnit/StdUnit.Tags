@@ -33,9 +33,7 @@ public class HjzkProjTests
     {
         var scope = this._root.CreateScope();
         var sp = scope.ServiceProvider;
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = System.IO.Path.GetDirectoryName(loc);
-        dir = Path.Combine(dir!, "HjzkTags");
+        var dir = TestPaths.Fixture("HjzkTags");
         using var proj = sp.MakeProject(dir);
 
         // Test Channels

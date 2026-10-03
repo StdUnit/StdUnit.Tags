@@ -1,5 +1,7 @@
 ﻿using Itminus.Tags.Core.Projects;
+#if !NETFRAMEWORK
 using McMaster.NETCore.Plugins;
+#endif
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -30,10 +32,13 @@ internal class LogicetLoader : ILogicetsLoader
     /// <inheritdoc/>
     public LoadedLogicets LoadLogicets(IServiceProvider sp, IEnumerable<string> dllLocations, IReadOnlyList<ITagChannel> channels, ITagGrp tags)
     {
+        var dlls = dllLocations as IReadOnlyList<string> ?? dllLocations.ToList();
+        WarnAboutNetFrameworkLimitations(dlls);
+
         var disposables = new List<IDisposable>();
         var logicets = new List<ILogicet>();
 
-        foreach (var dll in dllLocations)
+        foreach (var dll in dlls)
         {
 
             // 
@@ -77,6 +82,19 @@ internal class LogicetLoader : ILogicetsLoader
     private (IList<ILogicet> batch, IDisposable loader) MakeCore(IServiceProvider sp, IReadOnlyList<ITagChannel> channels, ITagGrp tags, string dll, List<Type> sharedTypes)
     {
         this._options.SharedTypesFilter?.Invoke(dll, sharedTypes);
+#if NETFRAMEWORK
+        // net472 没有 AssemblyLoadContext，无法使用 McMaster.NETCore.Plugins。
+        // 退化为 Assembly.LoadFrom：保留「宿主开发与插件开发分离」的能力（插件可独立编译、按路径挂载），
+        // 但缺少两项能力，属于降级用法（限制见 WarnAboutNetFrameworkLimitations 输出的告警）：
+        //   ① 无依赖隔离：依赖解析走默认上下文，与宿主同名程序集复用已加载的实例（先加载者为准）；
+        //   ② 无卸载：返回空 IDisposable，程序集在宿主进程退出前无法释放。
+        // 注意：不要改用 Assembly.LoadFile——它不做标识匹配，插件里的 ILogicet 会被判定为
+        //       与宿主不同型（IsAssignableFrom 为 false）而被全部跳过。
+        var pluginAssembly = Assembly.LoadFrom(dll);
+        var fallbackBatch = MakeLogicets(sp, pluginAssembly, channels, tags);
+
+        return (fallbackBatch, _noopDisposable);
+#else
         var loader = PluginLoader.CreateFromAssemblyFile(
             dll,
             isUnloadable: true,
@@ -86,6 +104,7 @@ internal class LogicetLoader : ILogicetsLoader
         var batch = MakeLogicets(sp, plugin, channels, tags);
 
         return (batch, loader);
+#endif
     }
 
 
@@ -121,5 +140,45 @@ internal class LogicetLoader : ILogicetsLoader
         return logicets!;
     }
 
+    /// <summary>
+    /// net472 下 Logicet 插件以 <see cref="Assembly.LoadFrom(string)"/> 加载，缺少依赖隔离与卸载能力。
+    /// 这里仅发出 WARNING（不阻断加载）：插件照常可用，但使用者需知悉其限制。net8.0 下为空实现。
+    /// </summary>
+    private void WarnAboutNetFrameworkLimitations(IReadOnlyList<string> dlls)
+    {
+#if NETFRAMEWORK
+        if (dlls.Count == 0)
+        {
+            return;
+        }
+
+        this._logger.LogWarning(
+            "net472 下 Logicet 插件降级为 Assembly.LoadFrom 加载，缺少隔离与卸载能力："
+            + "① 不做依赖隔离，插件依赖与宿主同名程序集冲突时以先加载者为准；"
+            + "② 不支持卸载，project 停止不会释放插件程序集，插件 dll 在宿主进程退出前一直被锁定，"
+            + "同一路径的插件重新编译后若不重启宿主，可能仍运行旧代码。"
+            + "dlls={dlls}",
+            string.Join(", ", dlls));
+
+        if (this._options.SharedTypesFilter is not null)
+        {
+            this._logger.LogWarning(
+                "net472 下 LogicetLoadOptions.SharedTypesFilter 不生效：插件与宿主本来就在同一加载上下文中，"
+                + "同名程序集天然复用同一份实例，无需（也无法）指定共享类型。该回调仍会被调用，但其结果被忽略。");
+        }
+#endif
+    }
+
+#if NETFRAMEWORK
+    /// <summary>net472 下插件加载不具备卸载语义，用作 <see cref="IDisposable"/> 占位。</summary>
+    private static readonly IDisposable _noopDisposable = new NoopDisposable();
+
+    private sealed class NoopDisposable : IDisposable
+    {
+        public void Dispose()
+        {
+        }
+    }
+#endif
 
 }

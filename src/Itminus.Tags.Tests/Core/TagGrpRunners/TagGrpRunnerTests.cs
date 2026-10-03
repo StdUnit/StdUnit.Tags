@@ -297,7 +297,7 @@ public class TagGrpRunnerTests
         // 回归测试：断开动作卡住时（模拟底层读持锁），清理路径应在有限超时后放弃等待并退出，
         // 而不是无限阻塞 StartAsync。
         // Arrange
-        var slowDisconnect = new TaskCompletionSource();
+        var slowDisconnect = new TaskCompletionSource<bool>();
         var channel = new RecordingChannel(new TagChannelDescriptor { Name = "fake-channel" })
         {
             SlowDisconnect = slowDisconnect,
@@ -328,7 +328,7 @@ public class TagGrpRunnerTests
         Assert.True(channel.DisconnectAsyncCallCount >= 1);
 
         // 清理：让挂起的断开完成，避免测试泄漏
-        slowDisconnect.TrySetResult();
+        slowDisconnect.TrySetResult(true);
     }
 
     [Fact]
@@ -452,7 +452,7 @@ public class TagGrpRunnerTests
         project.WriteIntent("intent-entry", (grp, ct) =>
         {
             intentExecuted = true;
-            return ValueTask.CompletedTask;
+            return default;
         }, out var intentTask);
 
         runner.TurnProcess += (_, _) =>
@@ -466,7 +466,51 @@ public class TagGrpRunnerTests
 
         // Assert — 意图已被 DrainWriteIntentsAsync 处理，intentTask 应完成
         Assert.True(intentExecuted, "意图应被执行");
-        Assert.True(intentTask.IsCompletedSuccessfully, "intentTask 应成功完成");
+        Assert.True(intentTask.Status == TaskStatus.RanToCompletion, "intentTask 应成功完成");
+    }
+
+    [Fact]
+    public async Task StartAsync_ProcessMultipleIntents_CompletesAllWithSequentialIndex()
+    {
+        // Arrange
+        var entry = new MockTagGrp(new TagGrpDescriptor { Name = "intent-entry", ScanInterval = 20 })
+        {
+            Channel = new FakedChannel(new TagChannelDescriptor { Name = "fake-channel" }),
+            IsEnabled = true
+        };
+        var project = new MockProject();
+        var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance);
+
+        using var cts = new CancellationTokenSource();
+        var executed = new List<int>();
+
+        project.WriteIntent("intent-entry", (grp, ct) =>
+        {
+            executed.Add(1);
+            return default;
+        }, out var first);
+        project.WriteIntent("intent-entry", (grp, ct) =>
+        {
+            executed.Add(2);
+            return default;
+        }, out var second);
+
+        runner.TurnProcess += (_, _) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        };
+
+        // Act
+        await RunUntilCancelled(runner, entry, cts.Token);
+
+        // Assert — 同一轮次排空的多个意图都应执行且按 FIFO 顺序完成；
+        // 完成值是在本次排空批次中的 0 基序号（IntentCompletion.Completion 为 TaskCompletionSource<int>）
+        Assert.Equal(new[] { 1, 2 }, executed);
+        Assert.True(first.Status == TaskStatus.RanToCompletion, "第1个 intentTask 应成功完成");
+        Assert.True(second.Status == TaskStatus.RanToCompletion, "第2个 intentTask 应成功完成");
+        Assert.Equal(0, await (Task<int>)first);
+        Assert.Equal(1, await (Task<int>)second);
     }
 
     [Fact]
@@ -648,7 +692,7 @@ public class TagGrpRunnerTests
         {
             var ch = _channels.GetOrAdd(entry, _ => CreateIntentChannel());
             var writer = ch.Writer;
-            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
             var item = new IntentCompletion(intent, tcs);
             task = tcs.Task;
             var written = writer.TryWrite(item);
@@ -729,7 +773,7 @@ public class TagGrpRunnerTests
         /// 若不为 null，DisconnectAsync 会等待该 TCS——用于模拟"断开卡住"的场景，
         /// 验证清理路径会超时放弃等待而不是无限阻塞。
         /// </summary>
-        public TaskCompletionSource? SlowDisconnect { get; set; }
+        public TaskCompletionSource<bool>? SlowDisconnect { get; set; }
 
         public Task DisconnectAsync(CancellationToken ct)
         {

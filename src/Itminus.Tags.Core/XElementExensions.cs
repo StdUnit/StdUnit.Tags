@@ -81,7 +81,10 @@ public static class XElementExensions
     internal static TagKinds GetTagUnionTagKind(this XElement e, string tagName)
     {
         var type = (string?)e.Attribute("type");
-        if (string.IsNullOrEmpty(type))
+
+        // 本来这个地方是 string.IsNullOrEmpty
+        // 但是 net472 引用程序集无可空标注，编译器看不到 [NotNullWhen(false)]，无法收缩类型（会报 CS8603）
+        if (type is null || type.Length == 0)
         {
             return BuiltinTagKinds.Unknown;
         }

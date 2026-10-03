@@ -34,9 +34,7 @@ public class ZLanProjTests
         var scope = this._root.CreateScope();
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = System.IO.Path.GetDirectoryName(loc);
-        dir = Path.Combine(dir!, "ZLanTags");
+        var dir = TestPaths.Fixture("ZLanTags");
         using var proj = factory.Create(dir!);
 
         // Test Channels

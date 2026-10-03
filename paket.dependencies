@@ -5,11 +5,11 @@ source https://baget.stdunit.com/v3/index.json
 cache ./nuget-package-caches
 storage: none
 strategy: min
-framework: net8.0, net8.0-windows, netstandard2.0
+framework: net472,net8.0, net8.0-windows, netstandard2.0
 
 nuget Microsoft.Extensions.DependencyInjection >= 8.0 lowest_matching: true
 nuget Microsoft.Extensions.Logging >= 8.0 lowest_matching: true
-nuget System.Memory >= 4.6.3 lowest_matching: true
+
 nuget Microsoft.XmlSerializer.Generator >= 8.0 lowest_matching: true
 
 nuget FSharp.Core >= 8.0 lowest_matching: true
@@ -23,10 +23,19 @@ nuget R3 >= 1.3.0 lowest_matching: true
 nuget R3Extensions.WPF >= 1.3.0 lowest_matching: true
 
 nuget System.Reactive >= 6.1.0 lowest_matching: true
-
 nuget System.IO.Ports >= 8.0.0 lowest_matching: true
+
+# net472 的 Span<T> / ValueTuple/Text.Json 垫片。netcore 由共享框架提供，netfx 才需要这些依赖包
+nuget System.Memory >= 4.6.3 restriction: == net472, lowest_matching: true
+nuget System.ValueTuple >= 4.6.1 restriction: == net472, lowest_matching: true
+nuget System.Text.Json >= 8.0 restriction: == net472, lowest_matching: true
+nuget IsExternalInit >= 1.0.3 restriction: == net472, lowest_matching: true
+
+# 抬高这些包的下限以与 Mcp 组对齐。其中，AsyncInterfaces/Channels 只有netfx需要，netcore 由共享框架提供
 nuget System.IO.Pipelines >= 10.0.7 lowest_matching: true
 nuget System.Diagnostics.DiagnosticSource >= 10.0.10 lowest_matching: true
+nuget Microsoft.Bcl.AsyncInterfaces >= 10.0.5 restriction: == net472, lowest_matching: true
+nuget System.Threading.Channels >= 10.0.5 restriction: == net472, lowest_matching: true
 
 nuget Microsoft.AspNetCore.Components.Web >= 8.0.12 lowest_matching: true
 nuget MudBlazor >= 9.2.0 lowest_matching: true
@@ -43,19 +52,28 @@ nuget Microsoft.NET.Test.Sdk >= 17.8.0 lowest_matching: true
 
 nuget Moq
 
+
 group Mcp
+    # 本组存在的唯一目的是：隔离 ModelContextProtocol 的间接依赖 Microsoft.Extensions.* 10.0.x。
+    # 如果合并入`Main`组，会把`Main`的依赖项 Logging/DI/Options/Primitives/Text.Json/Channels 一并抬到 10.0.5
+    #
+    # 另开一个组的代价是，双方共享的所有间接依赖，都需要手动固定住所有相关group都统一的版本，
+    # 比如，上面`Main`下的 System.IO.Pipelines 几个包版本是 10.x，一方面，看起来与 Main 其余 8.x 不一致，另一方面看起来似乎并没有被直接用到。但这 **可以为之**：
+    # 因为同一个包分属于不同group的不同版本，被同一个项目引用成传递依赖，会直接报错
+
     source https://api.nuget.org/v3/index.json
     source https://baget.stdunit.com/v3/index.json
 
     cache ./nuget-package-caches
     storage: none
     strategy: min
-    framework: net8.0, net8.0-windows
+    framework: net472,net8.0, net8.0-windows
 
     nuget ModelContextProtocol >= 1.2 lowest_matching: true
     nuget ModelContextProtocol.AspNetCore >= 1.2 lowest_matching: true
     nuget System.IO.Pipelines >= 10.0.7 lowest_matching: true
     nuget System.Diagnostics.DiagnosticSource >= 10.0.10 lowest_matching: true
+
 
 group SchemaGenerator
     source https://api.nuget.org/v3/index.json
@@ -70,3 +88,4 @@ group SchemaGenerator
     # 否则编译消费项目时报 CS9057（analyzer 引用更高版本编译器）。
     # 用独立 group 隔离，避免主 group 的 Microsoft.CodeAnalysis.CSharp.Scripting >= 5.0（ComScanner 用）拉高版本。
     nuget Microsoft.CodeAnalysis.CSharp >= 4.8 lowest_matching: true
+

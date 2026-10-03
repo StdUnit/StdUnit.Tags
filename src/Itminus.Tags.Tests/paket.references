@@ -1,3 +1,4 @@
+
 System.Reactive
 R3
 Microsoft.NET.Test.Sdk
@@ -5,3 +6,8 @@ xunit
 xunit.runner.visualstudio
 coverlet.collector
 Moq
+
+IsExternalInit framework: net472
+
+group Mcp
+    ModelContextProtocol

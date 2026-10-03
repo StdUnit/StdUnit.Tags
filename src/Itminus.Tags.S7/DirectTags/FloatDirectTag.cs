@@ -1,5 +1,4 @@
-﻿using System.Buffers.Binary;
-
+﻿
 namespace Itminus.Tags.S7;
 
 
@@ -14,20 +13,11 @@ internal class FloatDirectTag : ContinuousBytesBasedDirectTag<float>
 
     protected override float ConvertFromBytes(Span<byte> bytes)
     {
-        return this.TagEndian() == EndianKinds.BigEndian ?
-            BinaryPrimitives.ReadSingleBigEndian(bytes) :
-            BinaryPrimitives.ReadSingleLittleEndian(bytes);
+        return Compat.FloatBitsCompat.Read(bytes, this.TagEndian() == EndianKinds.BigEndian);
     }
 
     protected override void FillBytes(Span<byte> bytes, float value)
     {
-        if (this.TagEndian() == EndianKinds.BigEndian)
-        {
-            BinaryPrimitives.WriteSingleBigEndian(bytes, value);
-        }
-        else
-        {
-            BinaryPrimitives.WriteSingleLittleEndian(bytes, value);
-        }
+        Compat.FloatBitsCompat.Write(bytes, value, this.TagEndian() == EndianKinds.BigEndian);
     }
 }

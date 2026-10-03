@@ -56,8 +56,10 @@ public class DefaultTagGrpRunnerRetryStrategyTests
                 $"延迟 {d:hh\\:mm\\:ss\\.fff} 不应超过 MaxDelay={maxDelay:hh\\:mm\\:ss\\.fff}");
         }
         // 最后的值应非常接近 MaxDelay（>= 90%）
-        var last = delays[^1];
-        Assert.True(last >= maxDelay * 0.9,
+        // 注：net472 的 TimeSpan 没有 operator *(TimeSpan, double)（.NET Core 2.0+ 才有），故直接在毫秒上乘。
+        var last = delays[delays.Count - 1];
+        var threshold = TimeSpan.FromMilliseconds(maxDelay.TotalMilliseconds * 0.9);
+        Assert.True(last >= threshold,
             $"最终延迟 {last:hh\\:mm\\:ss\\.fff} 应接近 {maxDelay:hh\\:mm\\:ss\\.fff}");
     }
 
@@ -119,5 +121,45 @@ public class DefaultTagGrpRunnerRetryStrategyTests
         var tolerance = TimeSpan.FromSeconds(1);
         Assert.True(Math.Abs((delay - half).TotalMilliseconds) <= tolerance.TotalMilliseconds,
             $"中点处的延迟 {delay:hh\\:mm\\:ss\\.fff} 应接近 {half:hh\\:mm\\:ss\\.fff}");
+    }
+
+    [Fact]
+    public void GetDelay_AlwaysWithinConfiguredRange()
+    {
+        // Arrange
+        var strategy = new DefaultTagGrpRunnerRetryStrategy
+        {
+            MinDelay = TimeSpan.FromMilliseconds(300),
+            MaxDelay = TimeSpan.FromSeconds(20),
+            GrowthRate = 1.2,
+            Midpoint = 4,
+        };
+
+        // Act & Assert — 收敛（clamp）后的值必须始终落在 [MinDelay, MaxDelay] 内
+        foreach (var n in Enumerable.Range(1, 60))
+        {
+            var delay = strategy.GetDelay(n);
+            Assert.True(delay >= strategy.MinDelay,
+                $"n={n} 的延迟 {delay:hh\\:mm\\:ss\\.fff} 不应小于 MinDelay={strategy.MinDelay:hh\\:mm\\:ss\\.fff}");
+            Assert.True(delay <= strategy.MaxDelay,
+                $"n={n} 的延迟 {delay:hh\\:mm\\:ss\\.fff} 不应大于 MaxDelay={strategy.MaxDelay:hh\\:mm\\:ss\\.fff}");
+        }
+    }
+
+    [Fact]
+    public void GetDelay_WhenMinDelayGreaterThanMaxDelay_DoesNotThrow()
+    {
+        // 旧实现用 Math.Clamp(v, min, max)：min > max 时会抛 ArgumentException。
+        // net472 没有 Math.Clamp，改为手写收敛后，这种错误配置不再是异常路径。
+        // 这里把“不抛异常且返回 MinDelay”这一现状钉住。
+        var strategy = new DefaultTagGrpRunnerRetryStrategy
+        {
+            MinDelay = TimeSpan.FromSeconds(10),
+            MaxDelay = TimeSpan.FromSeconds(1),
+        };
+
+        var delay = strategy.GetDelay(1);
+
+        Assert.Equal(strategy.MinDelay, delay);
     }
 }

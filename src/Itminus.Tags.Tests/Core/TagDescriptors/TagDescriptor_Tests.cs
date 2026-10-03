@@ -29,6 +29,57 @@ public class TagDescriptor_Tests
     }
 
     [Fact]
+    public void Test_NormalizedAddress_FallsBackToRawAddress_WhenNormalizedIsEmpty()
+    {
+        var descriptor = new TagDescriptor
+        {
+            RawAddress = "DB200.100.1",
+            TagName = "tag-2",
+            TagKind = BuiltinTagKinds.BIT,
+            TagSize = 1,
+        };
+
+        descriptor.NormalizedAddress = string.Empty;
+
+        Assert.Equal("DB200.100.1", descriptor.NormalizedAddress);
+    }
+
+    [Fact]
+    public void Test_NormalizedAddress_PrefersNormalizedOverRaw()
+    {
+        var descriptor = new TagDescriptor
+        {
+            RawAddress = "$$104.1",
+            TagName = "tag-3",
+            TagKind = BuiltinTagKinds.BIT,
+            TagSize = 1,
+        };
+
+        descriptor.NormalizedAddress = "DB200.104.1";
+
+        Assert.Equal("DB200.104.1", descriptor.NormalizedAddress);
+    }
+
+    [Fact]
+    public void Test_NormalizedAddress_NeverReturnsNull()
+    {
+        // net472 支持分支给 getter 加了 ?? ""：契约是“永不返回 null”。
+        // 即使 RawAddress 与归一化地址都是 null，也应返回空字符串而不是 null。
+        var descriptor = new TagDescriptor
+        {
+            RawAddress = null!,
+            TagName = "tag-4",
+            TagKind = BuiltinTagKinds.BIT,
+            TagSize = 1,
+        };
+
+        var normalized = descriptor.NormalizedAddress;
+
+        Assert.NotNull(normalized);
+        Assert.Equal(string.Empty, normalized);
+    }
+
+    [Fact]
     public void Test_ConversionWithXElement_PersistsRawAddressOnly()
     {
         var descriptor1 = new TagDescriptor

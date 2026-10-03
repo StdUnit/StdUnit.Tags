@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers.Binary;
 using System.Linq;
 using Itminus.Tags;
 using Itminus.Tags.S7;
@@ -39,8 +38,8 @@ public class FloatTagCbntorEndianTests
         const float value = 1.0f; // 0x3F800000 => big-endian bytes: [0x3F, 0x80, 0x00, 0x00]
         tag.Value = value;
 
-        var expected = new byte[4];
-        BinaryPrimitives.WriteSingleBigEndian(expected, value);
+        // 直接写死期望字节，不依赖 BinaryPrimitives.WriteSingleBigEndian（.NET 5+，net472 没有）
+        var expected = new byte[] { 0x3F, 0x80, 0x00, 0x00 };
         var actual = cbnt.Cache.Span.Slice(0, 4).ToArray();
         Assert.Equal(expected, actual);
     }
@@ -55,8 +54,7 @@ public class FloatTagCbntorEndianTests
         const float value = 1.0f; // 0x3F800000 => little-endian bytes: [0x00, 0x00, 0x80, 0x3F]
         tag.Value = value;
 
-        var expected = new byte[4];
-        BinaryPrimitives.WriteSingleLittleEndian(expected, value);
+        var expected = new byte[] { 0x00, 0x00, 0x80, 0x3F };
         var actual = cbnt.Cache.Span.Slice(0, 4).ToArray();
         Assert.Equal(expected, actual);
     }
@@ -74,14 +72,10 @@ public class FloatTagCbntorEndianTests
         var actual1 = cbnt.Cache.Span.Slice(0, 4).ToArray();
         var actual2 = cbnt.Cache.Span.Slice(4, 4).ToArray();
 
-        Span<byte> expected1 = stackalloc byte[4];
-        BinaryPrimitives.WriteSingleLittleEndian(expected1, 1.0f);
-
-        Span<byte> expected2 = stackalloc byte[4];
-        BinaryPrimitives.WriteSingleLittleEndian(expected2, 2.0f);
-
-        expected1.Reverse();
-        Assert.Equal(expected1.ToArray(), actual1);
-        Assert.Equal(expected2.ToArray(), actual2);
+        // 1.0f 小端字节序为 [0x00,0x00,0x80,0x3F]，大端即其反序；2.0f(0x40000000) 小端为 [0x00,0x00,0x00,0x40]
+        var expected1 = new byte[] { 0x3F, 0x80, 0x00, 0x00 };
+        var expected2 = new byte[] { 0x00, 0x00, 0x00, 0x40 };
+        Assert.Equal(expected1, actual1);
+        Assert.Equal(expected2, actual2);
     }
 }

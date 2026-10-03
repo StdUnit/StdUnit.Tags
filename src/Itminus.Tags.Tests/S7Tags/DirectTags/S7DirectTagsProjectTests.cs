@@ -28,9 +28,7 @@ public class S7DirectTagsProjectTests
         var sp = scope.ServiceProvider;
         var factory = sp.GetRequiredService<ITagsProjectFactory>();
 
-        var loc = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var dir = Path.GetDirectoryName(loc)!;
-        dir = Path.Combine(dir, "S7Tags", "DirectTags");
+        var dir = TestPaths.Fixture("S7Tags", "DirectTags");
 
         using var proj = factory.Create(dir);
 
