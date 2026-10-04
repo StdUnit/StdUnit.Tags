@@ -13,9 +13,10 @@ nuget Microsoft.Extensions.Logging >= 8.0 lowest_matching: true
 nuget Microsoft.XmlSerializer.Generator >= 8.0 lowest_matching: true
 
 nuget FSharp.Core >= 8.0 lowest_matching: true
-nuget Itminus.FSharpExtensions >= 0.1.7 lowest_matching: true
 nuget NModbus >= 3.0.62 lowest_matching: true
-nuget StdUnit.Sharp7 >= 0.7.2 lowest_matching: true
+nuget Itminus.FSharpExtensions >= 0.2.3 lowest_matching: true
+nuget StdUnit.Sharp7 >= 0.7.3 lowest_matching: true
+
 
 nuget McMaster.NETCore.Plugins >= 2.0.0  restriction: || (== net8.0) (== net8.0-windows), lowest_matching: true
 
