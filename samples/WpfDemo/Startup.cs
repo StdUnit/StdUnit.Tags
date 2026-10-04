@@ -1,5 +1,5 @@
-﻿using Itminus.Tags.BlazorLib;
-using Itminus.Tags.McpServer;
+﻿using StdUnit.Tags.BlazorLib;
+using StdUnit.Tags.McpServer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using WpfDemo.Tags;
@@ -40,7 +40,7 @@ public static class STARTUP
         app.UseRouting();
         app.UseAuthentication();
         app.UseAntiforgery();
-        app.MapRazorComponents<Itminus.Tags.BlazorLib.Apps.TagsApp>()
+        app.MapRazorComponents<StdUnit.Tags.BlazorLib.Apps.TagsApp>()
             .AddInteractiveServerRenderMode();
         app.MapMcp("/mcp");
     }

@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+	<OutputType>Library</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\StdUnit.Tags.BlazorLib.Core\StdUnit.Tags.BlazorLib.Core.csproj" />
+    <ProjectReference Include="..\StdUnit.Tags.ModbusTcp\StdUnit.Tags.ModbusTcp.csproj" />
+    <ProjectReference Include="..\StdUnit.Tags.OpcUaClient\StdUnit.Tags.OpcUaClient.csproj" />
+    <ProjectReference Include="..\StdUnit.Tags.RxExtensions\StdUnit.Tags.RxExtensions.csproj" />
+    <ProjectReference Include="..\StdUnit.Tags.S7\StdUnit.Tags.S7.csproj" />
+    <ProjectReference Include="..\StdUnit.Tags.ZLan\StdUnit.Tags.ZLan.csproj" />
+    <ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\StdUnit.Tags.ComScanner\StdUnit.Tags.ComScanner.csproj" />
+    <ProjectReference Include="..\StdUnit.Tags.Hjzk\StdUnit.Tags.Hjzk.csproj" />
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

@@ -1,4 +1,4 @@
-using Itminus.Tags;
+using StdUnit.Tags;
 
 namespace NixMonitor.Tags;
 
@@ -16,7 +16,7 @@ class NixMonitorBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // 项目根目录：用应用程序目录（与 Itminus.Tags 在 dir 为空时的默认约定一致）。
+        // 项目根目录：用应用程序目录（与 StdUnit.Tags 在 dir 为空时的默认约定一致）。
         // 不要用 Assembly.GetExecutingAssembly().Location —— 那是当前程序集所在目录，
         // 与应用程序目录在影子拷贝/插件加载等场景下会分叉。
         var dir = AppContext.BaseDirectory;

@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+
+	<!-- 通道，可以配置多个-->
+	<Channel name="ModbusTcp-2" driver="ModbusTcp">
+		<IpAddr>localhost</IpAddr>
+		<Port>502</Port>
+	</Channel>
+
+
+	<!-- 测点配置，可以配置多个 -->
+
+	<!-- ModbusTcp 配置 -->
+	<TagGrp name="g3" isEntry="true" isEnabled="true" channel="ModbusTcp-2" scanInterval="10">
+		<TagCbnt name="输入" address="10001" access="RO">
+			<Tag name="放行按钮闭合状态" address="10001" type="DI"></Tag>
+			<Tag name="手动" address="10002" type="DI"></Tag>
+		</TagCbnt>
+		<TagCbnt name="输出" address="00001" access="R1W">
+			<Tag name="绿灯" address="00020" type="DO"></Tag>
+			<Tag name="红灯" address="00021" type="DO"></Tag>
+			<Tag name="黄灯" address="00022" type="DO"></Tag>
+			<Tag name="放行灯" address="00023" type="DO"></Tag>
+		</TagCbnt>
+		<TagCbnt name="采集" address="40001" access="RO">
+			<Tag name="byte" address="40020" type="BYTE"></Tag>
+			<Tag name="int16" address="40021" type="INT16"></Tag>
+			<Tag name="int32" address="40022" type="INT32"></Tag>
+			<Tag name="float" address="40024" type="FLOAT"></Tag>
+		</TagCbnt>
+	</TagGrp>
+
+	<!-- 逻辑配置，可以配置0~N个 -->
+	<!--<Logicet>E:\SourceCode\揽月\StdUnit.Tags\src\Samples.Plugin1\bin\Debug\net8.0\\Samples.Plugin1.dll</Logicet>-->
+</root>

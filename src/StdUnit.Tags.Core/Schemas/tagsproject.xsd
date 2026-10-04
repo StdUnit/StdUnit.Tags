@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ═══════════════════════════════════════════════════════════════════════
+  TagsProject 项目描述 XML 的 XML Schema —— 核心（Core）schema
+  ═══════════════════════════════════════════════════════════════════════
+
+  本文件校验 StdUnit.Tags 项目描述文件的文档根元素 <Project>
+  （默认文件名 index.xml，见 TagsProject.Initialize / TagsProjectServiceCollection.MakeProject）。
+  只声明与驱动无关的结构；驱动专属定义由各驱动项目持有（见下文）。
+
+  ── 模块化架构 ──────────────────────────────────────────────────────────
+  驱动 schema 按驱动归属存放于各驱动项目 Schemas/ 目录，各占独立命名空间
+  （自定义 URI scheme：tags:{driver}，短小、合法）：
+    S7          → tags:s7           (StdUnit.Tags.S7/Schemas/s7.xsd)
+    ModbusTcp   → tags:modbustcp    (StdUnit.Tags.ModbusTcp/Schemas/modbustcp.xsd)
+    ZLanTcp     → tags:zlan         (StdUnit.Tags.ZLan/Schemas/zlan.xsd)
+    HjzkIoBox   → tags:hjzk         (StdUnit.Tags.Hjzk/Schemas/hjzk.xsd)
+    COM         → tags:com          (StdUnit.Tags.ComScanner/Schemas/com.xsd)
+    OpcUaClient → tags:opcuaclient  (StdUnit.Tags.OpcUaClient/Schemas/opcua-client.xsd)
+    SimpleFiles → tags:simplefiles  (StdUnit.Tags.SimpleFiles/Schemas/simplefiles.xsd)
+  Channel 的驱动专属子元素必须放在驱动命名空间中（如 <s7:IpAddr>），本 schema 用
+  <xs:any namespace="##other"> 放行。运行期解析不受影响：TagChannelDescriptor.Extras
+  按 LocalName 索引（XElementExtensions_TagChannelDescriptor.ToTagChannelDescriptor），
+  元素带不带前缀、属于哪个命名空间都无所谓。
+  驱动命名空间的编辑器映射由消费方工具配置（如 .vscode/settings.json 的 xml.schemas），
+  核心 schema 不依赖任何驱动项目。
+
+  ── 按需加载 ────────────────────────────────────────────────────────────
+  · 编辑器侧：在 <Project> 上只声明你用到的驱动命名空间（xmlns:s7=...），
+    未使用的驱动 schema 文件根本不会被引用。
+  · 运行时侧（EnableXmlSchemaValidation）：核心 schema 由库内嵌；
+    各驱动 schema 由驱动库的 ITagsProjectSchemaProvider 注册合并进 XmlSchemaSet。
+
+  ── 新增驱动 ────────────────────────────────────────────────────────────
+  1. 在驱动项目 Schemas/ 下新建 <driver>.xsd，声明驱动专属子元素；
+  2. XML 中 Channel 使用 driver="<驱动名>"，并在 <Project> 上声明对应命名空间；
+  3. 驱动库实现 ITagsProjectSchemaProvider 注册 schema、buildTransitive targets
+     注入编辑器；核心 schema 无需改动。
+
+  ── XSD 1.0 限制 ────────────────────────────────────────────────────────
+  · 无法按 driver 属性值切换 Channel 的内容模型（XSD 1.1 的 xs:alternative 可以，
+    但 .NET System.Xml.Schema 只支持 1.0）；命名空间方案是 XSD 1.0 下唯一可行的
+    “按驱动模块化”手段。
+  · 交叉引用（channel 属性指向已声明的 <Channel>）无法用 XSD 表达（通道名含 "#"
+    等字符，不能用 xs:ID/xs:IDREF），由加载期代码校验。
+
+  ── 通用约定 ────────────────────────────────────────────────────────────
+  1) 顺序无关：运行期解析按元素名检索（root 的 Elements("Channel") 等），
+     因此 schema 对根元素及 TagGrp 的子元素均采用 <xs:choice maxOccurs="unbounded">。
+  2) 附加属性开放：Tag / TagCbnt / TagGrp / Channel 均有 <xs:anyAttribute>，
+     允许驱动/插件自定义属性（如 SimpleFiles 的 autoCreateFile、COM 测点的 marker）。
+  3) Tag 的 type 开放：除内置 BIT/BYTE/INT16/UINT16/INT32/UINT32/INT64/UINT64/
+     FLOAT/DOUBLE/STR/DI/DO 外，插件可注册自定义类型（CodeScanner、AnyLoad、MyJson……），
+     故 type 声明为普通字符串，不做枚举限制。
+
+  启用校验（示例）：
+    <Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="schema/tagsproject.xsd"
+          xmlns:s7="tags:s7">
+      <Channel name="S7-1" driver="S7">
+        <s7:IpAddr>localhost</s7:IpAddr>
+        <s7:Rack>0</s7:Rack>
+        <s7:Slot>1</s7:Slot>
+      </Channel>
+      ...
+    </Project>
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- ═══════════ 基础简单类型 ═══════════ -->
+
+  <!-- 非空名称（Tag / TagCbnt / TagGrp / Channel 的 name 等） -->
+  <xs:simpleType name="NameType">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- 访问模式：对应 TagAccessMode（RW / RO / R1W / WO） -->
+  <xs:simpleType name="AccessModeType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="RW"/>
+      <xs:enumeration value="RO"/>
+      <xs:enumeration value="R1W"/>
+      <xs:enumeration value="WO"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- 字节序：对应 EndianKinds -->
+  <xs:simpleType name="EndianType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="LittleEndian"/>
+      <xs:enumeration value="BigEndian"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ═══════════ 测点（Tag） ═══════════
+       对应 TagDescriptor（XElementExtensions_TagDescriptor.ToTagDescriptor） -->
+  <xs:complexType name="TagType">
+    <xs:sequence/>
+    <xs:attribute name="name"     type="NameType" use="required"/>
+    <!-- 驱动相关格式：S7 的 DB400.0、Modbus 的 40001、OpcUa 的 ns=4;s=...；
+         COM 直连测点（扫码枪/称重仪）可省略 -->
+    <xs:attribute name="address"  type="xs:string"/>
+    <!-- 开放：内置 BIT/BYTE/INT16/UINT16/INT32/UINT32/INT64/UINT64/FLOAT/DOUBLE/STR/DI/DO + 插件自定义 -->
+    <xs:attribute name="type"     type="xs:string"/>
+    <xs:attribute name="endian"   type="EndianType" default="LittleEndian"/>
+    <xs:attribute name="access"   type="AccessModeType"/> <!-- 省略时向上冒泡继承 -->
+    <xs:attribute name="channel"  type="NameType"/>      <!-- 省略时向上冒泡继承 -->
+    <xs:attribute name="note"     type="xs:string"/>
+    <xs:attribute name="tagSize"  type="xs:positiveInteger"/>
+    <!-- 驱动/插件自定义属性：S7 STR 的 maxlen、SimpleFiles 的 autoCreateFile、COM 测点的 marker 等 -->
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <!-- ═══════════ 测点组合（TagCbnt） ═══════════
+       对应 TagCbntDescriptor（XElementExtensions_TagCbntDescriptor.ToTagCbntDescriptor） -->
+  <xs:complexType name="TagCbntType">
+    <xs:sequence>
+      <xs:element name="Tag" type="TagType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="name"      type="NameType" use="required"/>
+    <!-- Hjzk/Modbus 位空间组合可省略 address，改用 area+slave（见 HjzkCbntBuilderBase） -->
+    <xs:attribute name="address"   type="xs:string"/>
+    <xs:attribute name="channel"   type="NameType"/>
+    <xs:attribute name="isEnabled" type="xs:boolean" default="true"/>
+    <xs:attribute name="access"    type="AccessModeType"/>
+    <xs:attribute name="area"      type="xs:string"/>        <!-- DI / DO / ...（Modbus/Hjzk 位空间用） -->
+    <xs:attribute name="slave"     type="xs:unsignedByte"/>  <!-- Modbus/Hjzk 从站号 -->
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <!-- ═══════════ 测点组（TagGrp） ═══════════
+       对应 TagGrpDescriptor（XElementExtensions_TagGrpDescriptor.ToTagGrpDescriptor） -->
+  <xs:complexType name="TagGrpType">
+    <xs:choice maxOccurs="unbounded">
+      <xs:element name="TagGrp"  type="TagGrpType"/>
+      <xs:element name="TagCbnt" type="TagCbntType"/>
+      <xs:element name="Tag"     type="TagType"/>
+    </xs:choice>
+    <xs:attribute name="name"         type="NameType" use="required"/>
+    <xs:attribute name="channel"      type="NameType"/>         <!-- 省略时向上冒泡继承 -->
+    <xs:attribute name="isEntry"      type="xs:boolean" default="false"/>
+    <xs:attribute name="isEnabled"    type="xs:boolean" default="true"/>
+    <xs:attribute name="scanInterval" type="xs:nonNegativeInteger"/> <!-- 毫秒；省略时向上冒泡继承 -->
+    <xs:attribute name="access"       type="AccessModeType"/>
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <!-- ═══════════ 通道（Channel） ═══════════
+       对应 TagChannelDescriptor（XElementExtensions_TagChannelDescriptor.ToTagChannelDescriptor）。
+       驱动专属子元素在各自的驱动 schema（Schemas/Drivers/*.xsd，独立命名空间）中声明，
+       这里用 <xs:any namespace="##other"> 放行。 -->
+  <xs:complexType name="ChannelType">
+    <xs:sequence>
+      <!-- 驱动专属子元素（如 <s7:IpAddr>）必须放在驱动命名空间中；
+           未限定的子元素无法通过本 schema 校验（运行期仍可解析，Extras 按 LocalName 索引）。 -->
+      <xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="name"   type="NameType" use="required"/>
+    <xs:attribute name="driver" type="NameType" use="required"/>
+    <!-- 通道级扩展属性 -->
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <!-- ═══════════ 逻辑组件（Logicet） ═══════════
+       文本内容为插件 DLL 的路径（相对项目根目录或绝对路径），见 TagsProject.LoadLogicets -->
+  <xs:simpleType name="LogicetType">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ═══════════ 根元素 ═══════════
+       Project 是项目描述文件的文档根元素（名字是约定，运行期不校验根元素名）。
+       子元素 Channel / TagGrp / Logicet 顺序任意、数量任意。 -->
+  <xs:complexType name="ProjectType">
+    <xs:choice maxOccurs="unbounded">
+      <xs:element name="Channel" type="ChannelType"/>
+      <xs:element name="TagGrp"  type="TagGrpType"/>
+      <xs:element name="Logicet" type="LogicetType"/>
+    </xs:choice>
+    <xs:anyAttribute processContents="lax"/>
+  </xs:complexType>
+
+  <xs:element name="Project" type="ProjectType"/>
+
+</xs:schema>

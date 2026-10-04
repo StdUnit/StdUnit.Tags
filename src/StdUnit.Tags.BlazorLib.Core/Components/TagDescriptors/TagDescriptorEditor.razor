@@ -1,0 +1,124 @@
+﻿@using MudBlazor
+@using StdUnit.Tags
+@using StdUnit.Tags.BlazorLib
+@using StdUnit.Tags.BlazorLib.Components
+
+@if (Model is null)
+{
+    <MudText Typo="Typo.caption">-</MudText>
+}
+else
+{
+    <MudPaper Class="pa-4">
+        @if (Model is TagDescriptor td)
+        {
+            <MudTextField Label="Name" @bind-Value="td.TagName" />
+            <MudTextField Label="Address" @bind-Value="td.RawAddress" />
+            <MudTextField Label="Type" @bind-Value="td.TagKind" />
+            <MudSelect T="string" Label="Channel" @bind-Value="td.ChannelName">
+                <MudSelectItem Value="@string.Empty"></MudSelectItem>
+                @foreach(var channel in Channels)
+                {
+                    <MudSelectItem Value="@channel.Name">@channel.Name</MudSelectItem>
+				}
+            </MudSelect>
+            <MudTextField Label="Note" @bind-Value="td.Note" />
+            <MudNumericField T="int" Label="TagSize" @bind-Value="td.TagSize" />
+            <MudSelect T="TagAccessMode?" Label="Access" @bind-Value="td.AccessMode">
+                <MudSelectItem Value="@((TagAccessMode?)null)">空</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.RW">RW</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.RO">RO</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.R1W">R1W</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.WO">WO</MudSelectItem>
+            </MudSelect>
+        }
+        else if (Model is TagCbntDescriptor cbd)
+        {
+            <MudTextField Label="Name" @bind-Value="cbd.Name" />
+            <MudTextField Label="StartAddress" @bind-Value="cbd.StartAddress" />
+            <MudSelect T="string" Label="Channel" @bind-Value="cbd.ChannelName">
+                <MudSelectItem Value="@string.Empty"></MudSelectItem>
+                @foreach (var channel in Channels)
+                {
+                    <MudSelectItem Value="@channel.Name">@channel.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="TagAccessMode?" Label="Access" @bind-Value="cbd.AccessMode">
+                <MudSelectItem Value="@((TagAccessMode?)null)">空</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.RW">RW</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.RO">RO</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.R1W">R1W</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.WO">WO</MudSelectItem>
+            </MudSelect>
+        }
+        else if (Model is TagGrpDescriptor tgd)
+        {
+            <MudTextField Label="Name" @bind-Value="tgd.Name" />
+            <MudSelect T="string" Label="Channel" @bind-Value="tgd.ChannelName">
+                <MudSelectItem Value="@string.Empty"></MudSelectItem>
+                @foreach (var channel in Channels)
+                {
+                    <MudSelectItem Value="@channel.Name">@channel.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="TagAccessMode?" Label="Access" @bind-Value="tgd.AccessMode">
+                <MudSelectItem Value="@((TagAccessMode?)null)">空</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.RW">RW</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.RO">RO</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.R1W">R1W</MudSelectItem>
+                <MudSelectItem Value="TagAccessMode.WO">WO</MudSelectItem>
+            </MudSelect>
+            <MudNumericField T="int?" Label="ScanInterval" @bind-Value="tgd.ScanInterval" />
+            <MudCheckBox T="bool" @bind-Value="tgd.IsEntry" >IsEntry</MudCheckBox>
+            <MudCheckBox T="bool" @bind-Value="tgd.IsEnabled">IsEnabled</MudCheckBox>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public IList<TagChannelDescriptor> Channels { get; set; } = new List<TagChannelDescriptor>();
+
+    [Parameter]
+    public ITagsDescriptor? Model { get; set; }
+
+    [Parameter]
+    public EventCallback<ITagsDescriptor?> ModelChanged { get; set; }
+
+    private void RemoveChild(TagCbntDescriptor cbnt, TagDescriptor child)
+    {
+        cbnt.Children.Remove(child);
+        StateHasChanged();
+    }
+
+    private void AddChildToCbnt(TagCbntDescriptor cbnt)
+    {
+        var t = new TagDescriptor { TagName = "NewTag", RawAddress = "" };
+        cbnt.Children.Add(t);
+        StateHasChanged();
+    }
+
+    private void RemoveChildFromGroup(TagGrpDescriptor grp, ITagsDescriptor child)
+    {
+        grp.Children.Remove(child);
+        StateHasChanged();
+    }
+
+    private void AddTagToGroup(TagGrpDescriptor grp)
+    {
+        grp.Children.Add(new TagDescriptor { TagName = "NewTag", RawAddress = "" });
+        StateHasChanged();
+    }
+
+    private void AddCbntToGroup(TagGrpDescriptor grp)
+    {
+        grp.Children.Add(new TagCbntDescriptor { Name = "NewCbnt", StartAddress = "" });
+        StateHasChanged();
+    }
+
+    private void AddGroupToGroup(TagGrpDescriptor grp)
+    {
+        grp.Children.Add(new TagGrpDescriptor { Name = "NewGroup" });
+        StateHasChanged();
+    }
+}

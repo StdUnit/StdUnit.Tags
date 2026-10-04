@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	<TargetFrameworks>net8.0;net472</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- 把核心Schemas/tagsproject.xsd交给源生成器（StdUnit.Tags.SchemaGenerator）
+       编译为静态字符串常量（TagsGeneratedSchemas），随 DLL 部署、对 NativeAOT/trim 友好。
+       驱动 schema 由各驱动项目（StdUnit.Tags.S7 等）各自生成并提供（ITagsProjectSchemaProvider）。 -->
+  <ItemGroup>
+    <AdditionalFiles Include="Schemas\tagsproject.xsd" />
+    <ProjectReference Include="..\StdUnit.Tags.SchemaGenerator\StdUnit.Tags.SchemaGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!-- NuGet 打包：
+       1) buildTransitive targets（源码位于 Schemas/，打包到 buildTransitive/ 触发自动导入）：
+          还原后自动把 Schemas/tagsproject.xsd 以链接项注入消费项目（编辑器智能提示，不拷 bin）；
+       2) 驱动 schema 由各驱动包注入到 Schemas/Drivers/（见各驱动项目的 buildTransitive targets），
+          本包只注入核心 schema。驱动命名空间的编辑器映射由消费方配置（xml.schemas / catalog），
+          不放在 Core 内（Core 不依赖具体驱动项目）。 -->
+  <ItemGroup>
+    <None Include="Schemas\StdUnit.Tags.Core.targets" Pack="true" PackagePath="buildTransitive/StdUnit.Tags.Core.targets" />
+    <None Include="Schemas\tagsproject.xsd" Pack="true" PackagePath="buildTransitive/Schemas/tagsproject.xsd" />
+  </ItemGroup>
+
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

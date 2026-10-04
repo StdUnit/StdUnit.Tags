@@ -1,0 +1,12 @@
+﻿@using System.Collections.ObjectModel
+@using System.Xml.Linq
+@using StdUnit.Tags
+@using StdUnit.Tags.BlazorLib.Components.Tags
+
+@page "/stdunit.tags/monitor"
+@rendermode InteractiveServer
+@inject ITagsProjectCtrl projctrl
+
+<PageTitle>Tags Monitor</PageTitle>
+
+<TagsView Project="@projctrl.Project"></TagsView>

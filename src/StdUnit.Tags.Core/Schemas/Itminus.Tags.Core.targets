@@ -1,0 +1,19 @@
+<Project>
+
+  <!--
+    StdUnit.Tags.Core —— 自动把核心 schema（tagsproject.xsd）以链接项注入消费项目。
+    本文件源码位于 Schemas/，打包时 PackagePath 指向 buildTransitive/（NuGet 自动导入）。
+    还原包后，消费项目树自动出现 Schemas/tagsproject.xsd（None 链接项，不拷 bin、不参与编译产物），
+    供编辑器智能提示：index.xml 写 xsi:noNamespaceSchemaLocation="Schemas/tagsproject.xsd" 即可。
+    驱动 schema（Schemas/Drivers/*.xsd）由各驱动包（StdUnit.Tags.S7 等）的 buildTransitive targets
+    以同样的 Link 约定注入到 Schemas/Drivers/ 下；驱动命名空间的编辑器映射由消费方配置
+    （xml.schemas / catalog），Core 不承载驱动映射。
+    关闭自动注入：<TagsProjectSchemaDisabled>true</TagsProjectSchemaDisabled>。
+  -->
+
+  <ItemGroup Condition="'$(TagsProjectSchemaDisabled)' != 'true'">
+    <None Include="$(MSBuildThisFileDirectory)Schemas\tagsproject.xsd"
+          Link="Schemas\tagsproject.xsd" />
+  </ItemGroup>
+
+</Project>

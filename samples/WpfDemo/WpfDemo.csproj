@@ -9,14 +9,14 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Itminus.Tags.BlazorLib.Core\Itminus.Tags.BlazorLib.Core.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags.Core\Itminus.Tags.Core.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags.R3Extensions\Itminus.Tags.R3Extensions.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags.S7\Itminus.Tags.S7.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags.SimpleFiles\Itminus.Tags.SimpleFiles.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags\Itminus.Tags.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags.McpServer\Itminus.Tags.McpServer.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags.ComScanner\Itminus.Tags.ComScanner.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.BlazorLib.Core\StdUnit.Tags.BlazorLib.Core.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.Core\StdUnit.Tags.Core.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.R3Extensions\StdUnit.Tags.R3Extensions.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.S7\StdUnit.Tags.S7.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.SimpleFiles\StdUnit.Tags.SimpleFiles.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.McpServer\StdUnit.Tags.McpServer.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ComScanner\StdUnit.Tags.ComScanner.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="Tags\index.xml">

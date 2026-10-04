@@ -1,0 +1,195 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="../../src/StdUnit.Tags.Core/Schemas/tagsproject.xsd"
+      xmlns:s7="tags:s7"
+      xmlns:mb="tags:modbustcp"
+      xmlns:zl="tags:zlan"
+      xmlns:hj="tags:hjzk"
+      xmlns:ua="tags:opcuaclient"
+      xmlns:com="tags:com">
+
+	<!-- 通道，可以配置多个-->
+	<Channel name="S7-1" driver="S7" >
+		<s7:IpAddr>localhost</s7:IpAddr>
+		<s7:Rack>0</s7:Rack>
+		<s7:Slot>1</s7:Slot>
+	</Channel>
+	<Channel name="ModbusTcp-2" driver="ModbusTcp">
+		<mb:IpAddr>localhost</mb:IpAddr>
+		<mb:Port>502</mb:Port>
+	</Channel>
+	<Channel name="ZLan-1" driver="ZLanTcp">
+		<zl:IpAddr>localhost</zl:IpAddr>
+		<zl:Port>502</zl:Port>
+	</Channel>
+	<Channel name="Hjzk-1" driver="HjzkIoBox">
+		<hj:IpAddr>172.16.2.21</hj:IpAddr>
+		<hj:Port>502</hj:Port>
+	</Channel>
+	<Channel name="S7-3" driver="S7" >
+		<s7:IpAddr>192.168.1.13</s7:IpAddr>
+		<s7:Rack>0</s7:Rack>
+		<s7:Slot>3</s7:Slot>
+	</Channel>
+	<Channel name="OpcUaClient-2" driver="OpcUaClient">
+		<ua:ClientName>client-name-1</ua:ClientName>
+		<ua:ServerOpt>
+			<ua:DiscoveryUrl>opc.tcp://DESKTOP-FM4T292:4840</ua:DiscoveryUrl>
+			<ua:UsePassword>false</ua:UsePassword>
+			<ua:UserName>user</ua:UserName>
+			<ua:Password>1</ua:Password>
+		</ua:ServerOpt>
+	</Channel>
+	<Channel name="COM-1" driver="COM">
+		<com:Port>COM1</com:Port>
+		<com:BaudRate>115200</com:BaudRate>
+		<com:Parity>None</com:Parity>
+		<com:DataBits>8</com:DataBits>
+		<com:StopBits>One</com:StopBits>
+	</Channel>
+	<Channel name="COM-2" driver="COM">
+		<com:Port>COM2</com:Port>
+		<com:BaudRate>115200</com:BaudRate>
+		<com:Parity>None</com:Parity>
+		<com:DataBits>8</com:DataBits>
+		<com:StopBits>One</com:StopBits>
+	</Channel>
+
+	<!-- 测点配置，可以配置多个 -->
+	<!--<TagGrp name="g1" isEntry="false" isEnabled="true" address="DB200.500.1" channel="S7-1" scanInterval="10">
+		<TagCbnt name="拍照请求" access="RO" address="DB200.500.1">
+			<Tag name="拍照-请求-标志" address="DB200.500.1" type="BIT" />
+			<Tag name="拍照-请求-料号" address="DB200.502" type="BYTE" />
+			<Tag name="拍照-请求-程序号" address="DB200.504" type="INT16" />
+		</TagCbnt>
+
+		<TagCbnt name="拍照响应" access="R1W" address="DB200.400.0">
+			<Tag name="拍照-响应-标志" address="DB200.400.0" type="BIT" />
+			<Tag name="拍照-响应-B1" address="DB200.400.1" type="BIT" />
+			<Tag name="拍照-响应-I2" address="DB200.400.2" type="BIT" />
+		</TagCbnt>
+	</TagGrp>-->
+
+	<!-- ZLan 配置 -->
+	<TagGrp name="g2" isEntry="true" isEnabled="false" channel="ZLan-1" scanInterval="10">
+		<TagCbnt name="输入" area="DI" access="RO">
+			<Tag name="放行按钮闭合状态" address="DI1" type="DI"></Tag>
+			<Tag name="手动" address="DI2" type="DI"></Tag>
+		</TagCbnt>
+		<TagCbnt name="输出" area="DO" access="R1W">
+			<Tag name="绿灯" address="DO1" type="DO"></Tag>
+			<Tag name="红灯" address="DO2" type="DO"></Tag>
+			<Tag name="黄灯" address="DO3" type="DO"></Tag>
+			<Tag name="放行灯" address="DO4" type="DO"></Tag>
+		</TagCbnt>
+	</TagGrp>
+
+	<TagGrp name="hjzk" isEntry="true" isEnabled="true" channel="Hjzk-1" scanInterval="10">
+		<TagCbnt name="输入" area="DI" slave="2" access="RO">
+			<Tag name="放行按钮闭合状态"	address="DI1" type="DI"></Tag>
+			<Tag name="手动"				address="DI2" type="DI"></Tag>
+			<Tag name="3"				address="DI3" type="DI"></Tag>
+			<Tag name="4"				address="DI4" type="DI"></Tag>
+		</TagCbnt>
+		<TagCbnt name="输出" area="DO" slave="2"  access="RW">
+			<Tag name="绿灯" address="DO1" type="DO"></Tag>
+			<Tag name="红灯" address="DO2" type="DO"></Tag>
+			<Tag name="黄灯" address="DO3" type="DO"></Tag>
+			<Tag name="放行灯" address="DO4" type="DO"></Tag>
+			<Tag name="灯5" address="DO5" type="DO"></Tag>
+			<Tag name="灯6" address="DO6" type="DO"></Tag>
+			<Tag name="灯7" address="DO7" type="DO"></Tag>
+			<Tag name="灯8" address="DO8" type="DO"></Tag>
+			<Tag name="灯9" address="DO9" type="DO"></Tag>
+			<Tag name="灯10" address="DO10" type="DO"></Tag>
+			<Tag name="灯11" address="DO11" type="DO"></Tag>
+			<Tag name="灯12" address="DO12" type="DO"></Tag>
+			<Tag name="灯13" address="DO13" type="DO"></Tag>
+			<Tag name="灯14" address="DO14" type="DO"></Tag>
+			<Tag name="灯15" address="DO15" type="DO"></Tag>
+			<Tag name="灯16" address="DO16" type="DO"></Tag>
+		</TagCbnt>
+	</TagGrp>
+	
+	<!-- ModbusTcp 配置 -->
+	<TagGrp name="g3" isEntry="true" isEnabled="false" channel="ModbusTcp-2" scanInterval="10">
+		<TagCbnt name="输入" address="10001" access="RO">
+			<Tag name="放行按钮闭合状态" address="10001" type="DI"></Tag>
+			<Tag name="手动" address="10002" type="DI"></Tag>
+		</TagCbnt>
+		<TagCbnt name="输出" address="00001" access="R1W">
+			<Tag name="绿灯" address="00020" type="DO"></Tag>
+			<Tag name="红灯" address="00021" type="DO"></Tag>
+			<Tag name="黄灯" address="00022" type="DO"></Tag>
+			<Tag name="放行灯" address="00023" type="DO"></Tag>
+		</TagCbnt>
+		<TagCbnt name="采集" address="40001" access="RO">
+			<Tag name="byte" address="40020" type="BYTE"></Tag>
+			<Tag name="int16" address="40021" type="INT16"></Tag>
+			<Tag name="int32" address="40022" type="INT32"></Tag>
+			<Tag name="float" address="40024" type="FLOAT"></Tag>
+		</TagCbnt>
+	</TagGrp>
+
+	<!-- OpcUa 配置 -->
+	<TagGrp name="g4" isEntry="true" isEnabled="false" channel="OpcUaClient-2" scanInterval="10">
+		<TagCbnt name="输入" access="RO">
+			<Tag name="放行按钮闭合状态" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var3" ></Tag>
+			<Tag name="手动" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var3"></Tag>
+		</TagCbnt>
+		<TagCbnt name="输出" >
+			<Tag name="绿灯" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var3"></Tag>
+			<Tag name="红灯" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var4"></Tag>
+			<Tag name="黄灯" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var5"></Tag>
+			<Tag name="放行灯" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var6"></Tag>
+		</TagCbnt>
+	</TagGrp>
+
+
+
+	<TagGrp name="拧紧枪" isEntry="true"  isEnabled="false" channel="S7-1" scanInterval="10">
+
+		<TagGrp name="1#">
+			<TagCbnt name="拧紧请求" address="DB400.0" access="RW">
+				<Tag name="请求标志" address="DB400.0.0" type="BIT"></Tag>
+				<Tag name="程序号" address="DB400.2" type="INT16"></Tag>
+				<Tag name="套筒号" address="DB400.4" type="INT16"></Tag>
+			</TagCbnt>
+			<TagCbnt name="拧紧响应" address="DB500.0" access="RW">
+				<Tag name="响应标志" address="DB500.0.0" type="BIT"></Tag>
+			</TagCbnt>
+		</TagGrp>
+
+		<TagGrp name="2#">
+			<TagCbnt name="拧紧请求" address="DB400.20" access="RW">
+				<Tag name="请求标志" address="DB400.20.0" type="BIT"></Tag>
+				<Tag name="程序号" address="DB400.22" type="INT16"></Tag>
+				<Tag name="套筒号" address="DB400.24" type="INT16"></Tag>
+			</TagCbnt>
+			<TagCbnt name="拧紧响应" address="DB500.20" access="RW">
+				<Tag name="响应标志" address="DB500.20.0" type="BIT"></Tag>
+			</TagCbnt>
+		</TagGrp>
+
+		<TagGrp name="3#">
+			<TagCbnt name="拧紧请求" address="DB400.60" access="RW">
+				<Tag name="请求标志" address="DB400.60.0" type="BIT"></Tag>
+				<Tag name="程序号" address="DB400.62" type="INT16"></Tag>
+				<Tag name="套筒号" address="DB400.64" type="INT16"></Tag>
+			</TagCbnt>
+			<TagCbnt name="拧紧响应" address="DB500.60" access="RW">
+				<Tag name="响应标志" address="DB500.60.0" type="BIT"></Tag>
+			</TagCbnt>
+		</TagGrp>
+
+	</TagGrp>
+
+
+	<TagGrp name="扫码枪" isEntry="true" isEnabled="true" scanInterval="10">
+		<Tag name="1#" type="STR"  channel="COM-1"></Tag>
+		<Tag name="2#" type="STR"  channel="COM-2"></Tag>
+	</TagGrp>
+
+	<!-- 逻辑配置，可以配置0~N个 -->
+	<!--<Logicet>E:\SourceCode\揽月\StdUnit.Tags\src\Samples.Plugin1\bin\Debug\net8.0\\Samples.Plugin1.dll</Logicet>-->
+</Project>

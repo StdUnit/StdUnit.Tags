@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+
+	<!-- 通道，可以配置多个-->
+	<Channel name="OpcUaClient-2" driver="OpcUaClient">
+		<ClientName>client-name-1</ClientName>
+		<ServerOpt>
+			<DiscoveryUrl>192.168.10.68</DiscoveryUrl>
+			<UsePassword>true</UsePassword>
+			<UserName>user-1</UserName>
+			<Password>pass-1</Password>
+		</ServerOpt>
+	</Channel>
+
+
+	<!-- 测点配置，可以配置多个 -->
+
+	<!-- OpcUa 配置 -->
+	<TagGrp name="g4" isEntry="true" isEnabled="true" channel="OpcUaClient-2" scanInterval="10">
+		<TagCbnt name="输入" access="RO">
+			<Tag name="放行按钮闭合状态" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var3" ></Tag>
+			<Tag name="手动" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var3"></Tag>
+		</TagCbnt>
+		<TagCbnt name="输出" access="RW">
+			<Tag name="绿灯" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var3"></Tag>
+			<Tag name="红灯" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var4"></Tag>
+			<Tag name="黄灯" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var5"></Tag>
+			<Tag name="放行灯" address="ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.var6"></Tag>
+		</TagCbnt>
+	</TagGrp>
+
+	<!-- 逻辑配置，可以配置0~N个 -->
+	<!--<Logicet>E:\SourceCode\揽月\StdUnit.Tags\src\Samples.Plugin1\bin\Debug\net8.0\\Samples.Plugin1.dll</Logicet>-->
+</root>

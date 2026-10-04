@@ -13,54 +13,54 @@ component_management:
         target: auto
         threshold: 5%
   individual_components:
-    - component_id: itminus_tags_core 
+    - component_id: stdunit_tags_core 
       name: "Core" 
       paths:
-        - "src/Itminus.Tags.Core/**"
-    - component_id: itminus_tags
+        - "src/StdUnit.Tags.Core/**"
+    - component_id: stdunit_tags
       name: "Tags"
       paths:
-        - "src/Itminus.Tags/**"
-    - component_id: itminus_tags_s7
+        - "src/StdUnit.Tags/**"
+    - component_id: stdunit_tags_s7
       name: "S7"
       paths:
-        - "src/Itminus.Tags.S7/**"
-    - component_id: itminus_tags_modbstcp
+        - "src/StdUnit.Tags.S7/**"
+    - component_id: stdunit_tags_modbstcp
       name: "ModbusTcp"
       paths:
-        - "src/Itminus.Tags.ModbusTcp/**"
-    - component_id: itminus_tags_opcuaclient
+        - "src/StdUnit.Tags.ModbusTcp/**"
+    - component_id: stdunit_tags_opcuaclient
       name: "OpcUaClient"
       paths:
-        - "src/Itminus.Tags.OpcUaClient/**"
-    - component_id: itminus_tags_hjzk
+        - "src/StdUnit.Tags.OpcUaClient/**"
+    - component_id: stdunit_tags_hjzk
       name: "Hjzk"
       paths:
-        - "src/Itminus.Tags.Hjzk/**"
-    - component_id: itminus_tags_zLan
+        - "src/StdUnit.Tags.Hjzk/**"
+    - component_id: stdunit_tags_zLan
       name: "ZLan"
       paths:
-        - "src/Itminus.Tags.ZLan/**"
-    - component_id: itminus_tags_comscanner
+        - "src/StdUnit.Tags.ZLan/**"
+    - component_id: stdunit_tags_comscanner
       name: "Com"
       paths:
-        - "src/Itminus.Tags.ComScanner/**"
-    - component_id: itminus_tags_rx
+        - "src/StdUnit.Tags.ComScanner/**"
+    - component_id: stdunit_tags_rx
       name: "Rx"
       paths:
-        - "src/Itminus.Tags.RxExtensions/**"
-    - component_id: itminus_tags_r3
+        - "src/StdUnit.Tags.RxExtensions/**"
+    - component_id: stdunit_tags_r3
       name: "R3"
       paths:
-        - "src/Itminus.Tags.R3Extensions/**"
-    - component_id: itminus_tags_mcpserver
+        - "src/StdUnit.Tags.R3Extensions/**"
+    - component_id: stdunit_tags_mcpserver
       name: "McpServer"
       paths:
-        - "src/Itminus.Tags.McpServer/**"
-    - component_id: itminus_tags_simplefiles
+        - "src/StdUnit.Tags.McpServer/**"
+    - component_id: stdunit_tags_simplefiles
       name: "SimpleFiles"
       paths:
-        - "src/Itminus.Tags.SimpleFiles/**"
+        - "src/StdUnit.Tags.SimpleFiles/**"
 
 ignore:
   - "**/*.md"

@@ -1,6 +1,6 @@
 
-using Itminus.Tags;
-using Itminus.Tags.SimpleFiles;
+using StdUnit.Tags;
+using StdUnit.Tags.SimpleFiles;
 
 namespace NixMonitor.Tags.SimpleTags;
 
