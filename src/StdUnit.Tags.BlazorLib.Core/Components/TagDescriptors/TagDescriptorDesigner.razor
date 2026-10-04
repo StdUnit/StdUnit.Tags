@@ -1,0 +1,260 @@
+﻿@using Microsoft.AspNetCore.Components.Web
+@using MudBlazor
+@using StdUnit.Tags
+@using StdUnit.Tags.BlazorLib
+@using StdUnit.Tags.BlazorLib.Components
+
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudPaper Class="d-flex flex-grow-1">
+    <MudPaper Class="mr-8 px-0 border border-solid mud-border-primary" MinWidth="360px" @onkeydown="OnLeftPanelKeyDown">
+        <MudPaper onclick="@(() => {this.Selected = null;})" Class="pl-4 pr-1 mb-4 d-flex justify-space-between align-items-center">
+            <MudText Class="w-32 mr-32">/</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddGroup" Class="pr-1 my-1" >添加 Group</MudButton>
+        </MudPaper>
+        <TagDescriptorTree Items="Grps" Selected="Selected" 
+            SelectedChanged="OnSelectedChanged"
+            AddTagRequested="OnAddTagRequested" 
+            AddCbntRequested="OnAddCbntRequested" 
+            AddGroupRequested="OnAddGroupRequested" 
+            DeleteRequested="OnDeleteRequested" 
+            />
+    </MudPaper>
+    <MudPaper Class="flex-grow-1 border border-solid mud-border-primary px-1">
+        <TagDescriptorEditor Model="Selected" Channels="@Channels" ModelChanged="OnSelectedChanged" />
+    </MudPaper>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public IList<TagChannelDescriptor> Channels { get; set; } = new List<TagChannelDescriptor>();
+
+    [Parameter]
+    public IList<TagGrpDescriptor> Grps { get; set; } = new List<TagGrpDescriptor>();
+
+    private ITagsDescriptor? Selected { get; set; }
+
+    private DeletionRecord? _lastDeletion;
+
+    private Task OnSelectedChanged(ITagsDescriptor? d)
+    {
+        Selected = d;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task OnDeleteRequested(ITagsDescriptor? target)
+    {
+        if (target is null) return Task.CompletedTask;
+        Selected = target;
+        return ConfirmDelete();
+    }
+
+    private Task OnAddTagRequested(ITagsDescriptor? parent)
+    {
+        if (parent is TagGrpDescriptor grp)
+        {
+            var t = new TagDescriptor { TagName = "NewTag", RawAddress = "" };
+            grp.Children.Add(t);
+            Selected = t;
+        }
+        else if (parent is TagCbntDescriptor cbnt)
+        {
+            var t = new TagDescriptor { TagName = "NewTag", RawAddress = "" };
+            cbnt.Children.Add(t);
+            Selected = t;
+        }
+        else
+        {
+            if (Grps.Count == 0)
+            {
+                var root = new TagGrpDescriptor { Name = "Root" };
+                Grps.Add(root);
+            }
+            var parentRoot = Grps[0];
+            var newTag = new TagDescriptor { TagName = "NewTag", RawAddress = "" };
+            parentRoot.Children.Add(newTag);
+            Selected = newTag;
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task OnAddCbntRequested(ITagsDescriptor? parent)
+    {
+        if (parent is TagGrpDescriptor grp)
+        {
+            var cb = new TagCbntDescriptor { Name = "NewCbnt", StartAddress = "" };
+            grp.Children.Add(cb);
+            Selected = cb;
+        }
+        else
+        {
+            if (Grps.Count == 0)
+            {
+                var root = new TagGrpDescriptor { Name = "Root" };
+                Grps.Add(root);
+            }
+            var parentRoot = Grps[0];
+            var cb = new TagCbntDescriptor { Name = "NewCbnt", StartAddress = "" };
+            parentRoot.Children.Add(cb);
+            Selected = cb;
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task OnAddGroupRequested(ITagsDescriptor? parent)
+    {
+        if (parent is TagGrpDescriptor grp)
+        {
+            var g = new TagGrpDescriptor { Name = "NewGroup" };
+            grp.Children.Add(g);
+            Selected = g;
+        }
+        else
+        {
+            var g = new TagGrpDescriptor { Name = "NewGroup" };
+            Grps.Add(g);
+            Selected = g;
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (Selected is null)
+        {
+            Snackbar.Add("未选中节点，无法删除", Severity.Warning);
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"确定删除 “{GetDisplayName(Selected)}” 吗？");
+        if (confirmed)
+        {
+            DoRemove(Selected);
+        }
+    }
+
+    private void DoRemove(ITagsDescriptor selected)
+    {
+        // find parent and index
+        if (selected is TagGrpDescriptor tg && Grps.Contains(tg))
+        {
+            var idx = Grps.IndexOf(tg);
+            Grps.RemoveAt(idx);
+            _lastDeletion = new DeletionRecord { ParentIsRoot = true, RootIndex = idx, RemovedGroup = tg };
+            Selected = null;
+            StateHasChanged();
+            return;
+        }
+
+        var parent = FindParent(selected, Grps);
+        if (parent.ParentGrp is not null)
+        {
+            var p = parent.ParentGrp!;
+            var idx = p.Children.IndexOf(selected);
+            if (idx >= 0)
+            {
+                p.Children.RemoveAt(idx);
+                _lastDeletion = new DeletionRecord { ParentGrp = p, ChildIndex = idx, Removed = selected };
+                Selected = p; // select parent
+                StateHasChanged();
+                return;
+            }
+        }
+        else if (parent.ParentCbnt is not null)
+        {
+            var cb = parent.ParentCbnt!;
+            if (selected is TagDescriptor td)
+            {
+                var idx = cb.Children.IndexOf(td);
+                if (idx >= 0)
+                {
+                    cb.Children.RemoveAt(idx);
+                    _lastDeletion = new DeletionRecord { ParentCbnt = cb, ChildIndex = idx, Removed = td };
+                    Selected = cb;
+                    StateHasChanged();
+                    return;
+                }
+            }
+        }
+
+        // fallback
+        Snackbar.Add("删除失败或未找到父节点", Severity.Error);
+    }
+
+    private (TagGrpDescriptor? ParentGrp, TagCbntDescriptor? ParentCbnt) FindParent(ITagsDescriptor target, IEnumerable<TagGrpDescriptor> roots)
+    {
+        foreach (var g in roots)
+        {
+            if (g.Children != null)
+            {
+                foreach (var child in g.Children)
+                {
+                    if (ReferenceEquals(child, target)) return (g, null);
+                    if (child is TagGrpDescriptor subGrp)
+                    {
+                        var found = FindParent(target, new[] { subGrp });
+                        if (found.ParentGrp is not null || found.ParentCbnt is not null) return found;
+                    }
+                    else if (child is TagCbntDescriptor cb)
+                    {
+                        if (cb.Children != null && cb.Children.Contains(target)) return (null, cb);
+                    }
+                }
+            }
+        }
+        return (null, null);
+    }
+
+    private string GetDisplayName(ITagsDescriptor v)
+    {
+        return v switch
+        {
+            TagGrpDescriptor g => g.Name,
+            TagCbntDescriptor c => c.Name,
+            TagDescriptor t => t.TagName,
+            _ => "(unknown)",
+        };
+    }
+
+    private async Task OnLeftPanelKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Delete")
+        {
+            await ConfirmDelete();
+        }
+    }
+
+    private void AddGroup()
+    {
+        if (Selected is TagGrpDescriptor grp)
+        {
+            var g = new TagGrpDescriptor { Name = "NewGroup" };
+            grp.Children.Add(g);
+            Selected = g;
+        }
+        else
+        {
+            var g = new TagGrpDescriptor { Name = "NewGroup" };
+            Grps.Add(g);
+            Selected = g;
+        }
+        StateHasChanged();
+    }
+
+    private class DeletionRecord
+    {
+        public bool ParentIsRoot { get; set; }
+        public int? RootIndex { get; set; }
+        public TagGrpDescriptor? RemovedGroup { get; set; }
+
+        public TagGrpDescriptor? ParentGrp { get; set; }
+        public TagCbntDescriptor? ParentCbnt { get; set; }
+        public int? ChildIndex { get; set; }
+        public ITagsDescriptor? Removed { get; set; }
+    }
+}

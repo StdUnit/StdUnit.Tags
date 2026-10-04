@@ -1,6 +1,6 @@
-using Itminus.Tags;
-using Itminus.Tags.SimpleFiles;
-using Itminus.Tags.BlazorLib;
+using StdUnit.Tags;
+using StdUnit.Tags.SimpleFiles;
+using StdUnit.Tags.BlazorLib;
 using NixMonitor.Tags;
 using NixMonitor.Tags.SimpleTags;
 
@@ -49,6 +49,6 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseAntiforgery();
-app.MapRazorComponents<Itminus.Tags.BlazorLib.Apps.TagsApp>()
+app.MapRazorComponents<StdUnit.Tags.BlazorLib.Apps.TagsApp>()
     .AddInteractiveServerRenderMode();
 app.Run();

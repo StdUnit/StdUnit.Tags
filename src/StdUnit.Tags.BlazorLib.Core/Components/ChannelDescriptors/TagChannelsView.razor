@@ -1,0 +1,48 @@
+﻿@using StdUnit.Tags
+@using StdUnit.Tags.BlazorLib
+@using StdUnit.Tags.BlazorLib.Components
+
+@if (Descriptors is null || !Descriptors.Any())
+{
+    <MudText Class="pa-4" Color="Color.Secondary">(no channels)</MudText>
+}
+else
+{
+    <MudPaper Class="pa-2">
+        <MudStack Spacing="1">
+			@for (var i =0; i < this.Descriptors.Count; i++)
+			{
+				var idx = i;
+				<TagChannelItem Descriptor="this.Descriptors[idx]" Editable="Editable" DescriptorChanged="(d => _ = OnDescriptorChangedAsync(idx, d))" />
+			}
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public IList<TagChannelDescriptor>? Descriptors { get; set; }
+    [Parameter] public bool Editable { get; set; }
+    [Parameter] public EventCallback<TagChannelDescriptorItemUpdatedArgs> OnChannelDescriptorUpdated { get; set; }
+
+
+    private async Task OnDescriptorChangedAsync(int index, TagChannelDescriptor newDescriptor)
+    {
+        if(this.Descriptors is null)
+        {
+            return;
+        }
+
+        if (index <0 || index >= this.Descriptors.Count)
+            return;
+
+        this.Descriptors[index] = newDescriptor;
+
+        if(this.OnChannelDescriptorUpdated.HasDelegate)
+        {
+            await this.OnChannelDescriptorUpdated.InvokeAsync(new TagChannelDescriptorItemUpdatedArgs(index, newDescriptor));
+        }
+    }
+
+
+    public record TagChannelDescriptorItemUpdatedArgs(int Index, TagChannelDescriptor ChannelDescriptor);
+}

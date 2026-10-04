@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-      xsi:noNamespaceSchemaLocation="../../../src/Itminus.Tags.Core/Schemas/tagsproject.xsd"
+      xsi:noNamespaceSchemaLocation="../../../src/StdUnit.Tags.Core/Schemas/tagsproject.xsd"
       xmlns:s7="tags:s7"
       xmlns:com="tags:com"
       xmlns:sf="tags:simplefiles">

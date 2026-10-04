@@ -1,8 +1,8 @@
-﻿using Itminus.Tags;
-using Itminus.Tags.S7;
+﻿using StdUnit.Tags;
+using StdUnit.Tags.S7;
 using Microsoft.Extensions.DependencyInjection;
-using Itminus.Tags.ComScanner;
-using Itminus.Tags.SimpleFiles;
+using StdUnit.Tags.ComScanner;
+using StdUnit.Tags.SimpleFiles;
 
 namespace WpfDemo.Tags;
 

@@ -1,0 +1,19 @@
+﻿@using StdUnit.Tags.BlazorLib
+@using StdUnit.Tags.BlazorLib.Components
+@using StdUnit.Tags.ZLan
+
+<MudGrid Class="pl-4">
+    <MudItem xs="12" sm="6" md="4">
+        <MudTextField Label="Name" Variant="Variant.Filled" @bind-Value="Descriptor.Name" />
+    </MudItem>
+    <MudItem xs="12" sm="6" md="4">
+        <MudTextField Label="IpAddr" Variant="Variant.Filled" @bind-Value="Descriptor.IpAddr" />
+    </MudItem>
+    <MudItem xs="12" sm="6" md="4">
+        <MudNumericField T="int" Label="Port" Variant="Variant.Filled" @bind-Value="Descriptor.Port" />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public ZLanTcpTagChannelDescriptor Descriptor { get; set; } = default!;
+}

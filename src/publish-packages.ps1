@@ -3,23 +3,23 @@
 )
 
 $projects = @(
-    "Itminus.Tags.Core",
-    "Itminus.Tags", 
-    "Itminus.Tags.McpServer",
+    "StdUnit.Tags.Core",
+    "StdUnit.Tags", 
+    "StdUnit.Tags.McpServer",
 
-    "Itminus.Tags.S7", 
-    "Itminus.Tags.SimpleFiles", 
-    "Itminus.Tags.ModbusTcp", 
-    "Itminus.Tags.ZLan",
-    "Itminus.Tags.Hjzk",
-    "Itminus.Tags.OpcUaClient",
-    "Itminus.Tags.ComScanner",
+    "StdUnit.Tags.S7", 
+    "StdUnit.Tags.SimpleFiles", 
+    "StdUnit.Tags.ModbusTcp", 
+    "StdUnit.Tags.ZLan",
+    "StdUnit.Tags.Hjzk",
+    "StdUnit.Tags.OpcUaClient",
+    "StdUnit.Tags.ComScanner",
 
-    "Itminus.Tags.RxExtensions",
-    "Itminus.Tags.R3Extensions",
+    "StdUnit.Tags.RxExtensions",
+    "StdUnit.Tags.R3Extensions",
 
-    "Itminus.Tags.BlazorLib.Core", 
-    "Itminus.Tags.BlazorLib"
+    "StdUnit.Tags.BlazorLib.Core", 
+    "StdUnit.Tags.BlazorLib"
     )
 $nugetSource = $Env:NugetSource
 $key = $Env:NugetApiKey

@@ -14,10 +14,10 @@
             "args": [],
         },
         {
-            "name": "C#: Itminus.Tags.Web Debug",
+            "name": "C#: StdUnit.Tags.Web Debug",
             "type": "dotnet",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/samples/Itminus.Tags.Web/Itminus.Tags.Web.csproj"
+            "projectPath": "${workspaceFolder}/samples/StdUnit.Tags.Web/StdUnit.Tags.Web.csproj"
         },
         {
             "name": "C#: NixMonitor Debug",

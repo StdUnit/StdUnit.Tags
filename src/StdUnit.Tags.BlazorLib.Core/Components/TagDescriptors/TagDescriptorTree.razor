@@ -1,0 +1,150 @@
+﻿@using MudBlazor
+@using StdUnit.Tags
+@using StdUnit.Tags.BlazorLib
+@using StdUnit.Tags.BlazorLib.Components
+
+<div>
+    @if (Items == null || Items.Count == 0)
+    {
+        <MudText Typo="Typo.caption">(未配置测点)</MudText>
+    }
+    else
+    {
+        <MudTreeView T="ITagsDescriptor" Items="_treeItems" SelectionMode="SelectionMode.SingleSelection" SelectedValue="Selected" SelectedValueChanged="OnSelectedValueChanged" Class="overflow-y-auto" MaxHeight="600px">
+            <ItemTemplate>
+                <MudTreeViewItem Items="@context.Children" Value="@context.Value" Expanded Icon="@context.Icon" Text="@context.Text">
+                    <BodyContent Context="child">
+                        <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <MudText Typo="Typo.body2">@child.Value.GetLabel()</MudText>
+                            </div>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                @if (child.Value is TagGrpDescriptor)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Outlined.CreateNewFolder" Size="Size.Small" Color="Color.Primary" OnClick="@(() => AddGroupRequested.InvokeAsync(child.Value))" />
+                                    <MudIconButton Icon="@Icons.Material.Outlined.GroupWork" Size="Size.Small" Color="Color.Primary" OnClick="@(() => AddCbntRequested.InvokeAsync(child.Value))" />
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Tag" Size="Size.Small" Color="Color.Primary" OnClick="@(() => AddTagRequested.InvokeAsync(child.Value))" />
+                                }
+                                else if (child.Value is TagCbntDescriptor)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Tag" Size="Size.Small" Color="Color.Primary" OnClick="@(() => AddTagRequested.InvokeAsync(child.Value))" />
+                                }
+
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteRequested.InvokeAsync(child.Value))" />
+                            </div>
+                        </div>
+                    </BodyContent>
+                </MudTreeViewItem>
+            </ItemTemplate>
+        </MudTreeView>
+    }
+
+</div>
+
+@code {
+    [Parameter]
+    public IList<TagGrpDescriptor> Items { get; set; } = new List<TagGrpDescriptor>();
+
+    [Parameter]
+    public ITagsDescriptor? Selected { get; set; }
+
+    [Parameter]
+    public EventCallback<ITagsDescriptor?> SelectedChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<ITagsDescriptor?> AddTagRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<ITagsDescriptor?> AddCbntRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<ITagsDescriptor?> AddGroupRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<ITagsDescriptor?> DeleteRequested { get; set; }
+
+    private IReadOnlyList<TreeItemData<ITagsDescriptor>>? _treeItems;
+
+    private async Task OnSelectedValueChanged(ITagsDescriptor? value)
+    {
+        Selected = value;
+        await SelectedChanged.InvokeAsync(value);
+    }
+
+    public override Task SetParametersAsync(ParameterView parameters)
+    {
+        if (parameters.TryGetValue<IList<TagGrpDescriptor>>(nameof(Items), out var items))
+        {
+            _treeItems = items == null || items.Count == 0 ?
+                Array.Empty<TreeItemData<ITagsDescriptor>>() : 
+                items.Select(ConvertGroup).ToList();
+        }
+        return base.SetParametersAsync(parameters);
+    }
+
+    private TreeItemData<ITagsDescriptor> ConvertGroup(TagGrpDescriptor grp)
+    {
+        var children = new List<TreeItemData<ITagsDescriptor>>();
+        var node = new TreeItemData<ITagsDescriptor>
+        {
+            Text = grp.Name,
+            Value = grp,
+            Children = children,
+            Icon = Icons.Material.Filled.Layers
+        };
+
+        foreach (var child in grp.Children)
+        {
+            if (child is TagDescriptor td)
+            {
+                children.Add(new TreeItemData<ITagsDescriptor>
+                {
+                    Text = td.GetLabel(),
+                    Value = td,
+                    Icon = Icons.Material.Filled.Tag
+                });
+            }
+            else if (child is TagCbntDescriptor cb)
+            {
+                var cbChildren = new List<TreeItemData<ITagsDescriptor>>();
+                var cbNode = new TreeItemData<ITagsDescriptor>
+                {
+                    Text = cb.Name,
+                    Value = cb,
+                    Children = cbChildren,
+                    Icon = Icons.Material.Filled.GroupWork
+                };
+
+                if (cb.Children != null)
+                {
+                    foreach (var t in cb.Children)
+                    {
+                        cbChildren.Add(new TreeItemData<ITagsDescriptor>
+                        {
+                            Text = t.GetLabel(),
+                            Value = t,
+                            Icon = Icons.Material.Filled.Tag
+                        });
+                    }
+                }
+
+                children.Add(cbNode);
+            }
+            else if (child is TagGrpDescriptor g)
+            {
+                children.Add(ConvertGroup(g));
+            }
+            else
+            {
+                children.Add(new TreeItemData<ITagsDescriptor>
+                {
+                    Text = "(unknown)",
+                    Value = child,
+                    Icon = Icons.Material.Filled.DeviceUnknown
+                });
+            }
+        }
+
+        return node;
+    }
+}

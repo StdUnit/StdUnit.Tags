@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ModbusTcp 驱动：Channel 专属子元素 schema
+  命名空间：tags:modbustcp
+  对应运行时类型：ModbusTcpTagChannelDescriptor（src/StdUnit.Tags.ModbusTcp/Channels/ModbusTcpTagChannelDescriptor.cs）
+  默认值：IpAddr=localhost，Port=502，MaxWriteRegisters/MaxReadRegisters/MaxReadBits 未指定时使用协议默认
+         （123 / 125 / 2000，见 ModbusTcpChannel.MaxXxxPerPdu）。
+  注意：Port 声明为 xs:string——COM 驱动的 <Port> 是 "COM1" 形式，此处为兼容统一声明；
+        Modbus 侧运行期会把值解析为整数（int.TryParse）。
+  用法：
+    <root xmlns:mb="tags:modbustcp">
+      <Channel name="mb-1" driver="ModbusTcp">
+        <mb:IpAddr>192.168.1.10</mb:IpAddr>
+        <mb:Port>502</mb:Port>
+      </Channel>
+    </root>
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="tags:modbustcp"
+           targetNamespace="tags:modbustcp"
+           elementFormDefault="qualified">
+
+  <xs:simpleType name="SingleFrameLimitType">
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="IpAddrType">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Port 为字符串以兼容 COM 的 "COM1" 形式；Modbus 侧运行期解析为整数 -->
+  <xs:simpleType name="PortType">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="IpAddr" type="IpAddrType"/>
+  <xs:element name="Port" type="PortType"/>
+  <xs:element name="MaxWriteRegisters" type="SingleFrameLimitType"/>
+  <xs:element name="MaxReadRegisters" type="SingleFrameLimitType"/>
+  <xs:element name="MaxReadBits" type="SingleFrameLimitType"/>
+
+</xs:schema>

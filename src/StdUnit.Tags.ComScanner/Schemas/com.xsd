@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  COM 驱动：Channel 专属子元素 schema
+  命名空间：tags:com
+  对应运行时类型：ComChannelDescriptor（src/StdUnit.Tags.ComScanner/Channels/ComChannelDescriptor.cs）
+  默认值（见 ComChannelDescriptor.ToComChannelDescriptor）：
+    Port=COM1，BaudRate=9600，Parity=None，DataBits=8，StopBits=None，
+    ReadEntireLine=true，ChannelCapacity=1；NewLine/ReadScript 默认缺省。
+  兼容性说明：0.10 及以前版本的拼写错误 <BaundRate> 运行期仍兼容（优先读 BaudRate，
+    读不到时回退 BaundRate），但 schema 校验会把它标为非法——建议迁移到正确拼写。
+  用法：
+    <root xmlns:com="tags:com">
+      <Channel name="COM-1" driver="COM">
+        <com:Port>COM1</com:Port>
+        <com:BaudRate>115200</com:BaudRate>
+        <com:Parity>None</com:Parity>
+        <com:DataBits>8</com:DataBits>
+        <com:StopBits>One</com:StopBits>
+        <com:NewLine>\n</com:NewLine>
+      </Channel>
+    </root>
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="tags:com"
+           targetNamespace="tags:com"
+           elementFormDefault="qualified">
+
+  <!-- System.IO.Ports.Parity -->
+  <xs:simpleType name="ParityType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="None"/>
+      <xs:enumeration value="Odd"/>
+      <xs:enumeration value="Even"/>
+      <xs:enumeration value="Mark"/>
+      <xs:enumeration value="Space"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- System.IO.Ports.StopBits -->
+  <xs:simpleType name="StopBitsType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="None"/>
+      <xs:enumeration value="One"/>
+      <xs:enumeration value="Two"/>
+      <xs:enumeration value="OnePointFive"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="Port" type="xs:string"/> <!-- "COM1" 形式的字符串 -->
+  <xs:element name="BaudRate" type="xs:int"/>
+  <xs:element name="Parity" type="ParityType"/>
+  <xs:element name="DataBits" type="xs:int"/>
+  <xs:element name="StopBits" type="StopBitsType"/>
+  <xs:element name="NewLine" type="xs:string"/> <!-- 支持转义序列，如 \n、\r\n -->
+  <xs:element name="ReadEntireLine" type="xs:boolean"/>
+  <xs:element name="ReadScript" type="xs:string"/>
+  <xs:element name="ReadScriptDebugInformationEnabled" type="xs:boolean"/>
+  <xs:element name="ChannelCapacity" type="xs:positiveInteger"/>
+
+</xs:schema>

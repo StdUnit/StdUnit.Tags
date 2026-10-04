@@ -1,0 +1,34 @@
+﻿@using StdUnit.Tags.BlazorLib
+@using StdUnit.Tags.BlazorLib.Components
+@using StdUnit.Tags.OpcUaClient
+
+<MudGrid Class="pl-4">
+    <MudItem xs="12" sm="6" md="4">
+        <MudTextField Label="Name" Variant="Variant.Filled" @bind-Value="Descriptor.Name" />
+    </MudItem>
+    <MudItem xs="12" sm="6" md="4">
+        <MudTextField Label="ClientName" Variant="Variant.Filled" @bind-Value="Descriptor.OpcUaTagChannelOpt.ClientName" />
+    </MudItem>
+
+    <MudItem xs="12" md="8">
+        <MudTextField Label="DiscoveryUrl" Variant="Variant.Filled" @bind-Value="Descriptor.OpcUaTagChannelOpt.ServerOpt.DiscoveryUrl" />
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="4">
+        <MudSwitch T="bool" Label="UsePassword" Value="@Descriptor.OpcUaTagChannelOpt.ServerOpt.UsePassword" ValueChanged="@(v => Descriptor.OpcUaTagChannelOpt.ServerOpt.UsePassword = v)" />
+    </MudItem>
+
+    @if (Descriptor.OpcUaTagChannelOpt.ServerOpt.UsePassword)
+    {
+        <MudItem xs="12" sm="6" md="4">
+            <MudTextField Label="UserName" Variant="Variant.Filled" @bind-Value="Descriptor.OpcUaTagChannelOpt.ServerOpt.UserName" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudTextField Label="Password" Variant="Variant.Filled" InputType="InputType.Password" @bind-Value="Descriptor.OpcUaTagChannelOpt.ServerOpt.Password" />
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public OpcUaClientTagChannelDescriptor Descriptor { get; set; } = default!;
+}

@@ -32,7 +32,7 @@ jobs:
 
     - name: build 
       working-directory: .
-      run: dotnet build Itminus.Tags.sln
+      run: dotnet build StdUnit.Tags.sln
 
     - name: Test with Coverage
       working-directory: .

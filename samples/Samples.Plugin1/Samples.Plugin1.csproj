@@ -7,7 +7,7 @@
   </PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\src\Itminus.Tags.Core\Itminus.Tags.Core.csproj" >
+		<ProjectReference Include="..\..\src\StdUnit.Tags.Core\StdUnit.Tags.Core.csproj">
 		</ProjectReference>
 	</ItemGroup>
 </Project>

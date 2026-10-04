@@ -1,0 +1,109 @@
+﻿@using StdUnit.Tags
+@using StdUnit.Tags.BlazorLib
+@using StdUnit.Tags.BlazorLib.Components
+@using StdUnit.Tags.BlazorLib.Components.ChannelDescriptors.Editing
+@inject TagChannelDescriptorRendererRegistry Registry
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6">新增通道</MudText>
+
+        <MudGrid Class="mt-2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" Label="Driver" Variant="Variant.Filled" @bind-Value="Driver" Immediate="true">
+                    @foreach (var d in Drivers)
+                    {
+                        <MudSelectItem T="string" Value="@d">@d</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudDivider Class="my-2" />
+            </MudItem>
+
+            <MudItem xs="12">
+                @if (string.IsNullOrWhiteSpace(_driver))
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">请选择 Driver。</MudAlert>
+                }
+                else if (_descriptor is null)
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">未找到该 Driver 对应的编辑器。</MudAlert>
+                }
+                else
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">通道参数</MudText>
+                    var editor = Registry.ResolveEditor(_descriptor);
+                    if (editor is null)
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">未找到该 Driver 对应的编辑器。</MudAlert>
+                    }
+                    else
+                    {
+                        @editor.Edit(_descriptor, d => _descriptor = d)
+                    }
+                }
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanSave)" OnClick="Save">确定</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<string> Drivers { get; set; } = Array.Empty<string>();
+
+    private string? _driver;
+    private TagChannelDescriptor? _descriptor;
+
+    private bool CanSave => _descriptor is not null;
+
+    protected override void OnParametersSet()
+    {
+        Drivers ??= Array.Empty<string>();
+    }
+
+    private void EnsureDescriptor()
+    {
+        if (string.IsNullOrWhiteSpace(_driver))
+        {
+            _descriptor = null;
+            return;
+        }
+
+        if (_driver == _descriptor?.Driver)
+        {
+            return;
+        }
+
+        _descriptor = new TagChannelDescriptor() { Driver = _driver };
+    }
+
+    private string? Driver
+    {
+        get => _driver;
+        set
+        {
+            if (_driver == value) return;
+            _driver = value;
+            EnsureDescriptor();
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Save()
+    {
+        if (_descriptor is null)
+            return;
+
+        MudDialog.Close(DialogResult.Ok(_descriptor));
+    }
+}

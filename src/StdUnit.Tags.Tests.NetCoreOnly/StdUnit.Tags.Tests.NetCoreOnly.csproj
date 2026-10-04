@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  仅 net8.0 的测试项目 —— 专门存放**无法**面向 net472 的测试。
+
+  什么时候用本项目：
+  * 测试引用了仅支持 net8.0 的项目/包（如 BlazorLib / BlazorLib.Core、
+    ModelContextProtocol.AspNetCore）；
+  * 测试依赖 net8.0 专属的运行期 API（如 AssemblyLoadContext，见 StdUnit.Tags.Tests 里
+    被 Compile Remove 的 LogicetPluginLifecycleTests）。
+
+  什么时候**不要**用本项目：
+  * 只要能在 net472 下编译运行，就放 StdUnit.Tags.Tests —— 那里两个 TFM 都跑，
+    覆盖更广，也避免 net472 侧的代码悄悄腐烂。
+
+  另外：不要在 StdUnit.Tags.Tests 里用 #if NETFRAMEWORK 排除整个文件来回避 net8-only 依赖 ——
+  那是编译期开关，解决不了"引用 net8-only 项目"的问题。
+
+  现状：暂无测试，作为占位预留。首个用例预期来自 ASP.NET Core / Blazor 方向。
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <NuGetAudit>false</NuGetAudit>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>CS0067,CS1998</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- net8.0 专属的被测项目。当前尚无测试，故先只引用基础库；
+         将来写 Blazor / ASP.NET Core 测试时按需追加
+         StdUnit.Tags.BlazorLib.Core / StdUnit.Tags.BlazorLib。 -->
+    <ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

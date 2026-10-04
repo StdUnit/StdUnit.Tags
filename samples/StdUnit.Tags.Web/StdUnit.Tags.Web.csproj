@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+
+	<PropertyGroup>
+		<StaticFilesFolderName>Samples.Plugin1</StaticFilesFolderName>
+	</PropertyGroup>
+	
+  <ItemGroup>
+	  <ContentWithTargetPath Include="../Samples.Plugin1/bin/Debug/net8.0/**/*.*">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		  <TargetPath>$(StaticFilesFolderName)\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+	  </ContentWithTargetPath>
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StdUnit.Tags.BlazorLib\StdUnit.Tags.BlazorLib.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ComScanner\StdUnit.Tags.ComScanner.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.Hjzk\StdUnit.Tags.Hjzk.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ModbusTcp\StdUnit.Tags.ModbusTcp.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.OpcUaClient\StdUnit.Tags.OpcUaClient.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.RxExtensions\StdUnit.Tags.RxExtensions.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.S7\StdUnit.Tags.S7.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ZLan\StdUnit.Tags.ZLan.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="index-plugin.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="index.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="index2.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

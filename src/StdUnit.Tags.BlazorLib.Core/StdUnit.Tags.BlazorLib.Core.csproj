@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<OutputType>Library</OutputType>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>StdUnit.Tags.BlazorLib</RootNamespace>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\StdUnit.Tags.R3Extensions\StdUnit.Tags.R3Extensions.csproj" />
+		<ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
+	</ItemGroup>
+	<Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

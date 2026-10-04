@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  HjzkIoBox 驱动：Channel 专属子元素 schema（self-contained，不依赖其他驱动 schema）
+  命名空间：tags:hjzk
+  对应运行时类型：HjzkTagChannelDescriptor（src/StdUnit.Tags.Hjzk/Channels/HjzkTagChannelDescriptor.cs）。
+  HjzkTagChannelDescriptor : ModbusTcpTagChannelDescriptor（C# 继承），
+  但 schema 保持独立，避免跨项目 import 的路径解析问题。
+  用法：
+    <root xmlns:hj="tags:hjzk">
+      <Channel name="hj-1" driver="HjzkIoBox">
+        <hj:IpAddr>172.16.2.21</hj:IpAddr>
+        <hj:Port>502</hj:Port>
+      </Channel>
+    </root>
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="tags:hjzk"
+           targetNamespace="tags:hjzk"
+           elementFormDefault="qualified">
+
+  <xs:simpleType name="SingleFrameLimitType">
+    <xs:restriction base="xs:unsignedShort">
+      <xs:minInclusive value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:element name="IpAddr" type="xs:string"/>
+  <!-- Port 为字符串以兼容 COM 的 "COM1" 形式；Hjzk 侧运行期解析为整数 -->
+  <xs:element name="Port" type="xs:string"/>
+  <xs:element name="MaxWriteRegisters" type="SingleFrameLimitType"/>
+  <xs:element name="MaxReadRegisters" type="SingleFrameLimitType"/>
+  <xs:element name="MaxReadBits" type="SingleFrameLimitType"/>
+
+</xs:schema>

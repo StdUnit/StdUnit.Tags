@@ -12,9 +12,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Itminus.Tags\Itminus.Tags.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags.SimpleFiles\Itminus.Tags.SimpleFiles.csproj" />
-    <ProjectReference Include="..\..\src\Itminus.Tags.BlazorLib.Core\Itminus.Tags.BlazorLib.Core.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.SimpleFiles\StdUnit.Tags.SimpleFiles.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.BlazorLib.Core\StdUnit.Tags.BlazorLib.Core.csproj" />
   </ItemGroup>
 
 
