@@ -17,7 +17,7 @@ public static class TagUnionExtensions
         await tagunion.Map(
             async tag =>
             {
-                if (tag.SearchAccessMode() == TagAccessMode.R1W && tag.IsScaned)
+                if (tag.SearchAccessMode() == TagAccessMode.R1W && tag.IsScanned)
                 {
                     return;
                 }
@@ -26,11 +26,11 @@ public static class TagUnionExtensions
                     return;
                 }
                 await tag.ReadAsync(ct);
-                tag.IsScaned = true;
+                tag.IsScanned = true;
             },
             async cbnt =>
             {
-                if (cbnt.SearchAccessMode() == TagAccessMode.R1W && cbnt.IsScaned)
+                if (cbnt.SearchAccessMode() == TagAccessMode.R1W && cbnt.IsScanned)
                 {
                     return;
                 }
@@ -39,7 +39,7 @@ public static class TagUnionExtensions
                     return;
                 }
                 await cbnt.ReadAsync(ct);
-                cbnt.IsScaned = true;
+                cbnt.IsScanned = true;
             },
             async grp =>
             {

@@ -57,7 +57,7 @@ public abstract class Tag<TValue, TChannel> : ITag
     public event TagSyncEventHandler? OnTagWritten;
 
     /// <inheritdoc/>
-    public bool IsScaned { get; set; }
+    public bool IsScanned { get; set; }
 
     #region 读写测点值
     /// <summary>

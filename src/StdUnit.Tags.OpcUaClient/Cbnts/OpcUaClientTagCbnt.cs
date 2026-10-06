@@ -28,7 +28,7 @@ internal class OpcUaClientTagCbnt : ITagCbnt
     /// <inheritdoc/>
     public bool IsEnabled { get; set; }
     /// <inheritdoc/>
-    public bool IsScaned { get; set; }
+    public bool IsScanned { get; set; }
     /// <inheritdoc/>
     public ITagChannel? Channel { get; set; }
     /// <inheritdoc/>

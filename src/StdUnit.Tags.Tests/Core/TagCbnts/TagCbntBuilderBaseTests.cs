@@ -27,7 +27,7 @@ public class TagCbntBuilderBaseTests
         public IDictionary<string, ITagCbntor> Children { get; } = new Dictionary<string, ITagCbntor>();
         public ITagCbntor this[string key] => Children[key];
         public bool IsEnabled { get; set; } = true;
-        public bool IsScaned { get; set; }
+        public bool IsScanned { get; set; }
         public ITagChannel? Channel { get; set; }
         public string StartAddress { get; set; } = string.Empty;
         public bool IsDirty { get; set; }

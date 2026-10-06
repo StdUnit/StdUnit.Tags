@@ -97,7 +97,7 @@ public abstract class TagCbntor : ITagCbntor
     }
 
     /// <inheritdoc/>
-    public bool IsScaned { get; set; }
+    public bool IsScanned { get; set; }
 
     #region 
     /// <inheritdoc />

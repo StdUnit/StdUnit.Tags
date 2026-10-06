@@ -162,7 +162,7 @@ public partial class TagView : IDisposable
             {
                 project.WriteIntent(entry.TagName(), (entry, ct) =>
                 {
-                    cbnt.IsScaned = false;
+                    cbnt.IsScanned = false;
                     return ValueTask.CompletedTask;
                 },
                 out task);
@@ -174,7 +174,7 @@ public partial class TagView : IDisposable
                     entry.TagName(),
                     (entry, ct) =>
                     {
-                        tag.IsScaned = false;
+                        tag.IsScanned = false;
                         return ValueTask.CompletedTask;
                     },
                     out task

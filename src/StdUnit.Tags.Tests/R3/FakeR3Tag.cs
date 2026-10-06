@@ -12,7 +12,7 @@ internal sealed class FakeR3Tag : ITag
     public TagDescriptor TagDescriptor { get; set; } = new() { TagName = "test-tag" };
     public object? Value { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-    public bool IsScaned { get; set; }
+    public bool IsScanned { get; set; }
     public bool IsDirty { get; set; }
     public ITagChannel? Channel => null;
     public TagContainer? Parent { get; set; }
