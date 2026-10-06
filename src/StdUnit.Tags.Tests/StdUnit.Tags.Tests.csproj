@@ -2,12 +2,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
-    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
 	<NuGetAudit>false</NuGetAudit>
-	<LangVersion>latest</LangVersion>
-  <NoWarn>CS0067,CS1998</NoWarn>
-
+    <NoWarn>$(NoWarn);CS0067,CS1998</NoWarn>
+    <!-- 测试项目不生成 XML 文档：测试代码的公开成员没有注释，继承 src/Directory.Build.props 的默认值会刷出大量 CS1591 -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\StdUnit.Tags.ComScanner\StdUnit.Tags.ComScanner.csproj" />

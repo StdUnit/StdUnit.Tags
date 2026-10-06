@@ -6,7 +6,7 @@ namespace StdUnit.Tags.ZLan;
 
 
 /// <summary>
-/// 构建 <see cref="ZLanChannel"/>
+/// 构建 <see cref="ZLanTcpChannel"/>
 /// </summary>
 public class ZLanTcpChannelFactory : ITagChannelFactory
 {

@@ -1,12 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
+		<Description>简单文件支持，把测点树映射为文件树</Description>
 		<TargetFrameworks>net8.0;net472</TargetFrameworks>
-		<ImplicitUsings>enable</ImplicitUsings>
 		<OutputType>Library</OutputType>
-		<LangVersion>latest</LangVersion>
-		<Nullable>enable</Nullable>
-		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 	</PropertyGroup>
 
 	<ItemGroup>
