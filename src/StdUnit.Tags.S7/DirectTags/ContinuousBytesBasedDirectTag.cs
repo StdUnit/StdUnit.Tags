@@ -38,7 +38,7 @@ internal abstract class ContinuousBytesBasedDirectTag<T> : Tag<T, S7TagChannel>
         var addr = this.NormalizedAddress();
         var bytes = await this._bubbleChannel.ReadAsync(addr, BufferSize, ct);
         this._value = this.ConvertFromBytes(bytes.AsSpan());
-        this.Timestamp = DateTime.Now;
+        this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead(this.Value);
     }
 

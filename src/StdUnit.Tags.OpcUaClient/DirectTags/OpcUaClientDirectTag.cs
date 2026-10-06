@@ -20,7 +20,7 @@ internal abstract class OpcUaClientDirectTag<TValue> : Tag<TValue, OpcUaClientTa
         var datavale = await this._bubbleChannel.ReadValueAsync(addrstr, ct);
         var value = this.ConvertFromDataValue(datavale);
         this._value = value;
-        this.Timestamp = DateTime.Now;
+        this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead(value);
     }
 

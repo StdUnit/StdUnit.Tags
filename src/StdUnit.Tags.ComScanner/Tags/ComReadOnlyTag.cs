@@ -43,7 +43,7 @@ public class ComReadOnlyTag<T> : Tag<T, ComChannelBase<T>>
         }
 
         this._value = str;
-        this.Timestamp = DateTime.Now;
+        this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead(str);
     }
 

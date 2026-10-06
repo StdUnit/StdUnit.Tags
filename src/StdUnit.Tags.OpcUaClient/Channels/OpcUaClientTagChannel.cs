@@ -153,7 +153,7 @@ public class OpcUaClientTagChannel : ITagChannel
         //    EventGroup = "OpcUa",
         //    Content = $"OPC UA 连接成功：{this._opcServerOpt.DiscoveryUrl}",
         //    Level = LogLevel.Information,
-        //    Timestamp = DateTime.Now,
+        //    Timestamp = DateTime.UtcNow,
         //}));
         return session;
     }

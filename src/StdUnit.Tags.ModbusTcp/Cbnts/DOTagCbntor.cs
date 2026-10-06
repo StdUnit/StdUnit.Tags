@@ -36,7 +36,7 @@ public class DOTagCbntor : ModbusBitSpaceTagCbntorBase
                 this.Cache.Span[this.CacheOffset] = b;
             }
 
-            Timestamp = DateTime.Now;
+            Timestamp = DateTime.UtcNow;
             MarkDirty();
         }
     }

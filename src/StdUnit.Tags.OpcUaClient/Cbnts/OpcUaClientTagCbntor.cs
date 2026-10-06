@@ -87,7 +87,7 @@ internal class OpcUaClientTagCbntor : TagCbntor
 
         // 通道保证"返回即非坏值"（坏点会让这次读取直接失败）
         cbnt.Bag[this.NodeId] = values[0];
-        this.Timestamp = DateTime.Now;
+        this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead();
     }
 }

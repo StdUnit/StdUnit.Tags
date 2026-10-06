@@ -42,7 +42,7 @@ public class TagSyncEventArgs : EventArgs
     /// </summary>
     public object? NewValue { get; set; }
     /// <summary>
-    /// 时间戳
+    /// 时间戳（UTC）：该测点最近一次读/写发生的时刻
     /// </summary>
     public DateTime Timestamp { get; set; }
     /// <summary>
@@ -75,7 +75,8 @@ public interface ITag
     public object? Value { get; set; }
 
     /// <summary>
-    /// 时间戳
+    /// 时间戳：该测点最近一次被读/写的时刻，**统一为 UTC**（<c>DateTime.UtcNow</c>）。<br/>
+    /// 展示或与本地时间比较时请自行转换；不要用 <c>DateTime.Now</c> 写入本属性。
     /// </summary>
     public DateTime Timestamp { get; set; }
 

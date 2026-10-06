@@ -44,7 +44,7 @@ public class S7Int16TagCbntor : S7TagCbntorBase
             {
                 BinaryPrimitives.WriteInt16LittleEndian(dst, data);
             }
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }
@@ -92,7 +92,7 @@ public class S7UInt16TagCbntor : S7TagCbntorBase
             {
                 BinaryPrimitives.WriteUInt16LittleEndian(dst, data);
             }
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }
@@ -140,7 +140,7 @@ public class S7Int32TagCbntor : S7TagCbntorBase
             {
                 BinaryPrimitives.WriteInt32LittleEndian(dst, data);
             }
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }
@@ -188,7 +188,7 @@ public class S7UInt32TagCbntor : S7TagCbntorBase
             {
                 BinaryPrimitives.WriteUInt32LittleEndian(dst, data);
             }
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }
@@ -236,7 +236,7 @@ public class S7Int64TagCbntor : S7TagCbntorBase
             {
                 BinaryPrimitives.WriteInt64LittleEndian(dst, data);
             }
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }
@@ -284,7 +284,7 @@ public class S7UInt64TagCbntor : S7TagCbntorBase
             {
                 BinaryPrimitives.WriteUInt64LittleEndian(dst, data);
             }
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }

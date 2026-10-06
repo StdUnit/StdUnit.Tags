@@ -116,7 +116,7 @@ public class ComTagTests
             await channel.EnsureConnectedAsync(false, cts.Token);
             await Task.Delay(100);
 
-            var before = DateTime.Now.AddSeconds(-1);
+            var before = DateTime.UtcNow.AddSeconds(-1);
             await tag.ReadAsync(cts.Token);
 
             Assert.True(tag.Timestamp >= before, "Timestamp should be updated after ReadAsync");
@@ -326,7 +326,7 @@ public class ComTagTests
         {
             await channel.EnsureConnectedAsync(false, cts.Token);
 
-            var before = DateTime.Now.AddSeconds(-1);
+            var before = DateTime.UtcNow.AddSeconds(-1);
             tag.Value = "timestamp-check";
             Assert.True(tag.Timestamp >= before, "Value setter should update Timestamp");
 

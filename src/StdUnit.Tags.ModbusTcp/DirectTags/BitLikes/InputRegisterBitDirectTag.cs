@@ -39,7 +39,7 @@ internal class InputRegisterBitDirectTag : Tag<bool, ModbusTcpChannel>
     {
         var regs = await this._bubbleChannel.ReadRegistersAsync(this.NormalizedAddress(), 1, ct);
         this._value = ((regs[0] >> this.NthBit) & 1) != 0;
-        this.Timestamp = DateTime.Now;
+        this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead(this._value);
     }
     public override Task WriteAsync(CancellationToken ct) =>

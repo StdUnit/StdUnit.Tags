@@ -82,7 +82,7 @@ public abstract class Tag<TValue, TChannel> : ITag
         set
         {
             _value = value;
-            Timestamp = DateTime.Now;
+            Timestamp = DateTime.UtcNow;
             IsDirty = true;
         }
     }

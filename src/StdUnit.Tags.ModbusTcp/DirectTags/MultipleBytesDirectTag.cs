@@ -56,7 +56,7 @@ internal abstract class MultipleBytesDirectTag<T> : Tag<T, ModbusTcpChannel>
     {
         var regs = await this._bubbleChannel.ReadRegistersAsync(this.NormalizedAddress(), this.RegisterCount, ct);
         this._value = this.GetValueFromRegisters(regs);
-        this.Timestamp = DateTime.Now;
+        this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead(this._value);
     }
 
