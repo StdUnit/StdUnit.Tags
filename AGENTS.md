@@ -82,6 +82,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 
 ## 约定
 
+- **时间戳一律 UTC**：`ITag.Timestamp` 用 `DateTime.UtcNow` 写入，**不要用 `DateTime.Now`**（本地时间跨时区/夏令时不可比）；展示或与本地时间比较时由调用方自行转换。
 - 公共编译设置（`ImplicitUsings` + `Nullable` + `LangVersion latest` + XML 文档文件）与 NuGet 包元数据（作者/授权/仓库/项目主页/标签/README）统一在 `src/Directory.Build.props`；**新增会被发布的包时，务必在自己 csproj 里补一行 `<Description>`**（否则 nuget.org 上只会显示 SDK 占位文本 `Package Description`），并把项目名加进 `src/publish-packages.ps1` 的列表。
 - 驱动包内的 DI 扩展类约定**同名** `TagsProject_Extensions`，各自位于自己的命名空间（如 `StdUnit.Tags.S7`）。
 - 驱动名常量集中在 `XxxNames.DriverName`（如 `S7Names.DriverName = "S7"`、`ComDriverNames.DriverName = "COM"`）；XML 中的 `driver="..."` 必须与之完全一致。

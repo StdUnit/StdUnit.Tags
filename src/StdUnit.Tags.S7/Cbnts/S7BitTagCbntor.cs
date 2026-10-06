@@ -46,7 +46,7 @@ public class S7BitTagCbntor : S7TagCbntorBase
                 ? oldFlags | 1 << this.NthBit
                 : oldFlags & ~(1 << this.NthBit);
             this.Cache.Span[this.CacheOffset] = (byte)newFlags;
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }

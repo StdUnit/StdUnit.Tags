@@ -34,7 +34,7 @@ public class S7FloatTagCbntor : S7TagCbntorBase
 #pragma warning restore CS8605 // Unboxing a possibly null value.
             var dst = this.Cache.Span.Slice(this.CacheOffset, 4);
             Compat.FloatBitsCompat.Write(dst, data, this.TagEndian() == EndianKinds.BigEndian);
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }

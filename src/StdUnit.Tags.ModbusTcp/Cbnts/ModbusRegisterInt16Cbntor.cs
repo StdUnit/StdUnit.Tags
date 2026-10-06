@@ -30,7 +30,7 @@ internal class ModbusRegisterInt16Cbntor : ModbusRegisterCbntorBase
 #pragma warning restore CS8605 // Unboxing a possibly null value.
             this.EnsureWritable();
             this.RegCache.Span[this.RegOffset] = (ushort)data;
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }
@@ -66,7 +66,7 @@ internal class ModbusRegisterUInt16Cbntor : ModbusRegisterCbntorBase
 #pragma warning restore CS8605 // Unboxing a possibly null value.
             this.EnsureWritable();
             this.RegCache.Span[this.RegOffset] = data;
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }

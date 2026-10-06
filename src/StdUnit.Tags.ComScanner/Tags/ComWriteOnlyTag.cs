@@ -32,7 +32,7 @@ public class ComWriteOnlyTag<T> : Tag<T, ComChannelBase<T>>
         {
             this._value = value;
             this.IsDirty = true;
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
         }
     }
 

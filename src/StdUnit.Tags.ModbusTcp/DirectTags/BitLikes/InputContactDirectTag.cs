@@ -36,7 +36,7 @@ internal class InputContactDirectTag : Tag<bool, ModbusTcpChannel>
     {
         var bits = await this._bubbleChannel.ReadBitsAsync(this.NormalizedAddress(), 1, ct);
         this._value = bits[0];
-        this.Timestamp = DateTime.Now;
+        this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead(this._value);
     }
 

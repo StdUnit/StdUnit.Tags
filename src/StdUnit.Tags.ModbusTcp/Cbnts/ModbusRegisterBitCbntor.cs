@@ -54,7 +54,7 @@ internal class ModbusRegisterBitCbntor : ModbusRegisterCbntorBase
                 ? (ushort)(reg | (1 << this.NthBit))
                 : (ushort)(reg & ~(1 << this.NthBit));
             this.RegCache.Span[this.RegOffset] = newReg;
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }

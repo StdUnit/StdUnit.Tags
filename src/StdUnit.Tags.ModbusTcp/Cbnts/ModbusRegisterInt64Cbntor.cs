@@ -58,7 +58,7 @@ internal class ModbusRegisterInt64Cbntor : ModbusRegisterCbntorBase
             span[2] = (ushort)(bits >> 32);
             span[3] = (ushort)(bits >> 48);
         }
-        this.Timestamp = DateTime.Now;
+        this.Timestamp = DateTime.UtcNow;
         this.MarkDirty();
     }
 }

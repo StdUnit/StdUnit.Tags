@@ -28,7 +28,7 @@ public class S7ByteTagCbntor : S7TagCbntorBase
             var b = (byte)value;
 #pragma warning restore CS8605 // Unboxing a possibly null value.
             this.Cache.Span[this.CacheOffset] = b;
-            this.Timestamp = DateTime.Now;
+            this.Timestamp = DateTime.UtcNow;
             this.MarkDirty();
         }
     }
