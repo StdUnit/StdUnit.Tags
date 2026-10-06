@@ -127,7 +127,8 @@ public struct ModbusTcpAddress
             return $"{SlaveAddress}~{addr}.{NthBit}";
         }
 
-        throw new NotImplementedException();
+        throw new TagsProjectAddressException(
+            $"ModbusTcp 地址无法格式化：未预料到的地址区域 Area={Area}（Slave={SlaveAddress}, StartPoint={StartPoint}, UseBit={UseBit}, NthBit={NthBit}）");
     }
 }
 
@@ -145,13 +146,14 @@ public static class ModBusTcpAddressParser
     /// </summary>
     /// <param name="address"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="TagsProjectAddressException">地址字符串不是合法的 Modbus 地址</exception>
     public static ModbusTcpAddress Parse(string address)
     {
         var q = ParseWithNthBit(address).OrElse(_ => ParseWithoutNthBit(address));
         if (q.IsError)
         {
-            throw new Exception($"非法的Modbus地址({address})格式: {q.ErrorValue}");
+            throw new TagsProjectAddressException(
+                $"非法的Modbus地址 '{address}'：{q.ErrorValue}（期望 [<slave>~]<area><start>[.<nth>]，area 取 0/1/3/4，如 '1~40001.0'）");
         }
         return q.ResultValue;
     }

@@ -727,7 +727,7 @@ public class DirectTagTests : IDisposable
         };
         var tag = CreateTag(descriptor);
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => tag.ReadAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<TagsProjectXmlException>(() => tag.ReadAsync(CancellationToken.None));
         Assert.Contains("autoCreateFile", ex.Message);
         Assert.Contains("not-a-bool", ex.Message);
     }
@@ -799,7 +799,7 @@ public class DirectTagTests : IDisposable
         var descriptor = MakeDescriptor("t", "x.txt", "UNSUPPORTED");
         var factory = new SimpleFilesDirectTagFactory(_grp.IntoTagContainer());
 
-        var ex = Assert.Throws<Exception>(() => factory.Create(descriptor, _channel));
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => factory.Create(descriptor, _channel));
         Assert.Contains("UNSUPPORTED", ex.Message);
     }
 

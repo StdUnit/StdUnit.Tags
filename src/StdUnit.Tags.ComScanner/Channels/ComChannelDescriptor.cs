@@ -74,13 +74,15 @@ public static class TagChannelDescriptor_ComExtensions
     /// </summary>
     /// <param name="descriptor"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="TagsProjectConfigurationException">当前描述符的驱动不是 <see cref="ComDriverNames.DriverName"/></exception>
+    /// <exception cref="TagsProjectXmlException">串口选项无法解析</exception>
     public static ComChannelDescriptor ToComChannelDescriptor(this TagChannelDescriptor descriptor)
     {
         if (descriptor.Driver != ComDriverNames.DriverName)
         {
-            throw new InvalidOperationException($"通道驱动错误：期望 {ComDriverNames.DriverName}，而当前为{descriptor.Driver}");
+            throw new TagsProjectConfigurationException(
+                $"通道驱动错误：期望 {ComDriverNames.DriverName}，而当前为{descriptor.Driver}",
+                $"Channel({descriptor.Name})");
         }
         if (descriptor is ComChannelDescriptor d)
         {
@@ -92,6 +94,7 @@ public static class TagChannelDescriptor_ComExtensions
         int defaultDataBits = 8;
         StopBits defaultStopBits = StopBits.None;
         int defaultChannelCapacity = 1;
+        var location = $"Channel({descriptor.Name})";
 
         string? newline = null;
         if (descriptor.Extras.TryGetValue(nameof(ComChannelDescriptor.Option.NewLine), out var newLine))
@@ -118,7 +121,7 @@ public static class TagChannelDescriptor_ComExtensions
         var readScriptDebugInformationEnabled =
                  !descriptor.Extras.TryGetValue(nameof(ComChannelDescriptor.Option.ReadScriptDebugInformationEnabled), out var readScriptDebugInformationEnabledStr) ? false :
                  bool.TryParse(readScriptDebugInformationEnabledStr.Value, out var readScriptDebugInformationEnabledVal) ? readScriptDebugInformationEnabledVal :
-                 throw new Exception($"串口读取脚本调试信息开关非法，无法解析成布尔值({readScriptDebugInformationEnabledStr.Value})");
+                 throw new TagsProjectXmlException($"串口读取脚本调试信息开关非法，无法解析成布尔值({readScriptDebugInformationEnabledStr.Value})", location);
 
         var port = !descriptor.Extras.TryGetValue(nameof(ComChannelDescriptor.Option.Port), out var comPort) ?
                     "COM1" :
@@ -129,21 +132,21 @@ public static class TagChannelDescriptor_ComExtensions
                     !descriptor.Extras.TryGetValue(nameof(ComChannelDescriptor.Option.BaudRate), out var baudRateStr) &&
                     !descriptor.Extras.TryGetValue("BaundRate", out baudRateStr) ? defaultBaudRate :
                     int.TryParse(baudRateStr.Value, out var baudRateVal) ? baudRateVal :
-                    throw new Exception($"串口波特率非法，无法解析成整数({baudRateStr.Value})");
+                    throw new TagsProjectXmlException($"串口波特率非法，无法解析成整数({baudRateStr.Value})", location);
         var parity = !descriptor.Extras.TryGetValue(nameof(ComChannelDescriptor.Option.Parity), out var parityStr) ? defaultParity :
                     Enum.TryParse<Parity>(parityStr.Value, out var parityVal) ? parityVal :
-                    throw new Exception($"串口极性非法，无法解析成Parity({parityStr.Value})");
+                    throw new TagsProjectXmlException($"串口极性非法，无法解析成Parity({parityStr.Value})", location);
         var databits =
                     !descriptor.Extras.TryGetValue(nameof(ComChannelDescriptor.Option.DataBits), out var databitsStr) ? defaultDataBits :
                     int.TryParse(databitsStr.Value, out var databitsVal) ? databitsVal :
-                    throw new Exception($"串口数据位非法，无法解析成整数({databitsStr.Value})");
+                    throw new TagsProjectXmlException($"串口数据位非法，无法解析成整数({databitsStr.Value})", location);
         var stopbits = !descriptor.Extras.TryGetValue(nameof(ComChannelDescriptor.Option.StopBits), out var stopbitsStr) ? defaultStopBits :
                     Enum.TryParse<StopBits>(stopbitsStr.Value, out var stopbitsVal) ? stopbitsVal :
-                    throw new Exception($"串口停止位非法，无法解析成StopBits({stopbitsStr.Value})");
+                    throw new TagsProjectXmlException($"串口停止位非法，无法解析成StopBits({stopbitsStr.Value})", location);
 
         var channelCapacity = !descriptor.Extras.TryGetValue(nameof(ComChannelDescriptor.Option.ChannelCapacity), out var channelCapacityStr) ? defaultChannelCapacity :
                    int.TryParse(channelCapacityStr.Value, out var channelCapacityVal) ? channelCapacityVal :
-                    throw new Exception($"通道容量非法，无法解析成正整数({channelCapacityStr.Value})");
+                    throw new TagsProjectXmlException($"通道容量非法，无法解析成正整数({channelCapacityStr.Value})", location);
 
         var res = new ComChannelDescriptor
         {

@@ -98,7 +98,7 @@ public class ChannelDescriptorTests
 ";
         var element = XElement.Parse(xml);
         var descriptor0 = element.ToTagChannelDescriptor();
-        Assert.Throws<ArgumentException>(() => descriptor0.ToS7TagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => descriptor0.ToS7TagChannelDescriptor());
     }
 
     [Fact]

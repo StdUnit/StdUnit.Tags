@@ -88,7 +88,9 @@ public class S7TagCbntBuilder : TagCbntBuilderBase
                 if (addr.Area != groupAddr.Area || addr.BlockNumber != groupAddr.BlockNumber)
                 {
                     var tagname = tag.TagName();
-                    throw new InvalidOperationException($"Tag & Cbnt start address doesn't match(Tag={tagname}, Grp={this.Name}).");
+                    throw new TagsProjectAddressException(
+                        $"测点 '{tagname}' 的地址 '{tag.RawAddress()}' 与所属组合 '{this.Name}' 的起始地址 '{this.TagCbnt.StartAddress}' 不在同一区域/DB 块；若要沿用组合的区域与 DB 块，请写成相对地址（如 '$${addr.StartAddress}'）",
+                        $"TagCbnt({this.Name})/Tag({tagname})");
                 }
             }
             else

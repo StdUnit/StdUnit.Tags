@@ -32,9 +32,9 @@ public class OpcUaClientTagCbntorTests
         var regularCbnt = new TestByteTagCbnt(new TagCbntDescriptor { Name = "regular", StartAddress = "0" });
         var descriptor = new TagDescriptor { TagName = "t", RawAddress = "ns=1;s=tag1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() =>
             new OpcUaClientTagCbntor(descriptor, regularCbnt, 0, 0));
-        Assert.Contains("OpcUaTagCbnt", ex.Message);
+        Assert.Contains("OpcUaClientTagCbnt", ex.Message);
     }
 
     [Fact]

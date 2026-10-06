@@ -76,7 +76,7 @@ public class NestedEntryValidatorTests
     [Fact]
     public void Validate_EntryDirectlyInsideEntry_Throws()
     {
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => Validate("""
+        var ex = Assert.Throws<TagsProjectValidationException>(() => Validate("""
             <Project>
                 <TagGrp name="entry" isEntry="true" channel="S7-1">
                     <TagGrp name="subEntry" isEntry="true" channel="ch-2">
@@ -86,7 +86,7 @@ public class NestedEntryValidatorTests
             </Project>
             """));
 
-        Assert.Contains("TagGrp(entry) → TagGrp(subEntry)", ex.Message);
+        Assert.Contains("TagGrp(entry)/TagGrp(subEntry)", ex.Message);
         Assert.Contains("不生效", ex.Message);
     }
 
@@ -94,7 +94,7 @@ public class NestedEntryValidatorTests
     [Fact]
     public void Validate_EntryDeepInsideEntry_Throws()
     {
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => Validate("""
+        var ex = Assert.Throws<TagsProjectValidationException>(() => Validate("""
             <Project>
                 <TagGrp name="entry" isEntry="true" channel="S7-1">
                     <TagGrp name="1#">
@@ -106,14 +106,14 @@ public class NestedEntryValidatorTests
             </Project>
             """));
 
-        Assert.Contains("TagGrp(entry) → TagGrp(1#) → TagGrp(subEntry)", ex.Message);
+        Assert.Contains("TagGrp(entry)/TagGrp(1#)/TagGrp(subEntry)", ex.Message);
     }
 
     /// <summary>isEntry 大小写不敏感（与运行期解析一致）。</summary>
     [Fact]
     public void Validate_IsEntryAttributeIsCaseInsensitive_Throws()
     {
-        Assert.Throws<TagsProjectSchemaException>(() => Validate("""
+        Assert.Throws<TagsProjectValidationException>(() => Validate("""
             <Project>
                 <TagGrp name="entry" isEntry="true" channel="S7-1">
                     <TagGrp name="subEntry" isEntry="TRUE">
@@ -152,7 +152,7 @@ public class NestedEntryValidatorTests
             </Project>
             """);
 
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => factory.Create(string.Empty, xml));
+        var ex = Assert.Throws<TagsProjectValidationException>(() => factory.Create(string.Empty, xml));
         Assert.Contains("不生效", ex.Message);
     }
 

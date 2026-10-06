@@ -108,7 +108,7 @@ public class CompositeTagChannelFactoryTests
         var composite = new CompositeTagChannelFactory();
         composite.AddFactory(new FakeFactory("S7"));
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() =>
             composite.Create(new TagChannelDescriptor { Driver = "MODBUS", Name = "m1" }));
         Assert.Contains("MODBUS", ex.Message);
     }
@@ -118,7 +118,7 @@ public class CompositeTagChannelFactoryTests
     {
         var composite = new CompositeTagChannelFactory();
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() =>
             composite.Create(new TagChannelDescriptor { Driver = "S7", Name = "s7-1" }));
         Assert.Contains("S7", ex.Message);
     }

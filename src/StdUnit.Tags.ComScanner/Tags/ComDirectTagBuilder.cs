@@ -13,6 +13,8 @@ public class ComDirectTagBuilder : TagBuilderBase
     /// </summary>
     /// <param name="channel"></param>
     /// <returns></returns>
+    /// <exception cref="TagsProjectConfigurationException">通道类型不匹配 / 测点类型不受支持</exception>
+    /// <exception cref="TagsProjectXmlException">access 不是 RO / WO</exception>
     protected override ITag Fallback(ITagChannel channel)
     {
         var tagKind = this.TagDescriptor.TagKind;
@@ -20,7 +22,9 @@ public class ComDirectTagBuilder : TagBuilderBase
         {
             if (channel is not ComChannelBase<string> com)
             {
-                throw new InvalidCastException($"测点({this.Name})当前通道必须是{nameof(ComChannelBase<string>)}！实际={channel.GetType()}");
+                throw new TagsProjectConfigurationException(
+                    $"测点 '{this.Name}' 当前通道必须是{nameof(ComChannelBase<string>)}！实际={channel.GetType()}",
+                    $"Tag({this.Name})");
             }
 
             var accessMode = this.TagDescriptor.AccessMode ?? this.Parent.SearchAccessMode();
@@ -29,11 +33,15 @@ public class ComDirectTagBuilder : TagBuilderBase
             {
                 TagAccessMode.RO => new ComReadOnlyTag<string>(this.TagDescriptor, com, TagContainer.From(this.Parent)),
                 TagAccessMode.WO => new ComWriteOnlyTag<string>(this.TagDescriptor, com, TagContainer.From(this.Parent), converter: str => Encoding.UTF8.GetBytes(str)),
-                _ => throw new InvalidOperationException($"串口型测点({this.Name})只支持(RO|WO)访问，当前模式={accessMode}！")
+                _ => throw new TagsProjectXmlException(
+                    $"串口型测点 '{this.Name}' 只支持(RO|WO)访问，当前模式={accessMode}！",
+                    $"Tag({this.Name})")
             };
             return tag;
         }
 
-        throw new NotImplementedException($"串口测点({this.Name})的类型({tagKind})上不支持！");
+        throw new TagsProjectConfigurationException(
+            $"串口测点 '{this.Name}' 的测点类型({tagKind})不受支持（只支持 STR）",
+            $"Tag({this.Name})");
     }
 }

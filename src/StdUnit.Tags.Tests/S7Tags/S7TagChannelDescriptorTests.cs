@@ -72,7 +72,7 @@ public class S7TagChannelDescriptorTests
             Driver = "ModbusTcp",
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => descriptor.ToS7TagChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => descriptor.ToS7TagChannelDescriptor());
         Assert.Contains(S7Names.DriverName, ex.Message);
     }
 
@@ -86,7 +86,7 @@ public class S7TagChannelDescriptorTests
         };
         baseDesc.Extras["Rack"] = new XElement("Rack", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToS7TagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToS7TagChannelDescriptor());
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class S7TagChannelDescriptorTests
         };
         baseDesc.Extras["Slot"] = new XElement("Slot", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToS7TagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToS7TagChannelDescriptor());
     }
 
     [Fact]

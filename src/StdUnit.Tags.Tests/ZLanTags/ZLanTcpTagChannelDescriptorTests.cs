@@ -126,7 +126,7 @@ public class ZLanTcpTagChannelDescriptorTests
             Driver = "S7",
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => descriptor.ToZLanTcpTagChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => descriptor.ToZLanTcpTagChannelDescriptor());
         Assert.Contains(ZLanTcpNames.DriverName, ex.Message);
     }
 
@@ -140,7 +140,7 @@ public class ZLanTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["Port"] = new XElement("Port", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToZLanTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToZLanTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public class ZLanTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToZLanTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToZLanTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class ZLanTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "0");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToZLanTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToZLanTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class ZLanTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "124");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToZLanTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToZLanTcpTagChannelDescriptor());
     }
 
     [Fact]

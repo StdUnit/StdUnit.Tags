@@ -193,13 +193,13 @@ public class DirectTagBuilderTests
     }
 
     [Fact]
-    public void WithFactory_Generic_WhenChannelTypeMismatch_ThrowsInvalidOperationException()
+    public void WithFactory_Generic_WhenChannelTypeMismatch_Throws()
     {
         var builder = CreateBuilder(selfChannel: new FakeNonSimpleFilesChannel());
         builder.WithFactory<string>((d, ch, container) => new CustomStringTag(d, ch, container));
 
         var channel = builder.Channel ?? builder.Parent.IntoTagContainer().SearchRequiredChannel();
-        Assert.Throws<InvalidOperationException>(() => builder.Build(channel));
+        Assert.Throws<TagsProjectConfigurationException>(() => builder.Build(channel));
     }
 
     [Fact]

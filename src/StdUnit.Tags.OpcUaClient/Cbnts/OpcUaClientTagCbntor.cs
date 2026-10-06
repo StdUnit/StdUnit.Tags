@@ -19,11 +19,14 @@ internal class OpcUaClientTagCbntor : TagCbntor
     /// <summary>
     /// c'tor
     /// </summary>
+    /// <exception cref="TagsProjectConfigurationException">所属测点组合不是 <see cref="OpcUaClientTagCbnt"/></exception>
     public OpcUaClientTagCbntor(TagDescriptor tagDescriptor, ITagCbnt tagCbnt, int tagOffset, int cacheOffset)
         : base(tagDescriptor, tagCbnt, tagOffset, cacheOffset)
     {
         this._cbnt = this.TagCbnt as OpcUaClientTagCbnt
-            ?? throw new InvalidOperationException("Cbnt is not an OpcUaTagCbnt");
+            ?? throw new TagsProjectConfigurationException(
+                $"测点组合 '{tagCbnt.TagName()}' 必须是 {nameof(OpcUaClientTagCbnt)}，实际为 {tagCbnt.GetType().Name}",
+                $"Tag({tagDescriptor.TagName})");
         this.NodeId = tagDescriptor.RawAddress;
     }
 

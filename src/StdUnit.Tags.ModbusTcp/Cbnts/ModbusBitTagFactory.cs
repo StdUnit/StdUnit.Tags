@@ -42,7 +42,9 @@ public class ModbusBitTagFactory : TagCbntorFactoryBase
 
         if (tagAddr.Area != RegisterKinds.InputContacts)
         {
-            throw new Exception($"地址区域{tagAddr.Area}不可作为DI测点");
+            throw new TagsProjectConfigurationException(
+                $"地址区域{tagAddr.Area}不可作为DI测点（DI 必须使用离散输入 1x 区域）",
+                $"Tag({tagDescriptor.TagName})");
         }
         var offset = tagAddr.StartPoint - groupAddr.StartPoint;
         return new DITagCbntor(tagDescriptor, TypedCbnt, offset);
@@ -67,7 +69,9 @@ public class ModbusBitTagFactory : TagCbntorFactoryBase
 
         if (tagAddr.Area != RegisterKinds.OutputCoils)
         {
-            throw new Exception($"地址区域{tagAddr.Area}不可作为DO测点");
+            throw new TagsProjectConfigurationException(
+                $"地址区域{tagAddr.Area}不可作为DO测点（DO 必须使用线圈 0x 区域）",
+                $"Tag({tagDescriptor.TagName})");
         }
         var offset = tagAddr.StartPoint - groupAddr.StartPoint;
         return new DOTagCbntor(tagDescriptor, TypedCbnt, offset);
@@ -83,7 +87,9 @@ public class ModbusBitTagFactory : TagCbntorFactoryBase
             BuiltinTagKinds.DI => CreateDITag(descriptor) as ITagCbntor,
             // 0000x 线圈输出
             BuiltinTagKinds.DO => CreateDOTag(descriptor) as ITagCbntor,
-            _ => throw new Exception($"位空间组合不支持测点种类={descriptor.TagKind}（BIT/BYTE/INT16/.../FLOAT 属于寄存器空间，请使用 {nameof(ModbusRegisterTagFactory)}）")
+            _ => throw new TagsProjectConfigurationException(
+                $"位空间组合不支持测点种类={descriptor.TagKind}（BIT/BYTE/INT16/.../FLOAT 属于寄存器空间，请使用 {nameof(ModbusRegisterTagFactory)}）",
+                $"Tag({descriptor.TagName})")
         };
         return tag;
     }

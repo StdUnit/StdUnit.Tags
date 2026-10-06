@@ -224,7 +224,7 @@ public class S7DirectTagFactoryTests
             TagKind = "UNKNOWN_KIND",
             RawAddress = "DB1.300",
         };
-        var ex = Assert.Throws<System.Exception>(() => factory.Create(descriptor, thisChannel: null));
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => factory.Create(descriptor, thisChannel: null));
         Assert.Contains("UNKNOWN_KIND", ex.Message);
     }
 

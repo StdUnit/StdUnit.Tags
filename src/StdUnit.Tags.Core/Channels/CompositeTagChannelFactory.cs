@@ -38,11 +38,20 @@ public class CompositeTagChannelFactory : ITagChannelFactory
 
 
     /// <inheritdoc/>
+    /// <exception cref="TagsProjectConfigurationException">descriptor 的 driver 未注册任何 <see cref="ITagChannelFactory"/> 实现</exception>
     public virtual ITagChannel Create(TagChannelDescriptor descriptor)
     {
         var factory = this._factoryList.FirstOrDefault(f => f.GetAvailableDrivers().Contains(descriptor.Driver))
-            ?? throw new Exception($"未注册驱动名={descriptor.Driver}的{nameof(ITagChannelFactory)}实现！");
+            ?? throw new TagsProjectConfigurationException(
+                $"通道 '{descriptor.Name}' 的 driver='{descriptor.Driver}' 未注册对应的 {nameof(ITagChannelFactory)} 实现（已注册: {this.DescribeAvailableDrivers()}）",
+                location: $"Channel({descriptor.Name})");
         var channel = factory.Create(descriptor);
         return channel;
     }
+
+    /// <summary>
+    /// 把已注册的驱动名拼成一行，仅用于错误消息。
+    /// </summary>
+    private string DescribeAvailableDrivers()
+        => string.Join(", ", this.GetAvailableDrivers().OrderBy(d => d, StringComparer.Ordinal));
 }

@@ -187,7 +187,7 @@ public class TagsLoaderExtensionsTests
 
         // Assert: predicate 拒绝导致 ChooseDirectTagBuilder 返回 null → LoadDirectTag 抛异常
         var tagDescriptor = new TagDescriptor { TagName = "t1", ChannelName = "ch1" };
-        Assert.Throws<NotImplementedException>(() =>
+        Assert.Throws<TagsProjectConfigurationException>(() =>
             loader.LoadTagGroup(parent, tagDescriptor, new[] { channel }));
     }
 
@@ -246,8 +246,8 @@ public class TagsLoaderExtensionsTests
         loader.AddDirectTagBuilder<ConfigurableTagBuilder>("FakedDriver");
 
         var tagDescriptor = new TagDescriptor { TagName = "t1", ChannelName = "ch1" };
-        // ChooseDirectTagBuilder 没有匹配的工厂 → 抛出 NotImplementedException
-        Assert.Throws<NotImplementedException>(() =>
+        // ChooseDirectTagBuilder 没有匹配的工厂 → 抛出 TagsProjectConfigurationException
+        Assert.Throws<TagsProjectConfigurationException>(() =>
             loader.LoadTagGroup(parent, tagDescriptor, new[] { channel }));
     }
 
@@ -343,8 +343,8 @@ public class TagsLoaderExtensionsTests
             ChannelName = "ch1"
         };
 
-        // ChooseTagCbntBuilder 返回 null → LoadTagCbnt 抛出 Exception
-        Assert.Throws<Exception>(() =>
+        // ChooseTagCbntBuilder 返回 null → LoadTagCbnt 抛出 TagsProjectConfigurationException
+        Assert.Throws<TagsProjectConfigurationException>(() =>
             loader.LoadTagGroup(parent, cbntDescriptor, new[] { channel }));
     }
 
@@ -415,8 +415,8 @@ public class TagsLoaderExtensionsTests
             ChannelName = "ch1"
         };
 
-        // ChooseTagCbntBuilder 没有匹配 → 抛出 Exception
-        Assert.Throws<Exception>(() =>
+        // ChooseTagCbntBuilder 没有匹配 → 抛出 TagsProjectConfigurationException
+        Assert.Throws<TagsProjectConfigurationException>(() =>
             loader.LoadTagGroup(parent, cbntDescriptor, new[] { channel }));
     }
 

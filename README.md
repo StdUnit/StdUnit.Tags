@@ -66,8 +66,9 @@ dotnet new tags.web # 这会创建一个 ASP.NET Core 项目
 ## 文档
 
 0. 我为本类库编写了教程，部署在[tags.doc](http://tags.doc.stdunit.com)。
-1. 供新手熟悉功能[WPFDemo](https://github.com/newbienewbie/StdUnit.Tags.WPFDemo): 按分支演示功能。
+1. 仓库内 [`docs/`](docs/) 放框架性内容（例如[异常处理与选型决策树](docs/异常处理.md)）；详细使用说明见上一点。
 2. 本仓库自带的[Samples](https://github.com/newbienewbie/StdUnit.Tags/tree/dev/samples): 主要用于开发验证+喂狗。
+3. 供新手熟悉功能[WPFDemo](https://github.com/newbienewbie/StdUnit.Tags.WPFDemo): 按分支演示功能。
 
 ## 文件夹结构
 

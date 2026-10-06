@@ -42,13 +42,14 @@ internal static class TagChannelDescriptor_SimpleFilesExtensions
     /// </summary>
     /// <param name="descriptor"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="TagsProjectConfigurationException">当前描述符的驱动不是 <see cref="SimpleFilesNames.DriverName"/></exception>
     public static SimpleFilesTagChannelDescriptor ToSimpleFilesTagChannelDescriptor(this TagChannelDescriptor descriptor)
     {
         if (descriptor.Driver != SimpleFilesNames.DriverName)
         {
-            throw new InvalidOperationException($"通道驱动错误：期望 {SimpleFilesNames.DriverName}，而当前为{descriptor.Driver}");
+            throw new TagsProjectConfigurationException(
+                $"通道驱动错误：期望 {SimpleFilesNames.DriverName}，而当前为{descriptor.Driver}",
+                $"Channel({descriptor.Name})");
         }
         if (descriptor is SimpleFilesTagChannelDescriptor d)
         {

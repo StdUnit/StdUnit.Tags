@@ -26,11 +26,11 @@ public class NestedEntryValidator : ITagsProjectValidator
     public void Validate(XElement root)
     {
         var errors = new List<string>();
-        Walk(root, insideEntry: false, errors, root);
+        Walk(root, insideEntry: false, errors);
 
         if (errors.Count > 0)
         {
-            throw new TagsProjectSchemaException(errors);
+            throw new TagsProjectValidationException(errors);
         }
     }
 
@@ -40,8 +40,7 @@ public class NestedEntryValidator : ITagsProjectValidator
     /// <param name="container">当前容器元素（项目根或 TagGrp）</param>
     /// <param name="insideEntry">当前是否已处于某个入口的子树内</param>
     /// <param name="errors">错误消息收集</param>
-    /// <param name="root">项目根元素</param>
-    private static void Walk(XElement container, bool insideEntry, List<string> errors, XElement root)
+    private static void Walk(XElement container, bool insideEntry, List<string> errors)
     {
         foreach (var child in container.Elements("TagGrp"))
         {
@@ -49,13 +48,10 @@ public class NestedEntryValidator : ITagsProjectValidator
             if (isEntry && insideEntry)
             {
                 errors.Add(
-                    $"入口 '{DescribePath(child, root)}' 嵌套在另一个入口内部，其 isEntry=\"true\" 不生效" +
-                    "（入口识别遇到最外层入口即停止下探，该子树仍由外层入口的 runner 轮询，" +
-                    "因此不会拥有独立的轮询周期、写入意图队列与逻辑组件匹配）：" +
-                    "请删除该属性，或把它移到最外层（与外层入口同级）");
+                    $"入口 '{child.GetLocationPath()}' 嵌套在另一个入口内部，其 isEntry=\"true\" 不生效（入口识别遇到最外层入口即停止下探，该子树仍由外层入口的 runner 轮询，因此不会拥有独立的轮询周期、写入意图队列与逻辑组件匹配）：请删除该属性，或把它移到最外层（与外层入口同级）");
             }
 
-            Walk(child, insideEntry || isEntry, errors, root);
+            Walk(child, insideEntry || isEntry, errors);
         }
     }
 
@@ -65,22 +61,4 @@ public class NestedEntryValidator : ITagsProjectValidator
     /// <param name="element"></param>
     private static bool IsEntryElement(XElement element)
         => string.Equals(element.Attribute("isEntry")?.Value, "true", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// 生成元素的定位描述（类型 + name 属性 + 父级路径），用于错误消息。
-    /// </summary>
-    /// <param name="element"></param>
-    /// <param name="root">项目根元素</param>
-    private static string DescribePath(XElement element, XElement root)
-    {
-        var parts = new List<string>();
-        for (var cur = element; cur is not null && cur != root; cur = cur.Parent)
-        {
-            if (cur.Name.LocalName is "TagGrp" or "TagCbnt" or "Tag")
-            {
-                parts.Insert(0, $"{cur.Name.LocalName}({cur.Attribute("name")?.Value ?? "?"})");
-            }
-        }
-        return string.Join(" → ", parts);
-    }
 }

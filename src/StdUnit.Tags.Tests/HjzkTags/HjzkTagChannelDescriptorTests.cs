@@ -126,7 +126,7 @@ public class HjzkTagChannelDescriptorTests
             Driver = "S7",
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => descriptor.ToHjzkTagChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => descriptor.ToHjzkTagChannelDescriptor());
         Assert.Contains(HjzkNames.DriverName, ex.Message);
     }
 
@@ -140,7 +140,7 @@ public class HjzkTagChannelDescriptorTests
         };
         baseDesc.Extras["Port"] = new XElement("Port", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToHjzkTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToHjzkTagChannelDescriptor());
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public class HjzkTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToHjzkTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToHjzkTagChannelDescriptor());
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class HjzkTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "0");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToHjzkTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToHjzkTagChannelDescriptor());
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class HjzkTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "124");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToHjzkTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToHjzkTagChannelDescriptor());
     }
 
     [Fact]

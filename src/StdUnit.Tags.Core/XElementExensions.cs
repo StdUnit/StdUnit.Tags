@@ -34,14 +34,42 @@ public static class XElementExensions
 
     #region helpers
     /// <summary>
+    /// 生成元素的定位描述（类型 + name 属性 + 父级路径），用于加载期错误消息。<br/>
+    /// 段之间用 <c>/</c> 连接（与 <see cref="ITagGrp.Descendant"/> 的路径语法一致），
+    /// 例如 <c>TagGrp(产线1)/TagCbnt(输入)/Tag(bit)</c>；元素自身不属于测点元素时退化为
+    /// <c>Channel(通道名)</c> 或 <c>&lt;元素名&gt;</c>。
+    /// </summary>
+    /// <param name="e"></param>
+    internal static string GetLocationPath(this XElement e)
+    {
+        var parts = new List<string>();
+        for (var cur = e; cur is not null; cur = cur.Parent)
+        {
+            if (cur.IsTagUnion())
+            {
+                parts.Insert(0, $"{cur.Name.LocalName}({cur.Attribute("name")?.Value ?? "?"})");
+            }
+        }
+
+        if (parts.Count == 0)
+        {
+            var name = e.Attribute("name")?.Value;
+            parts.Add(name is null ? $"<{e.Name.LocalName}>" : $"{e.Name.LocalName}({name})");
+        }
+        return string.Join("/", parts);
+    }
+
+    /// <summary>
     /// 获取测点元素的名称
     /// </summary>
     /// <param name="e"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="TagsProjectXmlException">元素未配置 name 属性</exception>
     internal static string GetTagUnionName(this XElement e)
     {
-        var tagName = (string?)e.Attribute("name") ?? throw new Exception($"Tag 未配置名称");
+        var tagName = (string?)e.Attribute("name") ?? throw new TagsProjectXmlException(
+            $"测点元素 <{e.Name.LocalName}> 未配置 name 属性",
+            e.GetLocationPath());
         return tagName;
     }
 
@@ -49,10 +77,9 @@ public static class XElementExensions
     /// 获取扫描间隔
     /// </summary>
     /// <param name="e"></param>
-    /// <param name="tagName"></param>
     /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
-    internal static int? GetTagUnionScanInterval(this XElement e, string tagName)
+    /// <exception cref="TagsProjectXmlException">scanInterval 无法解析成整数</exception>
+    internal static int? GetTagUnionScanInterval(this XElement e)
     {
         var interval = (string?)e.Attribute("scanInterval");
         if (string.IsNullOrEmpty(interval))
@@ -61,14 +88,16 @@ public static class XElementExensions
         }
         if (!int.TryParse(interval, out var parsed))
         {
-            throw new ArgumentException($"{tagName}的扫描周期无法解析成整数，它应该是一个毫秒数量");
+            throw new TagsProjectXmlException(
+                $"扫描周期 scanInterval='{interval}' 无法解析成整数，它应该是一个毫秒数量",
+                e.GetLocationPath());
         }
         return parsed;
     }
 
-    internal static string GetTagUnionAddress(this XElement e, string tagName)
+    internal static string GetTagUnionAddress(this XElement e)
     {
-        var address = (string?)e.Attribute("address") ?? "";// throw new Exception($"Tag(Name={tagName})未配置地址");
+        var address = (string?)e.Attribute("address") ?? "";// 允许为空，由具体驱动的地址解析器给出更具体的错误
         return address;
     }
 
@@ -78,7 +107,7 @@ public static class XElementExensions
         return channelName;
     }
 
-    internal static TagKinds GetTagUnionTagKind(this XElement e, string tagName)
+    internal static TagKinds GetTagUnionTagKind(this XElement e)
     {
         var type = (string?)e.Attribute("type");
 
@@ -92,7 +121,8 @@ public static class XElementExensions
         return type;
     }
 
-    internal static EndianKinds GetTagUnionEndian(this XElement e, string tagName)
+    /// <exception cref="TagsProjectXmlException">endian 不是已知的字节序</exception>
+    internal static EndianKinds GetTagUnionEndian(this XElement e)
     {
         var type = (string?)e.Attribute("endian");
         if (string.IsNullOrEmpty(type))
@@ -101,13 +131,16 @@ public static class XElementExensions
         }
         if (!Enum.TryParse<EndianKinds>(type, out var endian))
         {
-            throw new Exception($"Tag(Name={tagName}) 配置了未知的字节序={type}");
+            throw new TagsProjectXmlException(
+                $"配置了未知的字节序 endian='{type}'（可选值：{string.Join(" | ", Enum.GetNames(typeof(EndianKinds)))}，大小写敏感）",
+                e.GetLocationPath());
         }
         return endian;
     }
 
 
-    internal static TagAccessMode? GetTagUnionAccess(this XElement e, string tagName)
+    /// <exception cref="TagsProjectXmlException">access 不是已知的访问模式</exception>
+    internal static TagAccessMode? GetTagUnionAccess(this XElement e)
     {
         var modestr = (string?)e.Attribute("access");
         if (string.IsNullOrEmpty(modestr))
@@ -116,12 +149,14 @@ public static class XElementExensions
         }
         if (!Enum.TryParse<TagAccessMode>(modestr, out var access))
         {
-            throw new Exception($"Tag(Name={tagName}) 配置了未知的访问模式={modestr}");
+            throw new TagsProjectXmlException(
+                $"配置了未知的访问模式 access='{modestr}'（可选值：{string.Join(" | ", Enum.GetNames(typeof(TagAccessMode)))}，大小写敏感）",
+                e.GetLocationPath());
         }
         return access;
     }
 
-    internal static string? GetTagUnionNote(this XElement e, string tagName)
+    internal static string? GetTagUnionNote(this XElement e)
     {
         var note = (string?)e.Attribute("note");
         return note;

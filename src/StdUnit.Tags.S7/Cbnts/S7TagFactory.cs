@@ -229,7 +229,9 @@ internal class S7TagFactory : TagCbntorFactoryBase
             BuiltinTagKinds.UINT64 => CreateUInt64Tag(descriptor),
             BuiltinTagKinds.FLOAT => CreateFloatTag(descriptor),
             BuiltinTagKinds.STR => CreateStrTag(descriptor),
-            _ => throw new Exception($"未预料到的测点种类={descriptor.TagKind}")
+            _ => throw new TagsProjectConfigurationException(
+                $"S7 驱动未预料到的测点种类={descriptor.TagKind}。type 必须是 BIT/BYTE/INT16/UINT16/INT32/UINT32/INT64/UINT64/FLOAT/STR 之一",
+                $"Tag({descriptor.TagName})")
         };
         return tag;
     }

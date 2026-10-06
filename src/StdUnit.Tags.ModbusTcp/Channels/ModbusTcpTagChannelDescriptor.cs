@@ -81,18 +81,21 @@ public static class TagChannelDescriptor_ModbusTcpExtensions
     /// </summary>
     /// <param name="descriptor"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="TagsProjectConfigurationException">当前描述符的驱动不是 <see cref="ModbusTcpNames.DriverName"/></exception>
+    /// <exception cref="TagsProjectXmlException">Port / MaxWriteRegisters / MaxReadRegisters / MaxReadBits 不合法</exception>
     public static ModbusTcpTagChannelDescriptor ToModbusTcpTagChannelDescriptor(this TagChannelDescriptor descriptor)
     {
         if (descriptor.Driver != ModbusTcpNames.DriverName)
         {
-            throw new InvalidOperationException($"通道驱动错误：期望 {ModbusTcpNames.DriverName}，而当前为{descriptor.Driver}");
+            throw new TagsProjectConfigurationException(
+                $"通道驱动错误：期望 {ModbusTcpNames.DriverName}，而当前为{descriptor.Driver}",
+                $"Channel({descriptor.Name})");
         }
         if (descriptor is ModbusTcpTagChannelDescriptor d)
         {
             return d;
         }
+        var location = $"Channel({descriptor.Name})";
         var res = new ModbusTcpTagChannelDescriptor
         {
             Name = descriptor.Name,
@@ -105,33 +108,33 @@ public static class TagChannelDescriptor_ModbusTcpExtensions
                 502 :
                 int.TryParse(portEle.Value, out var port) ?
                     port :
-                    throw new ArgumentException($"配置的端口号不是整数"),
+                    throw new TagsProjectXmlException($"配置的端口号不是整数：{portEle.Value}", location),
             MaxWriteRegisters = !descriptor.Extras.TryGetValue(nameof(ModbusTcpTagChannelDescriptor.MaxWriteRegisters), out var batchEle) ?
                 null :
                 !ushort.TryParse(batchEle.Value, out var batch) ?
-                    throw new ArgumentException($"MaxWriteRegisters 配置不是整数") :
+                    throw new TagsProjectXmlException($"MaxWriteRegisters 配置不是整数：{batchEle.Value}", location) :
                     batch == 0 ?
-                        throw new ArgumentException($"MaxWriteRegisters 必须大于 0") :
+                        throw new TagsProjectXmlException($"MaxWriteRegisters 必须大于 0", location) :
                         batch > ModbusTcpChannel.MaxWriteRegistersPerPdu ?
-                            throw new ArgumentException($"MaxWriteRegisters 配置({batch})超过协议上限({ModbusTcpChannel.MaxWriteRegistersPerPdu})") :
+                            throw new TagsProjectXmlException($"MaxWriteRegisters 配置({batch})超过协议上限({ModbusTcpChannel.MaxWriteRegistersPerPdu})", location) :
                             batch,
             MaxReadRegisters = !descriptor.Extras.TryGetValue(nameof(ModbusTcpTagChannelDescriptor.MaxReadRegisters), out var readRegsEle) ?
                 null :
                 !ushort.TryParse(readRegsEle.Value, out var readRegs) ?
-                    throw new ArgumentException($"MaxReadRegisters 配置不是整数") :
+                    throw new TagsProjectXmlException($"MaxReadRegisters 配置不是整数：{readRegsEle.Value}", location) :
                     readRegs == 0 ?
-                        throw new ArgumentException($"MaxReadRegisters 必须大于 0") :
+                        throw new TagsProjectXmlException($"MaxReadRegisters 必须大于 0", location) :
                         readRegs > ModbusTcpChannel.MaxReadRegistersPerPdu ?
-                            throw new ArgumentException($"MaxReadRegisters 配置({readRegs})超过协议上限({ModbusTcpChannel.MaxReadRegistersPerPdu})") :
+                            throw new TagsProjectXmlException($"MaxReadRegisters 配置({readRegs})超过协议上限({ModbusTcpChannel.MaxReadRegistersPerPdu})", location) :
                             readRegs,
             MaxReadBits = !descriptor.Extras.TryGetValue(nameof(ModbusTcpTagChannelDescriptor.MaxReadBits), out var readBitsEle) ?
                 null :
                 !ushort.TryParse(readBitsEle.Value, out var readBits) ?
-                    throw new ArgumentException($"MaxReadBits 配置不是整数") :
+                    throw new TagsProjectXmlException($"MaxReadBits 配置不是整数：{readBitsEle.Value}", location) :
                     readBits == 0 ?
-                        throw new ArgumentException($"MaxReadBits 必须大于 0") :
+                        throw new TagsProjectXmlException($"MaxReadBits 必须大于 0", location) :
                         readBits > ModbusTcpChannel.MaxReadBitsPerPdu ?
-                            throw new ArgumentException($"MaxReadBits 配置({readBits})超过协议上限({ModbusTcpChannel.MaxReadBitsPerPdu})") :
+                            throw new TagsProjectXmlException($"MaxReadBits 配置({readBits})超过协议上限({ModbusTcpChannel.MaxReadBitsPerPdu})", location) :
                             readBits,
         };
         return res;

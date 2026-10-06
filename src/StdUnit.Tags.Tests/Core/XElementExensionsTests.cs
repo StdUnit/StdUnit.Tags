@@ -19,7 +19,7 @@ public class XElementExensionsTests
     {
         var e = new XElement("Tag", new XAttribute("type", configured));
 
-        var kind = e.GetTagUnionTagKind("t");
+        var kind = e.GetTagUnionTagKind();
 
         Assert.Equal(expected, kind);
     }
@@ -29,7 +29,7 @@ public class XElementExensionsTests
     {
         var e = new XElement("Tag");
 
-        var kind = e.GetTagUnionTagKind("t");
+        var kind = e.GetTagUnionTagKind();
 
         Assert.Equal(BuiltinTagKinds.Unknown, kind);
     }
@@ -39,7 +39,7 @@ public class XElementExensionsTests
     {
         var e = new XElement("Tag", new XAttribute("type", ""));
 
-        var kind = e.GetTagUnionTagKind("t");
+        var kind = e.GetTagUnionTagKind();
 
         Assert.Equal(BuiltinTagKinds.Unknown, kind);
     }

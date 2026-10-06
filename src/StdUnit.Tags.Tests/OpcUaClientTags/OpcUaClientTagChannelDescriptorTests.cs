@@ -79,7 +79,7 @@ public class OpcUaClientTagChannelDescriptorTests
             Driver = "ModbusTcp",
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => descriptor.ToOpcUaClientTagChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => descriptor.ToOpcUaClientTagChannelDescriptor());
         Assert.Contains(OpcUaClientNames.DriverName, ex.Message);
     }
 

@@ -44,14 +44,18 @@ internal class ModbusRegisterTagFactory : TagCbntorFactoryBase
                 BuiltinTagKinds.BIT or BuiltinTagKinds.BYTE or BuiltinTagKinds.INT16 or BuiltinTagKinds.UINT16 => 2,
                 BuiltinTagKinds.INT32 or BuiltinTagKinds.UINT32 or BuiltinTagKinds.FLOAT => 4,
                 BuiltinTagKinds.INT64 or BuiltinTagKinds.UINT64 => 8,
-                _ => throw new Exception($"未预料到的测点种类={descriptor.TagKind}"),
+                _ => throw new TagsProjectConfigurationException(
+                    $"ModbusTcp 寄存器空间未预料到的测点种类={descriptor.TagKind}",
+                    $"Tag({descriptor.TagName})"),
             };
         }
 
         var tagAddr = ModBusTcpAddressParser.Parse(descriptor.RawAddress);
         if (tagAddr.Area != RegisterKinds.HoldingRegisters && tagAddr.Area != RegisterKinds.InputRegisters)
         {
-            throw new Exception($"地址区域{tagAddr.Area}不可作为寄存器测点（请在位空间组合中使用）");
+            throw new TagsProjectConfigurationException(
+                $"地址区域{tagAddr.Area}不可作为寄存器测点（请在位空间组合中使用）",
+                $"Tag({descriptor.TagName})");
         }
         var isReadOnly = tagAddr.Area == RegisterKinds.InputRegisters;
         var regOffset = GetRegOffset(descriptor);
@@ -68,7 +72,9 @@ internal class ModbusRegisterTagFactory : TagCbntorFactoryBase
             BuiltinTagKinds.FLOAT => new ModbusRegisterFloatCbntor(descriptor, TypedCbnt, tagOffset, isReadOnly),
             BuiltinTagKinds.INT64 => new ModbusRegisterInt64Cbntor(descriptor, TypedCbnt, tagOffset, isReadOnly),
             BuiltinTagKinds.UINT64 => new ModbusRegisterUInt64Cbntor(descriptor, TypedCbnt, tagOffset, isReadOnly),
-            _ => throw new Exception($"未预料到的测点种类={descriptor.TagKind}"),
+            _ => throw new TagsProjectConfigurationException(
+                $"ModbusTcp 寄存器空间未预料到的测点种类={descriptor.TagKind}",
+                $"Tag({descriptor.TagName})"),
         };
         return tag;
     }

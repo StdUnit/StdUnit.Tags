@@ -76,10 +76,19 @@ public abstract class TagCbntBuilderBase
     /// </summary>
     /// <param name="tag"></param>
     /// <returns></returns>
+    /// <exception cref="TagsProjectConfigurationException">同一个测点组合下已存在同名子测点</exception>
     public virtual TagCbntBuilderBase AddTag(ITagCbntor tag)
     {
+        var tagName = tag.TagName();
+        if (TagCbnt.Children.ContainsKey(tagName))
+        {
+            throw new TagsProjectConfigurationException(
+                $"测点名重复：Tag({tagName})。同一个测点组合下的子测点名必须唯一，请修改其中一个的名称",
+                TagCbnt.Parent.GetLocationPath($"TagCbnt({TagCbnt.TagName()})/Tag({tagName})"));
+        }
+
         tag.Parent = TagContainer.From(this.TagCbnt);
-        TagCbnt.Children.Add(tag.TagName(), tag);
+        TagCbnt.Children.Add(tagName, tag);
         return this;
     }
 

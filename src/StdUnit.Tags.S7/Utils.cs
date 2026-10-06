@@ -7,15 +7,16 @@ internal static class S7Utils
     /// </summary>
     /// <param name="tagDescriptor"></param>
     /// <param name="maxlen"></param>
-    /// <exception cref="InvalidDataException"></exception>
+    /// <exception cref="TagsProjectXmlException">未配置 maxlen，或 maxlen 不是大于 0 的整数</exception>
     public static void NormalizeS7StrTagSize(TagDescriptor tagDescriptor, out byte maxlen)
     {
         var tagName = tagDescriptor.TagName;
+        var location = $"Tag({tagName})";
 
         maxlen =
-            !tagDescriptor.Extras.TryGetValue("maxlen", out var maxlenAttr) ? throw new InvalidDataException($"字符串型测点必须指定字符串最大长度 maxlen。测点={tagName}") :
-            !byte.TryParse(maxlenAttr.Value, out var prefer) ? throw new InvalidDataException($"字符串型测点 maxlen 属性必须可解析成正整数，当前 maxlen={maxlenAttr.Value}, 测点={tagName}") :
-            prefer < 1 ? throw new InvalidDataException($"字符串型测点 maxlen 属性必须大于0，当前 maxlen={prefer}, 测点={tagName}") :
+            !tagDescriptor.Extras.TryGetValue("maxlen", out var maxlenAttr) ? throw new TagsProjectXmlException($"字符串型测点必须指定字符串最大长度 maxlen", location) :
+            !byte.TryParse(maxlenAttr.Value, out var prefer) ? throw new TagsProjectXmlException($"字符串型测点 maxlen 属性必须可解析成正整数，当前 maxlen={maxlenAttr.Value}", location) :
+            prefer < 1 ? throw new TagsProjectXmlException($"字符串型测点 maxlen 属性必须大于0，当前 maxlen={prefer}", location) :
             prefer;
 
         // normalize the tagsize

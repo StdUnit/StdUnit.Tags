@@ -60,7 +60,7 @@ public class ComChannelDescriptorExtensionsTests
             Driver = "S7",
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => descriptor.ToComChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => descriptor.ToComChannelDescriptor());
         Assert.Contains(ComDriverNames.DriverName, ex.Message);
     }
 
@@ -74,7 +74,7 @@ public class ComChannelDescriptorExtensionsTests
         };
         baseDesc.Extras["BaudRate"] = new XElement("BaudRate", "not-a-number");
 
-        Assert.Throws<Exception>(() => baseDesc.ToComChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToComChannelDescriptor());
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class ComChannelDescriptorExtensionsTests
         };
         baseDesc.Extras["Parity"] = new XElement("Parity", "InvalidParity");
 
-        Assert.Throws<Exception>(() => baseDesc.ToComChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToComChannelDescriptor());
     }
 
     [Fact]

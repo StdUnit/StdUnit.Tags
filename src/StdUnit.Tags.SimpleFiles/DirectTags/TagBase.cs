@@ -50,7 +50,9 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
 
             if (!bool.TryParse(autoCreateFileValue.Value, out var autoCreateFile))
             {
-                throw new Exception($"测点({this.TagName()})配置了{AutoCreateFileAttrName}，但无法解析为布尔值：{autoCreateFileValue}");
+                throw new TagsProjectXmlException(
+                    $"测点配置了 {AutoCreateFileAttrName}，但无法解析为布尔值：{autoCreateFileValue.Value}",
+                    $"Tag({this.TagName()})");
             }
 
             this._autoCreateFile = autoCreateFile;

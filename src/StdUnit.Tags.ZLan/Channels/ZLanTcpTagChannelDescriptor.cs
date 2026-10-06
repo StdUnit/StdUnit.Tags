@@ -20,16 +20,21 @@ public class ZLanTcpTagChannelDescriptor : ModbusTcpTagChannelDescriptor
 
 public static class TagChannelDescriptor_S7Extensions
 {
+    /// <exception cref="TagsProjectConfigurationException">当前描述符的驱动不是 <see cref="ZLanTcpNames.DriverName"/></exception>
+    /// <exception cref="TagsProjectXmlException">Port / MaxWriteRegisters 不合法</exception>
     public static ZLanTcpTagChannelDescriptor ToZLanTcpTagChannelDescriptor(this TagChannelDescriptor descriptor)
     {
         if (descriptor.Driver != ZLanTcpNames.DriverName)
         {
-            throw new InvalidOperationException($"通道驱动错误：期望 {ZLanTcpNames.DriverName}，而当前为{descriptor.Driver}");
+            throw new TagsProjectConfigurationException(
+                $"通道驱动错误：期望 {ZLanTcpNames.DriverName}，而当前为{descriptor.Driver}",
+                $"Channel({descriptor.Name})");
         }
         if (descriptor is ZLanTcpTagChannelDescriptor d)
         {
             return d;
         }
+        var location = $"Channel({descriptor.Name})";
         var res = new ZLanTcpTagChannelDescriptor
         {
             Name = descriptor.Name,
@@ -42,15 +47,15 @@ public static class TagChannelDescriptor_S7Extensions
                 502 :
                 int.TryParse(portEle.Value, out var port) ?
                     port :
-                    throw new ArgumentException($"配置的端口号不是整数"),
+                    throw new TagsProjectXmlException($"配置的端口号不是整数：{portEle.Value}", location),
             MaxWriteRegisters = !descriptor.Extras.TryGetValue(nameof(ModbusTcpTagChannelDescriptor.MaxWriteRegisters), out var batchEle) ?
                 null :
                 !ushort.TryParse(batchEle.Value, out var batch) ?
-                    throw new ArgumentException($"MaxWriteRegisters 配置不是整数") :
+                    throw new TagsProjectXmlException($"MaxWriteRegisters 配置不是整数：{batchEle.Value}", location) :
                     batch == 0 ?
-                        throw new ArgumentException($"MaxWriteRegisters 必须大于 0") :
+                        throw new TagsProjectXmlException($"MaxWriteRegisters 必须大于 0", location) :
                         batch > ModbusTcpChannel.MaxWriteRegistersPerPdu ?
-                            throw new ArgumentException($"MaxWriteRegisters 配置({batch})超过协议上限({ModbusTcpChannel.MaxWriteRegistersPerPdu})") :
+                            throw new TagsProjectXmlException($"MaxWriteRegisters 配置({batch})超过协议上限({ModbusTcpChannel.MaxWriteRegistersPerPdu})", location) :
                             batch,
         };
         return res;

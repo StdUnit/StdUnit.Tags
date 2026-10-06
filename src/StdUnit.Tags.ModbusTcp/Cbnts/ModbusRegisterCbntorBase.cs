@@ -30,7 +30,9 @@ internal abstract class ModbusRegisterCbntorBase : TagCbntor
     {
         if (tagOffset % 2 != 0)
         {
-            throw new ArgumentException($"寄存器组合子要求字节偏移必须为偶数，当前 offset={tagOffset}");
+            throw new TagsProjectConfigurationException(
+                $"寄存器组合子要求字节偏移必须为偶数，当前 offset={tagOffset}（测点地址={tagDescriptor.RawAddress}）",
+                $"Tag({tagDescriptor.TagName})");
         }
         this._cbnt = tagCbnt;
         IsReadOnly = isReadOnly;

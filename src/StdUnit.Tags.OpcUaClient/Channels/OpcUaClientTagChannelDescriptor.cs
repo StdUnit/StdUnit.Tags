@@ -100,12 +100,14 @@ public static class TagChannelDescriptor_OpcUaClientExtensions
     /// </summary>
     /// <param name="descriptor"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
+    /// <exception cref="TagsProjectConfigurationException">当前描述符的驱动不是 <see cref="OpcUaClientNames.DriverName"/></exception>
     public static OpcUaClientTagChannelDescriptor ToOpcUaClientTagChannelDescriptor(this TagChannelDescriptor descriptor)
     {
         if (descriptor.Driver != OpcUaClientNames.DriverName)
         {
-            throw new InvalidOperationException($"通道驱动错误：期望 {OpcUaClientNames.DriverName}，而当前为{descriptor.Driver}");
+            throw new TagsProjectConfigurationException(
+                $"通道驱动错误：期望 {OpcUaClientNames.DriverName}，而当前为{descriptor.Driver}",
+                $"Channel({descriptor.Name})");
         }
         if (descriptor is OpcUaClientTagChannelDescriptor d)
         {

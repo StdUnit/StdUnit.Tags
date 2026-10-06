@@ -52,14 +52,14 @@ public static class XElementExtensions_TagGrpDescriptor
     /// </summary>
     /// <param name="thisElement"></param>
     /// <returns></returns>
-    /// <exception cref="NotImplementedException"></exception>
+    /// <exception cref="TagsProjectXmlException">XML 属性值不合法（name 缺失、scanInterval 非整数、access 未知）或不支持子元素</exception>
     public static TagGrpDescriptor ToTagGrpDescriptor(this XElement thisElement)
     {
         var thisTagName = thisElement.GetTagUnionName();
         var thisChannelName = thisElement.GetTagUnionChannelName();
 
         var isEnabled = !string.Equals(thisElement.Attribute("isEnabled")?.Value, "false", StringComparison.OrdinalIgnoreCase);
-        int? scanInterval = thisElement.GetTagUnionScanInterval(thisTagName);
+        int? scanInterval = thisElement.GetTagUnionScanInterval();
         var isEntry = string.Equals(thisElement.Attribute("isEntry")?.Value, "true", StringComparison.OrdinalIgnoreCase);
 
         var grp = new TagGrpDescriptor
@@ -70,7 +70,7 @@ public static class XElementExtensions_TagGrpDescriptor
             ScanInterval = scanInterval,
             IsEntry = isEntry,
         };
-        grp.AccessMode = thisElement.GetTagUnionAccess(thisTagName);
+        grp.AccessMode = thisElement.GetTagUnionAccess();
 
         // 处理额外特性
         foreach (var attr in thisElement.Attributes())
@@ -114,7 +114,9 @@ public static class XElementExtensions_TagGrpDescriptor
             }
             else
             {
-                throw new NotImplementedException($"不支持的 TagUnion 类型：{childElem.Name}");
+                throw new TagsProjectXmlException(
+                    $"不支持的测点元素 <{childElem.Name.LocalName}>，只支持 Tag / TagCbnt / TagGrp",
+                    childElem.GetLocationPath());
             }
         }
         return grp;

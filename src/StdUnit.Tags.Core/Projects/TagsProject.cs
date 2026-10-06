@@ -11,6 +11,11 @@ namespace StdUnit.Tags;
 /// </summary>
 internal class TagsProject : ITagsProject
 {
+    /// <summary>
+    /// 承载项目根的内部测点组节点名（不是入口，仅用于挂载顶层测点组）。
+    /// </summary>
+    internal const string MainGroupName = "__main__";
+
     private readonly ITagChannelsLoader _channelsLoader;
     private readonly ITagsLoader _tagsLoader;
     private readonly ILogicetsLoader _logicetLoader;
@@ -70,7 +75,7 @@ internal class TagsProject : ITagsProject
     /// <returns></returns>
     protected virtual TagsProject LoadTags(XElement root)
     {
-        var main = new TagGrp(new TagGrpDescriptor { Name = "__main__", IsEntry = false }, null);
+        var main = new TagGrp(new TagGrpDescriptor { Name = MainGroupName, IsEntry = false }, null);
         var descriptors = root.GetTagProjectGrpDescriptors();
         foreach (var descriptor in descriptors)
         {

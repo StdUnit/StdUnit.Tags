@@ -70,7 +70,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["Port"] = new XElement("Port", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "0");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxWriteRegisters"] = new XElement("MaxWriteRegisters", "124");
 
-        var ex = Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
         Assert.Contains("123", ex.Message);
     }
 
@@ -238,7 +238,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxReadRegisters"] = new XElement("MaxReadRegisters", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxReadRegisters"] = new XElement("MaxReadRegisters", "0");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxReadRegisters"] = new XElement("MaxReadRegisters", "126");
 
-        var ex = Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
         Assert.Contains("125", ex.Message);
     }
 
@@ -326,7 +326,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxReadBits"] = new XElement("MaxReadBits", "not-a-number");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -339,7 +339,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxReadBits"] = new XElement("MaxReadBits", "0");
 
-        Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
     }
 
     [Fact]
@@ -352,7 +352,7 @@ public class ModbusTcpTagChannelDescriptorTests
         };
         baseDesc.Extras["MaxReadBits"] = new XElement("MaxReadBits", "2001");
 
-        var ex = Assert.Throws<ArgumentException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectXmlException>(() => baseDesc.ToModbusTcpTagChannelDescriptor());
         Assert.Contains("2000", ex.Message);
     }
 
