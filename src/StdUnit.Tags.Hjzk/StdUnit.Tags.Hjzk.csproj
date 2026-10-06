@@ -1,12 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+	  <Description>Hjzk 远程IO 通信支持（建立在 ModbusTcp 之上）</Description>
 	  <TargetFrameworks>net8.0;net472</TargetFrameworks>
-	  <ImplicitUsings>enable</ImplicitUsings>
 	  <OutputType>Library</OutputType>
-	  <LangVersion>latest</LangVersion>
-	  <Nullable>enable</Nullable>
-	  <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

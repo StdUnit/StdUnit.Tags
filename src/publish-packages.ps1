@@ -54,7 +54,8 @@ $projects | ForEach-Object -Process{
             throw
         }
 
-        dotnet nuget push -s "$($nugetSource)" -k "$($nugetKey)" ./bin/Release/$($projName).$($packageVersion).nupkg
+        # --skip-duplicate：发布中途失败后重跑时，已推上去的包不再让整条流水线失败
+        dotnet nuget push -s "$($nugetSource)" -k "$($nugetKey)" --skip-duplicate ./bin/Release/$($projName).$($packageVersion).nupkg
         if($LASTEXITCODE -ne 0)
         {
             throw

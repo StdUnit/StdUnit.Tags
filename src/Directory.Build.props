@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  src/ 下所有项目共享的编译设置与 NuGet 打包元数据。
+
+  1) TargetFrameworks 有意不在这里统一：StdUnit.Tags.Tests.NetCoreOnly 与 StdUnit.Tags.BlazorLib(.Core)
+     只面向 net8.0，其余项目面向 net8.0;net472，所以目标框架仍写在各 csproj 内。
+  2) 包元数据对所有项目生效，但只有 src/publish-packages.ps1 里列出的项目会被打包发布；
+     每个被发布的项目需在自己的 csproj 里提供 <Description>。
+-->
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>itminus</Authors>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/newbienewbie/StdUnit.Tags</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageProjectUrl>https://tags.doc.stdunit.com/</PackageProjectUrl>
+    <!-- 除 StdUnit.Tags.OpcUaClient（OPC Foundation MIT License 1.00，用 PackageLicenseFile）外，其余包均为 MIT -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>tags;plc;scada;opcua;modbus;profibus;s7;serial-port;industrial-automation</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- 不生成符号包（IncludeSymbols/SymbolPackageFormat=snupkg）：本仓库的打包由 Paket 的 PackTask 接管，
+         它不会把 pdb 映射进 nuspec，开了之后 dotnet pack 会以 NU5005 失败（已实测）。 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 仓库根 README 作为每个包的 readme（PackagePath="\" 表示放在包根） -->
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

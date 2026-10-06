@@ -64,6 +64,14 @@ v1.0 之前只专注于正确性和可靠性，我不推荐外部人员使用—
   - 注：入口识别（`ScanEntries`）遇到入口即停止下探 ⇒ **只有最外层入口才是入口**，嵌套 `isEntry="true"` 不生效（该子树仍由外层入口轮询）；错误配置由默认启用的 `NestedEntryValidator` 拒绝。
 - [x] 文档完善和更新：`docs/` 放框架性内容，详细使用说明放独立文档库。本次补齐 3 篇**概念层**框架文档（刻意不写 API 清单/字段语法——那些属于教程库）：`docs/核心模型.md`（三大概念 + 串行轮询循环 + "用确定性换性能"的取舍与"入口即并发粒度"的结论 + 失败语义）、`docs/外部意图.md`（为什么需要意图 + 环路等待死锁）、`docs/扩展点.md`（分层与依赖方向 + 公开面原则 + 驱动接入形状 + 加载期校验理念），与既有的 `docs/异常处理.md` 交叉引用；README 的"文档"一节列出全部 4 篇。
   - 顺手修正 3 处过期 XML 文档（异常族重构后的残留）：`TagsProjectServiceBuilder.EnableCrossReferenceValidation()` / `AddValidation<T>()` 与 `ITagsProjectValidator`，把"抛 `TagsProjectSchemaException`"改为"抛聚合的 `TagsProjectValidationException`"（`TagsProjectSchemaException` 现在只是它的派生类型、仅用于 XSD 校验）。
+- [x] 1.0 发布的配套（首发到 nuget.org 是第一次公开露面，这些必须补齐）：
+  - [x] **包元数据**：新增 `src/Directory.Build.props` 统一编译设置与 NuGet 元数据（`Authors=itminus`、`RepositoryUrl`、`PackageProjectUrl`、`PackageLicenseExpression=MIT`、`PackageTags`、`PackageReadmeFile`），14 个可发布项目各补一行 `<Description>`；`StdUnit.Tags.OpcUaClient` 因依赖 OPC UA 栈（OPC Foundation MIT License 1.00，不是 SPDX 标识符）改用 `PackageLicenseFile`。此前打出的 nuspec 是 `Package Description` 占位文本 + `authors=包名` + **没有任何 license 字段**。
+    - 顺带把 `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 收进 props（`TargetFrameworks` 仍留在各 csproj，因为有 net8-only 项目）；props 开启文档生成后刷出 ZLan 46 个 + BlazorLib 16 个 CS1591，属**既有**缺口（这两个包此前就不生成 XML 文档）。**ZLan 已补齐 46 个公开成员的注释**并恢复文档生成（包里现在带 `StdUnit.Tags.ZLan.xml`），BlazorLib 与两个测试项目显式 `<GenerateDocumentationFile>false</GenerateDocumentationFile>` 保留现状。
+    - **符号包（snupkg）不做**：本仓库打包由 Paket 的 `PackTask` 接管，它不把 pdb 映射进 nuspec，`IncludeSymbols=true` 会让 `dotnet pack` 以 `NU5005` 失败（已实测）。
+    - 顺带修掉 ZLan 一处 `<see cref="ZLanChannel">` 写错类型名（应为 `ZLanTcpChannel`）。
+  - [x] `src/publish-packages.ps1` 的 `nuget push` 加 `--skip-duplicate`：发布中途失败后重跑，不再因"包已存在"让整条流水线失败（上次 Release 唯一失败的一步正是 push）。
+  - [x] 新增 `CHANGELOG.md`：以 `0.16.0` 为基线列出 1.0 的全部破坏性变更（`IsScaned→IsScanned`、异常族重构、运行期异常类型、S7 组合相对地址、SimpleFiles 旧 key、OpcUa 坏点=抛错）；README 里"1.0 之前只发测试源"的声明同步改为"正式版本发 nuget.org、预览版发测试源"。
+  - **依赖漏洞（现场决定不做）**：`dotnet list package --vulnerable` 报出 SimpleFiles(net472) 的 `System.Text.Json 8.0.0`（High ×2）与 OpcUaClient 两个 TFM 的 `OPCFoundation.NetStandard.Opc.Ua.Core 1.5.374.126`（Medium，affected `< 1.5.374.158`）。因为 paket 用 `lowest_matching: true`，这两个版本会成为**消费方的最低版本要求**。当下不改：类库只负责声明最低要求，升不升级是终端开发者的事。
 - [x] 1.0 前的兼容残留逐条拍板（不让"临时兼容"混进 1.0）：
   - [x] SimpleFiles 旧 XML 属性 `AutoCreateFile` **移除**：`SimpleFilesDirectTagBase` 构造函数里显式拒绝（`TagsProjectConfigurationException`，`Location=Tag(名称)`，消息给出改用 `autoCreateFile` 的提示），不再有"新 key 优先"的回退。**移除 ≠ 静默忽略**：升级后文件不再自动创建却不报错，会变成极难定位的运行期怪象，所以选了加载期快速失败。新增 2 个测试（只写旧 key 报错、新旧 key 同时出现也报错），替换原 2 个兼容用例。
   - ~~移除 `ITagsProject.WriteIntent(...)` 的 `[Obsolete]` 2 参重载~~ **保留**：现场代码在用（本仓库零调用，但库外有真实调用方）。

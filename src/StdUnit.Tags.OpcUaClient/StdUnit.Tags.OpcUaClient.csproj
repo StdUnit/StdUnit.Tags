@@ -1,12 +1,13 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <Description>OPC UA 通信支持</Description>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
     <OutputType>Library</OutputType>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- 本包依赖 OPC UA 栈，采用的是 OPC Foundation MIT License 1.00（不是 SPDX 标识符），
+         所以用授权文件而不是 PackageLicenseExpression（后者在 Directory.Build.props 里统一设为 MIT）。 -->
+    <PackageLicenseExpression></PackageLicenseExpression>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
@@ -22,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="LICENSE" Pack="true" PackagePath="\" />
     <None Include="Schemas\StdUnit.Tags.OpcUaClient.targets"
           Pack="true"
           PackagePath="buildTransitive/StdUnit.Tags.OpcUaClient.targets" />

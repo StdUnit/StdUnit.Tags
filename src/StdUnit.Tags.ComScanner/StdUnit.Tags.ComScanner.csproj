@@ -1,12 +1,9 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <Description>串口通信支持</Description>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <LangVersion>latest</LangVersion>
-    <NoWarn>CS1998</NoWarn>
+    <NoWarn>$(NoWarn);CS1998</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />

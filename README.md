@@ -32,14 +32,16 @@
 2. 处理逻辑
 3. 刷写底层
 
-> **在正式发布1.0版本之前，这个包只会发布在我的测试源上**。
-> 如果你使用`nuget`管理，请参照[示例](https://github.com/newbienewbie/StdUnit.Tags.WPFDemo/blob/867a5063bc65ec16f77692d4c56ce9da5a38dc3c/nuget.config#L3-L8)，指定包源为 https://baget.stdunit.com/v3/index.json ；
+> **正式版本（`1.0.0` 及以后）发布到 nuget.org；预览版本只发布在我的测试源上**。
+> 如果你使用`nuget`管理并需要预览版，请参照[示例](https://github.com/newbienewbie/StdUnit.Tags.WPFDemo/blob/867a5063bc65ec16f77692d4c56ce9da5a38dc3c/nuget.config#L3-L8)，额外指定包源为 https://baget.stdunit.com/v3/index.json ；
 > 如果你使用`paket`管理，参照本项目[paket.dependencies](https://github.com/newbienewbie/StdUnit.Tags/blob/b4ef40f2952fa75d7154db03782c2b5f98be914c/paket.dependencies#L1-L2) 指定包源。
 > 我个人建议你使用`paket`管理依赖，这样哪怕我和nuget.org都破产跑路了，你的本地代码也能完全断网的情况下离线编译。
 
 警告：假设版本号是`<major>.<minor>.<patch>`:
 - 在`v1.0`版本之前，每个`minor`版本的跳变，可能会引入新特性和破坏性更新。
 - 在`v1.0`版本之后，每个`major`版本的跳变，可能会引入新特性和破坏性更新。
+
+各版本的用户可见变化见 [CHANGELOG.md](./CHANGELOG.md)。
 
 
 ## Quick Start
@@ -67,8 +69,8 @@ dotnet new tags.web # 这会创建一个 ASP.NET Core 项目
 
 0. 我为本类库编写了教程，部署在[tags.doc](http://tags.doc.stdunit.com)。
 1. 仓库内 [`docs/`](docs/) 放**框架性**内容：[核心模型](docs/核心模型.md)、[外部意图与死锁](docs/外部意图.md)、[扩展点](docs/扩展点.md)、[异常处理与选型决策树](docs/异常处理.md)；详细使用说明见上一点。
-2. 本仓库自带的[Samples](https://github.com/newbienewbie/StdUnit.Tags/tree/dev/samples): 主要用于开发验证+喂狗。
-3. 供新手熟悉功能[WPFDemo](https://github.com/newbienewbie/StdUnit.Tags.WPFDemo): 按分支演示功能。
+2. 本仓库自带的[Samples](https://github.com/StdUnit/StdUnit.Tags/tree/dev/samples): 主要用于开发验证+喂狗。
+3. 供新手熟悉功能[WPFDemo](https://github.com/StdUnit/StdUnit.Tags.WPFDemo): 按分支演示功能。
 
 ## 文件夹结构
 

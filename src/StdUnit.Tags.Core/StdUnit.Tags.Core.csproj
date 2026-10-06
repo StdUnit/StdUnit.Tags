@@ -1,11 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+	<Description>硬件无关的核心抽象，无外部依赖</Description>
 	<TargetFrameworks>net8.0;net472</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-	<GenerateDocumentationFile>true</GenerateDocumentationFile>
-	<LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <!-- 把核心Schemas/tagsproject.xsd交给源生成器（StdUnit.Tags.SchemaGenerator）

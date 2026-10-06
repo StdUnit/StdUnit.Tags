@@ -6,12 +6,16 @@ namespace StdUnit.Tags.ZLan;
 
 
 /// <summary>
-/// 构建 <see cref="ZLanChannel"/>
+/// 构建 <see cref="ZLanTcpChannel"/>
 /// </summary>
 public class ZLanTcpChannelFactory : ITagChannelFactory
 {
     private readonly ILoggerFactory _loggerFactory;
 
+    /// <summary>
+    /// c'tor
+    /// </summary>
+    /// <param name="loggerFactory">用于给通道创建日志</param>
     public ZLanTcpChannelFactory(ILoggerFactory loggerFactory)
     {
 
