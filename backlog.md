@@ -8,7 +8,31 @@ v1.0 之前只专注于正确性和可靠性，我不推荐外部人员使用—
 
 - [x] 轮询清理路径修复：`TagGrpRunner` 清理路径不再用已取消的 ct 调 `DisconnectAsync`（原实现 S7 会因 `_rw.WaitAsync(ct)` 立即抛 OCE 导致连接不断开、资源泄漏）。
 - [x] 通道断开策略化：新增 `ITagGrpRunnerDisconnectStrategy`（Core 公共接口）+ `DefaultTagGrpRunnerDisconnectStrategy`（有限超时等待，默认 5s），可按设备注入不同断开等待策略；`TagGrpRunnerFactory` 从 DI 解析。
-- [ ] OpcUaClientChannel 的具体问题清理：`WriteAsync` 不再丢弃调用方的 `ct`；检查 `ReadValuesAsync` 返回的错误（坏值不进缓存）；去掉 `Bag` 的双重写入；证书默认值（`AutoAcceptUntrustedCertificates` 等）改为可配置并输出警告。
+- [x] OpcUaClientChannel 的具体问题清理：
+  - [x] `WriteAsync` 不再丢弃调用方的 `ct`（原来是 `CancellationToken.None`，取消信号传不到底层，写入会无视取消一直阻塞）。
+  - [x] 检查 `ReadValuesAsync` 返回的错误 —— **最终语义：坏点 = 读取失败（抛异常），既不静默跳过也不替下游解释质量**。
+    - 判据：`OpcUaValueQuality.IsFailed(err, value)`——`err` 或 `DataValue.StatusCode` 任一为 **Bad** 即失败；`Uncertain` 不算（那只是"服务器给了值、它自己不确定"，是否可信是业务问题），为 `null` 视为失败。
+    - 行为：`OpcUaClientTagChannel.ReadAsync`（任意节点 Bad → 整体失败）与 `ReadValueAsync`（该节点 Bad → 失败）抛 `InvalidOperationException`，消息带通道名 + 操作 + 每个坏节点的节点与状态码（`节点=ns=1;s=Bad 状态码=0x80340000(BadNodeIdUnknown)`）。三个消费点（cbnt / cbntor / 直连测点）不再判断质量，只按"返回即非坏值"使用。
+    - **为什么不是"跳过坏点 + 记日志"（我最初的做法，已被推翻）**：(1) 坏点大多是通信/配置问题（`BadNotConnected`、`BadNodeIdUnknown`…），**只有抛出去才能走 `TagGrpRunner` 的"崩溃 → 断开全部通道 → 重连"恢复路径**，静默跳过恰好把重连路径掐断了；(2) 下游能用的接口只有"异常（重试/崩溃策略、`RunnerCrashed`）"和"值本身"，日志对下游没作用——静默跳过会让值被无限期冻结而入口看起来还活着；(3) 与 S7/Modbus"读到错误码就抛"的行为不一致。
+    - 代价（已知并接受）：永久性坏点（如 NodeId 写错）会让该入口持续走"失败 → 断开 → 重连"，延迟按 `DefaultTagGrpRunnerRetryStrategy`（Logistic）从 500ms 涨到 30s 封顶，期间该入口不再产出新值——但这是**显式失败**而不是静默冻结，且应用可通过 `RunnerCrashed` 观测到。
+    - 用户定调（原话）："数据采集就是采集……如果真想输出(点的测量值, 可信度)，再加一个 Tag 即可" → 驱动层不引入质量概念，可信度由业务用额外的测点表达。
+    - **"什么算失败"做成了可注入的策略**（不改变默认口径）：`AddOpcUaClientSupport(checkIsFailed: (err, value) => ...)` / `AddOpcUaClientChannel(checkIsFailed: ...)` → 注册时闭包构造 `OpcUaClientTagChannelFactory` → `OpcUaClientTagChannel` ctor 的可选参数，默认 `OpcUaValueQuality.IsFailed`。于是"更严（Uncertain 也算失败）"与"更松（任何状态都照原样采集，代价是 Bad 时 Value 可能为 null，由使用方承担）"都成了使用方的选择，而库的默认行为仍是"不解释质量"。未做成 XML 配置项：它是个委托，XML 表达不了，也避免让配置承担代码职责。
+    - 实测（Opc.Ua.Core 1.5.374）：`ServiceResult.IsBad(Bad)=true`、`IsBad(Uncertain)=false`、`IsBad(Good)=false`；但 `ServiceResult.IsGood(Uncertain)=false`——判据必须直接问 `IsBad` 而不是取反 `IsGood`，否则不确定质量会被误判成失败。该版本没有 `BadClarification` 之类"Bad 填充位"常量，无歧义。
+  - [x] 去掉 `Bag` 的双重写入：`Bag[nodeId] = value;` 之后紧跟的 `Bag.AddOrUpdate(nodeId, value, ...)` 是冗余的（索引器本身已是插入或更新）。
+  - [x] 证书默认值改为可配置并输出警告：新增 `OpcUaSecurityOpt`（挂在 `OpcUaClientTagChannelOpt.SecurityOpt`）——`AutoAcceptUntrustedCertificates`(true) / `RejectSHA1SignedCertificates`(false) / `MinimumCertificateKeySize`(1024，类型与底层 `SecurityConfiguration` 一致用 `ushort`)；默认值与旧硬编码行为一致，但**任一宽松项生效时构造通道会输出一次 `LogWarning`**（列出具体项，提示在 `<SecurityOpt>` 中收紧）。XML 解析/回写（`<SecurityOpt>` 子元素）、`opcua-client.xsd`、fixture 与 sample 均同步。
+  - 附带修掉：`ReadAsync` 结果数与请求数不一致时抛带通道名与 TagCbnt 名的 `InvalidOperationException`（原来会 `IndexOutOfRangeException`）；`ParseSreverOpt` 的 `UsePassword` 与新增的 `SecurityOpt` 各字段**不再静默降级**（`bool.Parse` 失败现在抛 `TagsProjectXmlException` 并带 `Channel(名)` 定位，与 Hjzk 等驱动一致）。
+  - 语义确认（写进代码注释）：读取失败时缓存/时间戳/通知都不改动，异常原样传出；成功时"先写完整个缓存再逐点通知"——处理器里读同组其它测点时不会看到半更新的缓存。
+  - [x] 轮询热路径去掉每轮重复构建（`ReadAsync`/`WriteAsync` 每轮都要"子测点 ↔ NodeId"映射）：
+    - 删掉冗余的 `_nodeIdCache` / `GetNodeIdByTagName`：`NodeId` 本来就是 `OpcUaClientTagCbntor` 的只读属性（构造时从 `RawAddress` 定下），用"测点名 → NodeId"的字典去"缓存"它等于把字段读取换成字符串哈希。
+    - 新增懒构建的 `GetNodeMap()`：两个下标对齐的数组（`OpcUaClientTagCbntor[]` + `NodeId[]`），读/写路径共用；子节点集合在加载完成后不再变化（与 S7/Modbus 一致——它们在构建期就把偏移量烘进了字节缓存），仍按数量做一次校验，万一加载后增删了子节点会重建而不是静默错位。
+    - 效果（每轮每组合）：省掉 1 次 LINQ 委托 + N 次 `TagName()` + N 次字符串哈希查字典 + 2 个 `List` 分配（`.ToList()` / `Select`）。**量级说明**：这些开销相对一次 OPC UA 往返（ms 级）可以忽略，收益主要是"不再每轮做显然重复的事"与减少 GC 压力，不是吞吐瓶颈。
+    - 两趟遍历**有意保留**（先写完整个缓存再通知）：与 `TagCbnt.NotifyChildrenRead()` 的语义一致（S7/Modbus 走的就是它）——处理器里读同组其它测点时不该看到半更新的缓存。两趟现在都是对缓存数组/字典的紧循环，合并省下的开销可忽略。
+    - 附带行为变化（有意）：同一 NodeId 被两个子测点引用（别名）时，写入不再抛"已添加相同键"，而是只写一次（最后设置的脏值生效）——与读路径（本来就容忍别名）一致。
+  - 新增 21 个测试（通道 9：`ct` 透传、宽松默认值+警告、收紧后不警告、任一节点 Bad → 抛错并带通道/节点/状态码、Uncertain 不抛错、单节点 Bad → 抛错、`checkIsFailed` 三例（恒 false 不抛 / 恒 true 也抛 / 可把 Uncertain 当失败）；cbnt 5：通道抛错时缓存与通知不动、结果数不匹配报错、子节点增删后映射缓存重建、别名 NodeId 写入只写一次、脏但无值抛错；cbntor 2：通道抛错时保留上次值/时间戳且不发通知、脏但无值抛错且不调通道；直连测点 1：读取失败时值/通知/时间戳不动；描述符 6：`SecurityOpt` 解析/默认值/两个非法值/`UsePassword` 非法值/`ToXElement` 往返；注册 2：带 `checkIsFailed` 能正常解析并建通道、与手动组合等价）。
+
+  - [x] 脏但没有缓存值 → **抛带上下文的错**（用户定调："这一点我认为应该抛出异常"）：`OpcUaClientTagCbnt.WriteAsync` 与 `OpcUaClientTagCbntor.WriteAsync` 都改为先 `Bag.TryGetValue`，取不到就抛 `InvalidOperationException`，消息带通道名 + 测点名 + NodeId（原来 `Bag[nodeId]` 直接取下标会抛**无消息**的 `KeyNotFoundException`）。理由：跳过会变成"标记了要写、实际什么都没写"的静默失效，而正常路径不会出现这种情况（`Value` setter 先写 Bag 再 `MarkDirty()`），只有绕开 setter 直接置 `IsDirty = true` 才会——那属于用户错误，就该显式报出来。新增 2 个测试（cbnt 路径；cbntor 路径同时断言**不调用通道**，避免"什么都没写却报告写成功"）。
+
+
 - [x] TagsProjectCtrl 的清理路径日志化：5 处空 `catch`（`StartPollAsync` finally 里的 `project.Dispose()`；`StopAsync` 里的 `project.Dispose()`、取消 `_cts` 失败、逐通道 `DisconnectAsync`、`StartedOrStopped` 事件处理器）改为捕获异常后 `LogWarning(ex, ...)`，**语义完全不变**（仍然吞掉、继续清理、不影响返回/原始异常），日志带上 `ProjectRoot` 或通道名。新增 3 个测试锁定四条不变量：不向外抛、留痕、一个通道失败不阻断其它通道、释放失败不覆盖轮询阶段的原始异常（`TagsProjectCtrlTests`，配 `CapturingLoggerProvider` + `MockTagsProject.DisposeThrows`）。
 - [x] `TagGrpRunner` 的清理路径日志化（与 TagsProjectCtrl 同类问题）：3 处静默吞掉改为捕获后 `LogWarning(ex, ...)`，**语义完全不变**（仍然吞掉、不阻断其它通道的清理、不影响 `StartAsync` 的异常传播）——`DisconnectAsync` 抛错、`DisconnectAllAsync` 里"发起断开"失败、等待断开策略失败；消息带通道名/入口名。新增 2 个测试（`StartAsync_WhenDisconnectThrows_SwallowsButLogs` / `StartAsync_WhenDisconnectStrategyThrows_SwallowsButLogs`），并把 `CapturingLoggerProvider` 提到 `Tests/Fakes/` 供两个测试类共用。
 - [x] 消除时间敏感测试的偶发失败（能确定化的部分已完成，套件耗时 11s → 8s）：
@@ -17,6 +41,7 @@ v1.0 之前只专注于正确性和可靠性，我不推荐外部人员使用—
   - `TagGrpRunnerTests.StartAsync_Cancellation_StopsLoop`：原来靠"100ms 内必须跑完一轮"，改为在第一次 `ReadAsync` 里取消。
   - `TagsProjectCtrlTests`：9 处 `await Task.Delay(200)` 猜后台启动进度，改为等待 `StartedOrStopped` 的"已启动"事件（测试侧 `ProjectStartedWatcher`，与生产侧 R3/Rx 的 `ObserveStartedOrStopped` 同一个信号）。**注意不能只等 `ctrl.Project != null`**：`Project` 在启动 hook 执行**之前**就已赋值，而 hook 里常要向项目补通道/逻辑组件，只等它就去 `StopAsync()` 会与 hook 竞态（清理不到 hook 刚加的东西）；该事件是在 hook 执行**完之后**才触发，才是"项目确实已就绪"的确定性信号。
   - `TagGrpRunnerTests.StartAsync_FailResetThenAccumulateAgain`：加了 `WaitAsync(15s)` 兜底，但"禁用后 1 秒再启用"仍是时间猜测（产品代码里禁用轮询固定 `Task.Delay(500, ct)`，测试观察不到它何时完成），根治见下一条。
+  - 后续复跑（做 OpcUa 驱动那条时）观察到 **1 次未复现的失败**（约 1/36 轮，之后 36+ 轮全绿），当时未捕获失败用例名，无法定位。据此把仍是"秒级预算"的等待一次性放宽（超时只影响失败暴露的快慢，断言语义不变）：`ComTagTests` 3 处 `2s→10s`、`LineBasedComChannelTests` 2 处 `3s→10s`、`TagsProjectCtrlTests` 里 `await startTask.WaitAsync(1s)`→`10s`（停表后等启动任务收尾，最可疑的一处）、新加的轮询失败日志测试等待预算 `3s→10s`。
 - [x] 根治 `TagGrpRunnerTests.StartAsync_FailResetThenAccumulateAgain` 的时序假设（**纯测试改法，产品代码不动**）：该用例要验证"失败计数在禁用一轮后复位"，而复位发生在轮询循环内部（`!IsEnabled → continue → finally`），外部观察不到它的结束时刻。改为给 mock 的 `IsEnabled` 加读取钩子（`MockTagGrp.OnIsEnabledRead`，回调先于取值生效，所以回调里改写 `IsEnabled` 后本次读取就返回新值），**第 2 次读到 false 时才重新启用**——`IsEnabled` 每轮外循环只读一次、复位就在上一轮末尾，同一线程串行，因此此刻复位必然已完成，不再需要定时器猜时机（1 秒定时器已删）。已做反证：把条件改成"第 1 次读到 false 就启用"，用例立刻以 `Expected: 1, Actual: 4` 失败，说明它确实在断言复位时刻而非静默通过。未采纳"把禁用轮询间隔做成可注入策略"的备选方案：那会为测试给生产 API 开口子，而禁用间隔只是时长问题、不是正确性问题。
 - [x] 异常细化：
   - [x] 加载期：统一收敛到异常族 `TagsProjectLoadException`(**abstract**，带 `Location`，直接派生自 `Exception`) → `TagsProjectXmlException` / `TagsProjectAddressException` / `TagsProjectConfigurationException` / `TagsProjectValidationException`（`Errors` 明细；原 `TagsProjectSchemaException` 改为其子类，保留 XSD 语义与旧消息格式）。
@@ -38,7 +63,8 @@ v1.0 之前只专注于正确性和可靠性，我不推荐外部人员使用—
 - [x] 单入口多通道：入口子树中所有会被用到的通道统一建连与断开。`ITagGrpExtensions.CollectChannels()` 向下递归收集；`TagGrpRunner` 每轮逐一 `EnsureConnectedAsync(force:false)`，清理路径 `DisconnectAllAsync` 断开全部通道（先全部发起再按 `ITagGrpRunnerDisconnectStrategy` 逐一等待）。语义：事件委托的 `channel` = 入口**主通道**；**一个通道 = 一个轮询回路**，同一通道实例不得跨入口共用——由默认启用的 `EntryChannelExclusivityValidator` 强制。理由不止"断开互相踩"（连接动作可为空实现，如 SimpleFiles），更根本的是两套扫描周期会交错读写同一底层资源、且两个入口的生命周期被耦合；而要求分离的代价几近为零（再声明一个指向同一设备的 Channel 即可）。
   - 注：入口识别（`ScanEntries`）遇到入口即停止下探 ⇒ **只有最外层入口才是入口**，嵌套 `isEntry="true"` 不生效（该子树仍由外层入口轮询）；错误配置由默认启用的 `NestedEntryValidator` 拒绝。
 - [ ] 文档完善和更新：`docs/` 放框架性内容，详细使用说明放独立文档库。
-- [ ] OpcUa和ModbusTcp单通道多入口并发支持。说明：当前S7已经做了单通道多入口的串行化，不过OpcUa和ModbusTcp目前只支持"单通道单入口"模型。这可能是一个值得改进的方向，但优先级不是很高：第一，我认为在工业交互的场景下，“单通道单入口”串行轮询机制更合理；其次，对于单设备多入口场景，可以手动建立指向单一设备的多个通道来解决——哪怕是`C#`官方类库，也没有强迫`TcpClient`是线程安全的；第三，多入口并行在很多场景下，对于没有思索过具体细节的新手用户，会带来非常多的困扰。简单的说，我更推崇**单入口多通道**模式。如果将来真要做单通道支持入口并行化，可以参考 ComScanner/S7 设计横展。
+- ~~OpcUa和ModbusTcp单通道多入口并发支持~~ **已废弃（不做）**。原说明：当前S7已经做了单通道多入口的串行化，不过OpcUa和ModbusTcp目前只支持“单通道单入口”模型。这可能是一个值得改进的方向，但优先级不是很高：第一，我认为在工业交互的场景下，“单通道单入口”串行轮询机制更合理；其次，对于单设备多入口场景，可以手动建立指向单一设备的多个通道来解决——哪怕是`C#`官方类库，也没有强迫`TcpClient`是线程安全的；第三，多入口并行在很多场景下，对于没有思索过具体细节的新手用户，会带来非常多的困扰。简单的说，我更推崇**单入口多通道**模式。如果将来真要做单通道支持入口并行化，可以参考 ComScanner/S7 设计横展。
+  - 废弃补充理由：**这个用法现在会被默认校验器直接拒绝**——`EntryChannelExclusivityValidator`（`UseDefaults = true` 时默认开启）不允许同一通道被多个入口共用，所以“OpcUa/ModbusTcp 不支持单通道多入口”不是潜在缺陷，而是有明确报错的既定约束。真要做单通道多入口并行，必须先让该约束变成可选（那等于放弃“一个通道实例只属于一个入口”的设计，见 `AGENTS.md` 约束 3），代价远大于收益。
 
 ## v1.0 之后的 todo
 

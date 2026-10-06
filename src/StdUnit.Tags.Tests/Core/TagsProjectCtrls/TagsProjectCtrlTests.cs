@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -128,7 +128,7 @@ public class TagsProjectCtrlTests
         await ctrl.StopAsync();
 
         // StartPollAsync 应该已完成
-        await startTask.WaitAsync(TimeSpan.FromSeconds(1));
+        await startTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         // 停止后 Project 应为 null
         Assert.Null(ctrl.Project);

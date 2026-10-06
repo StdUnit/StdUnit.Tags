@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
 
 	<!-- 通道，可以配置多个-->
@@ -10,6 +10,11 @@
 			<UserName>user-1</UserName>
 			<Password>pass-1</Password>
 		</ServerOpt>
+		<SecurityOpt>
+			<AutoAcceptUntrustedCertificates>false</AutoAcceptUntrustedCertificates>
+			<RejectSHA1SignedCertificates>true</RejectSHA1SignedCertificates>
+			<MinimumCertificateKeySize>2048</MinimumCertificateKeySize>
+		</SecurityOpt>
 	</Channel>
 
 

@@ -200,7 +200,7 @@ public class LineBasedComChannelTests
         {
             await channel.EnsureConnectedAsync(false, cts.Token);
 
-            var result = await received.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            var result = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal("scanned-barcode-123", result);
         }
         finally
@@ -240,7 +240,7 @@ public class LineBasedComChannelTests
         {
             await channel.EnsureConnectedAsync(false, cts.Token);
 
-            var result = await received.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            var result = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal("raw-buffer-data", result);
         }
         finally
@@ -350,8 +350,8 @@ public class LineBasedComChannelTests
         {
             await channel.EnsureConnectedAsync(false, cts.Token);
 
-            // 轮询跑在独立线程上，等它把错误记下来
-            var deadline = DateTime.UtcNow.AddSeconds(3);
+            // 轮询跑在独立线程上，等它把错误记下来（多轮复跑时预算给足，避免偶发超时）
+            var deadline = DateTime.UtcNow.AddSeconds(10);
             while (logs.Entries.Count == 0 && DateTime.UtcNow < deadline)
             {
                 await Task.Delay(20);

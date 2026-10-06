@@ -1,6 +1,7 @@
 using StdUnit.Tags;
 using StdUnit.Tags.OpcUaClient;
 using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Generic;
 using System.Xml.Linq;
 using Xunit;
 
@@ -104,6 +105,67 @@ public class OpcUaClientBuilderTests
         {
             Assert.True(g2.Children.ContainsKey(child.Key));
         }
+    }
+
+    #endregion
+
+    #region checkIsFailed：注册时可替换（默认 = OpcUaValueQuality.IsFailed）
+
+    [Fact]
+    public void AddOpcUaClientChannel_WithCheckIsFailed_ResolvesAndBuildsChannel()
+    {
+        var seen = new List<string>();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddTagsProjectServices(b =>
+        {
+            b.AddOpcUaClientChannel(checkIsFailed: (err, value) =>
+            {
+                seen.Add(value?.StatusCode.ToString() ?? "null");
+                return false;
+            });
+            b.AddOpcUaClientTagCbntBuilder();
+        });
+
+        using var root = services.BuildServiceProvider();
+        using var scope = root.CreateScope();
+
+        using var proj = scope.ServiceProvider.GetRequiredService<ITagsProjectFactory>()
+            .Create(string.Empty, BuildCbntXml());
+
+        Assert.Single(proj.Channels);
+        Assert.IsType<OpcUaClientTagChannel>(proj.Channels[0]);
+        // 委托只在读取时使用，构建通道时不该被调用
+        Assert.Empty(seen);
+    }
+
+    [Fact]
+    public void AddOpcUaClientSupport_WithCheckIsFailed_IsEquivalentToManualComposition()
+    {
+        var services1 = new ServiceCollection();
+        services1.AddLogging();
+        services1.AddTagsProjectServices(b => b.AddOpcUaClientSupport(checkIsFailed: (_, _) => false));
+        using var root1 = services1.BuildServiceProvider();
+        using var scope1 = root1.CreateScope();
+
+        var services2 = new ServiceCollection();
+        services2.AddLogging();
+        services2.AddTagsProjectServices(b =>
+        {
+            b.AddOpcUaClientChannel(checkIsFailed: (_, _) => false);
+            b.AddOpcUaClientTagCbntBuilder();
+            b.AddOpcUaClientDirectTagBuilder();
+        });
+        using var root2 = services2.BuildServiceProvider();
+        using var scope2 = root2.CreateScope();
+
+        using var proj1 = scope1.ServiceProvider.GetRequiredService<ITagsProjectFactory>()
+            .Create(string.Empty, BuildCbntXml());
+        using var proj2 = scope2.ServiceProvider.GetRequiredService<ITagsProjectFactory>()
+            .Create(string.Empty, BuildCbntXml());
+
+        Assert.Equal(proj1.Channels.Count, proj2.Channels.Count);
+        Assert.Equal(proj1.Tags.Children.Count, proj2.Tags.Children.Count);
     }
 
     #endregion

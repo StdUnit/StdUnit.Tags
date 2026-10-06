@@ -48,6 +48,19 @@ public class OpcUaClientTagChannelDescriptor : TagChannelDescriptor
         serverEle.SetOrAddChild(nameof(OpcUaServerOpt.Password), this.OpcUaTagChannelOpt.ServerOpt.Password);
 
         ele.Add(serverEle);
+
+        var existingSecurityOpt = ele.Element(nameof(OpcUaTagChannelOpt.SecurityOpt));
+        if (existingSecurityOpt != null)
+        {
+            existingSecurityOpt.Remove();
+        }
+
+        var securityEle = new XElement(nameof(OpcUaTagChannelOpt.SecurityOpt));
+        securityEle.SetOrAddChild(nameof(OpcUaSecurityOpt.AutoAcceptUntrustedCertificates), this.OpcUaTagChannelOpt.SecurityOpt.AutoAcceptUntrustedCertificates);
+        securityEle.SetOrAddChild(nameof(OpcUaSecurityOpt.RejectSHA1SignedCertificates), this.OpcUaTagChannelOpt.SecurityOpt.RejectSHA1SignedCertificates);
+        securityEle.SetOrAddChild(nameof(OpcUaSecurityOpt.MinimumCertificateKeySize), this.OpcUaTagChannelOpt.SecurityOpt.MinimumCertificateKeySize);
+
+        ele.Add(securityEle);
         return ele;
     }
 }
@@ -63,8 +76,10 @@ public static class TagChannelDescriptor_OpcUaClientExtensions
     /// 解析 <see cref="XElement"/> 对象为 <see cref="OpcUaServerOpt"/>
     /// </summary>
     /// <param name="serverOptEle"></param>
+    /// <param name="channelName">仅用于错误消息的定位上下文</param>
     /// <returns></returns>
-    private static OpcUaServerOpt ParseSreverOpt(XElement serverOptEle)
+    /// <exception cref="TagsProjectXmlException">属性/元素存在但取值无法解析</exception>
+    private static OpcUaServerOpt ParseSreverOpt(XElement serverOptEle, string? channelName)
     {
         var discoveryUrl =
             serverOptEle.Attribute(nameof(OpcUaServerOpt.DiscoveryUrl))?.Value ??
@@ -82,17 +97,78 @@ public static class TagChannelDescriptor_OpcUaClientExtensions
             serverOptEle.Attribute(nameof(OpcUaServerOpt.Password))?.Value ??
             serverOptEle.Element(nameof(OpcUaServerOpt.Password))?.Value ??
             string.Empty;
+        if (!bool.TryParse(usePasswordStr, out var usePassword))
+        {
+            // 静默降级为 false 会把"配错了"伪装成"配对了"，加载期直接报出来
+            throw new TagsProjectXmlException(
+                $"通道配置的 {nameof(OpcUaServerOpt.UsePassword)} 无法解析为布尔值：{usePasswordStr}",
+                $"Channel({channelName})");
+        }
+
         var serverOpt = new OpcUaServerOpt()
         {
             DiscoveryUrl = discoveryUrl,
-            UsePassword =
-                bool.TryParse(usePasswordStr, out var usePassword) ?
-                usePassword :
-                false,
+            UsePassword = usePassword,
             UserName = username,
             Password = password,
         };
         return serverOpt;
+    }
+
+    /// <summary>
+    /// 解析 <see cref="XElement"/> 对象为 <see cref="OpcUaSecurityOpt"/>
+    /// </summary>
+    /// <param name="securityOptEle"></param>
+    /// <param name="channelName">仅用于错误消息的定位上下文</param>
+    /// <returns></returns>
+    /// <exception cref="TagsProjectXmlException">属性/元素存在但取值无法解析</exception>
+    private static OpcUaSecurityOpt ParseSecurityOpt(XElement securityOptEle, string? channelName)
+    {
+        var securityOpt = new OpcUaSecurityOpt();
+
+        var autoAcceptStr =
+            securityOptEle.Attribute(nameof(OpcUaSecurityOpt.AutoAcceptUntrustedCertificates))?.Value ??
+            securityOptEle.Element(nameof(OpcUaSecurityOpt.AutoAcceptUntrustedCertificates))?.Value;
+        if (autoAcceptStr is not null)
+        {
+            if (!bool.TryParse(autoAcceptStr, out var autoAccept))
+            {
+                throw new TagsProjectXmlException(
+                    $"通道配置的 {nameof(OpcUaSecurityOpt.AutoAcceptUntrustedCertificates)} 无法解析为布尔值：{autoAcceptStr}",
+                    $"Channel({channelName})");
+            }
+            securityOpt.AutoAcceptUntrustedCertificates = autoAccept;
+        }
+
+        var rejectSha1Str =
+            securityOptEle.Attribute(nameof(OpcUaSecurityOpt.RejectSHA1SignedCertificates))?.Value ??
+            securityOptEle.Element(nameof(OpcUaSecurityOpt.RejectSHA1SignedCertificates))?.Value;
+        if (rejectSha1Str is not null)
+        {
+            if (!bool.TryParse(rejectSha1Str, out var rejectSha1))
+            {
+                throw new TagsProjectXmlException(
+                    $"通道配置的 {nameof(OpcUaSecurityOpt.RejectSHA1SignedCertificates)} 无法解析为布尔值：{rejectSha1Str}",
+                    $"Channel({channelName})");
+            }
+            securityOpt.RejectSHA1SignedCertificates = rejectSha1;
+        }
+
+        var minKeySizeStr =
+            securityOptEle.Attribute(nameof(OpcUaSecurityOpt.MinimumCertificateKeySize))?.Value ??
+            securityOptEle.Element(nameof(OpcUaSecurityOpt.MinimumCertificateKeySize))?.Value;
+        if (minKeySizeStr is not null)
+        {
+            if (!ushort.TryParse(minKeySizeStr, out var minKeySize) || minKeySize == 0)
+            {
+                throw new TagsProjectXmlException(
+                    $"通道配置的 {nameof(OpcUaSecurityOpt.MinimumCertificateKeySize)} 必须是 1~65535 的整数，当前为：{minKeySizeStr}",
+                    $"Channel({channelName})");
+            }
+            securityOpt.MinimumCertificateKeySize = minKeySize;
+        }
+
+        return securityOpt;
     }
 
     /// <summary>
@@ -115,8 +191,12 @@ public static class TagChannelDescriptor_OpcUaClientExtensions
         }
 
         var serverOpt = descriptor.Extras.TryGetValue(nameof(OpcUaClientTagChannelDescriptor.OpcUaTagChannelOpt.ServerOpt), out var serverEle) ?
-            ParseSreverOpt(serverEle) :
+            ParseSreverOpt(serverEle, descriptor.Name) :
             new OpcUaServerOpt();
+
+        var securityOpt = descriptor.Extras.TryGetValue(nameof(OpcUaClientTagChannelDescriptor.OpcUaTagChannelOpt.SecurityOpt), out var securityEle) ?
+            ParseSecurityOpt(securityEle, descriptor.Name) :
+            new OpcUaSecurityOpt();
 
         var res = new OpcUaClientTagChannelDescriptor
         {
@@ -130,6 +210,7 @@ public static class TagChannelDescriptor_OpcUaClientExtensions
                         DefaultClientName :
                         clientName.Value ?? DefaultClientName,
                 ServerOpt = serverOpt,
+                SecurityOpt = securityOpt,
             },
         };
         return res;

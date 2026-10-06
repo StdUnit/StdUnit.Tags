@@ -13,6 +13,11 @@ public class OpcUaClientTagChannelOpt
     /// 服务端选项
     /// </summary>
     public OpcUaServerOpt ServerOpt { get; set; } = new();
+
+    /// <summary>
+    /// 证书校验选项
+    /// </summary>
+    public OpcUaSecurityOpt SecurityOpt { get; set; } = new();
 }
 
 /// <summary>

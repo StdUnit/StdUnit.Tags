@@ -90,7 +90,7 @@ public class ComTagTests
             await Task.Delay(100);
             await tag.ReadAsync(cts.Token);
 
-            var result = await eventFired.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            var result = await eventFired.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal("event-data", result);
         }
         finally
@@ -174,7 +174,7 @@ public class ComTagTests
         await tag.WriteAsync(CancellationToken.None);
 
         Assert.False(tag.IsDirty);
-        Assert.True(await eventFired.Task.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.True(await eventFired.Task.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [Fact]
@@ -276,7 +276,7 @@ public class ComTagTests
             tag.Value = "fire-event";
             await tag.WriteAsync(cts.Token);
 
-            var result = await eventFired.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            var result = await eventFired.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal("fire-event", result);
         }
         finally

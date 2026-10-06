@@ -216,6 +216,37 @@ public class OpcUaClientTagCbntorTests
         Assert.Equal(42, cbnt.Bag[tag.NodeId].Value);
     }
 
+    /// <summary>
+    /// 单个组合测点写入时若"脏但没有缓存值"：抛带通道/测点/节点上下文的错，
+    /// 且不该去调用通道（避免"什么都没写却报告写成功"）。
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_WithMockChannel_WhenDirtyButNoCachedValue_ThrowsAndSkipsChannel()
+    {
+        var channel = new MockOpcUaChannel("mock");
+        var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "c", StartAddress = "ns=1" })
+        {
+            Channel = channel,
+        };
+        var descriptor = new TagDescriptor { TagName = "t", RawAddress = "ns=1;s=Var1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        var tag = new OpcUaClientTagCbntor(descriptor, cbnt, 0, 0);
+        tag.IsDirty = true;   // 绕开 Value setter
+
+        var channelCalled = false;
+        channel.WriteAsyncOverride = (_, _) =>
+        {
+            channelCalled = true;
+            return Task.CompletedTask;
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => tag.WriteAsync(CancellationToken.None));
+
+        Assert.Contains("mock", ex.Message);
+        Assert.Contains("t", ex.Message);
+        Assert.Contains(tag.NodeId.ToString(), ex.Message);
+        Assert.False(channelCalled);
+    }
+
     [Fact]
     public async Task WriteAsync_WithMockChannel_FiresOnTagWrittenAndClearsDirty()
     {
@@ -246,6 +277,42 @@ public class OpcUaClientTagCbntorTests
         Assert.Single(written);
         Assert.Equal(tag.NodeId, written.Keys.First());
         Assert.Equal(123, written.Values.First().Value);
+    }
+
+    /// <summary>
+    /// 通道判为读取失败（Bad）时，cbntor 不应改动缓存、不推进时间戳、不发通知。
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_WithMockChannel_WhenChannelThrows_KeepsPreviousValue()
+    {
+        var channel = new MockOpcUaChannel("mock");
+        var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "c", StartAddress = "ns=1" })
+        {
+            Channel = channel,
+        };
+        var descriptor = new TagDescriptor { TagName = "t", RawAddress = "ns=1;s=Var1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        var tag = new OpcUaClientTagCbntor(descriptor, cbnt, 0, 0);
+
+        channel.ReadAsyncOverride = async (_, _) =>
+        {
+            return (
+                new DataValueCollection { new DataValue { Value = 42 } },
+                new List<ServiceResult> { null! }
+            );
+        };
+        await tag.ReadAsync(CancellationToken.None);
+        var goodTimestamp = tag.Timestamp;
+
+        var eventFired = false;
+        tag.OnTagRead += (_, _) => eventFired = true;
+        channel.ReadAsyncOverride = (_, _) => throw new InvalidOperationException("读取节点失败：节点=ns=1;s=Var1 状态码=0x80340000(BadNodeIdUnknown)");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tag.ReadAsync(CancellationToken.None));
+
+        Assert.Equal(42, tag.Value);
+        Assert.Equal(42, cbnt.Bag[tag.NodeId].Value);
+        Assert.False(eventFired);
+        Assert.Equal(goodTimestamp, tag.Timestamp);
     }
 
     #endregion
