@@ -165,11 +165,11 @@ public class OpcUaClientTagChannel : ITagChannel
     {
         if (this.OpcSession is null)
         {
-            throw new InvalidOperationException("会话未创建");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未创建，无法读取节点");
         }
         if (this.OpcSession.Connected == false)
         {
-            throw new InvalidOperationException("会话未连接");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未连接，无法读取节点");
         }
 
         var (values, errs) = await this.OpcSession.ReadValuesAsync(nodeIds, ct);
@@ -187,11 +187,11 @@ public class OpcUaClientTagChannel : ITagChannel
     {
         if (this.OpcSession is null)
         {
-            throw new InvalidOperationException("会话未创建");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未创建，无法写入节点");
         }
         if (this.OpcSession.Connected == false)
         {
-            throw new InvalidOperationException("会话未连接");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未连接，无法写入节点");
         }
 
         var writeValues = new WriteValueCollection();
@@ -235,11 +235,11 @@ public class OpcUaClientTagChannel : ITagChannel
     {
         if (this.OpcSession is null)
         {
-            throw new InvalidOperationException("会话未创建");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未创建，无法读取节点值：{nodeId}");
         }
         if (this.OpcSession.Connected == false)
         {
-            throw new InvalidOperationException("会话未连接");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未连接，无法读取节点值：{nodeId}");
         }
 
         var value = await this.OpcSession.ReadValueAsync(nodeId, ct);
@@ -277,7 +277,7 @@ public class OpcUaClientTagChannel : ITagChannel
             }
             catch (Exception e)
             {
-                _logger.LogWarning("通道={ChannelName} 释放异常:{exception}", channelName, e.Message);
+                _logger.LogWarning(e, "通道={ChannelName} 释放异常", channelName);
             }
             finally
             {

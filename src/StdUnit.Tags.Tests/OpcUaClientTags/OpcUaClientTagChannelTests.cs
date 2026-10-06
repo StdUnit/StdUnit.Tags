@@ -115,6 +115,53 @@ public class OpcUaClientTagChannelTests
 
     #endregion
 
+    #region 会话缺失时的上下文
+
+    [Fact]
+    public async Task ReadAsync_WhenSessionNotCreated_ThrowsWithChannelContext()
+    {
+        var channel = CreateChannel(CreateSessionMock());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => channel.ReadAsync(new[] { new NodeId("x", 1) }, CancellationToken.None));
+
+        // 多通道入口里，"会话未创建"这类消息必须能定位到通道与操作
+        Assert.Contains("ch1", ex.Message);
+        Assert.Contains("读取节点", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReadValueAsync_WhenSessionDisconnected_ThrowsWithChannelContext()
+    {
+        var connected = true;
+        var sessionMock = new Mock<ISession>();
+        sessionMock.SetupGet(x => x.Connected).Returns(() => connected);
+        var channel = CreateChannel(sessionMock);
+        await channel.EnsureConnectedAsync(false, CancellationToken.None);
+        connected = false; // 模拟连接掉线
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => channel.ReadValueAsync(new NodeId("x", 1), CancellationToken.None));
+
+        Assert.Contains("ch1", ex.Message);
+        Assert.Contains("未连接", ex.Message);
+        Assert.Contains("读取节点值", ex.Message);
+    }
+
+    [Fact]
+    public async Task WriteAsync_WhenSessionNotCreated_ThrowsWithChannelContext()
+    {
+        var channel = CreateChannel(CreateSessionMock());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => channel.WriteAsync(new Dictionary<NodeId, DataValue>(), CancellationToken.None));
+
+        Assert.Contains("ch1", ex.Message);
+        Assert.Contains("写入节点", ex.Message);
+    }
+
+    #endregion
+
     #region ReadValueAsync
 
     [Fact]

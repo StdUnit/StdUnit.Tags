@@ -122,7 +122,12 @@ public class DirectTagTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_tempDir, fileName), "not-bool");
         var tag = CreateTag(MakeDescriptor("b", fileName, BuiltinTagKinds.BIT));
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => tag.ReadAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<InvalidDataException>(() => tag.ReadAsync(CancellationToken.None));
+        // 解析失败必须能定位到测点与文件（子类只能拿到文本，路径由 TagBase 补上）
+        Assert.Contains("Tag(b)", ex.Message);
+        Assert.Contains(fileName, ex.Message);
+        Assert.Contains("not-bool", ex.Message);
+        Assert.IsType<InvalidDataException>(ex.InnerException);
     }
 
     #endregion
@@ -204,7 +209,9 @@ public class DirectTagTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_tempDir, fileName), "not-a-number");
         var tag = CreateTag(MakeDescriptor("s", fileName, BuiltinTagKinds.INT16));
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => tag.ReadAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<InvalidDataException>(() => tag.ReadAsync(CancellationToken.None));
+        Assert.Contains("Tag(s)", ex.Message);
+        Assert.Contains(fileName, ex.Message);
     }
 
     #endregion

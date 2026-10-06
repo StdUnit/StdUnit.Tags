@@ -73,7 +73,16 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
             return;
         }
         var text = await Compat.FileAsyncCompat.ReadAllTextAsync(path, ct);
-        var value = this.ParseValue(text);
+        T? value;
+        try
+        {
+            value = this.ParseValue(text);
+        }
+        catch (InvalidDataException ex)
+        {
+            // ParseValue 看不到文件路径（子类只拿到文本），这里补上测点与文件，否则系统里几十个文件时无法定位是哪一个
+            throw new InvalidDataException($"Tag({this.TagName()}) 解析文件内容失败：文件={path}；{ex.Message}", ex);
+        }
         this._value = value;
         this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead(value);

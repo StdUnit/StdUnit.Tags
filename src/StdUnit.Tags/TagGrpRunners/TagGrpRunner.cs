@@ -129,12 +129,10 @@ internal class TagGrpRunner : ITagGrpRunner
                         catch (Exception handlingError)
                         {
                             this._logger.LogCritical(
-                                "测点分组(分组={grp},通道={channel})错误处理又抛出了错误，这破坏了错误处理不能再抛出异常的假设。err={errMsg}\r\nStackTrace={strace}",
+                                handlingError,
+                                "测点分组(分组={grp},通道={channel})错误处理又抛出了错误，这破坏了错误处理不能再抛出异常的假设",
                                 entry.TagName(),
-                                channel?.ChannelName() ?? "null",
-                                handlingError.Message,
-                                handlingError.StackTrace
-                                );
+                                channel?.ChannelName() ?? "null");
                             throw;
                         }
                     }
@@ -161,9 +159,14 @@ internal class TagGrpRunner : ITagGrpRunner
                         // 否则辅通道的连接会一直残留、占用设备连接数。
                         await this.DisconnectAllAsync(channels);
                     }
-                    catch
+                    catch (Exception disconnectError)
                     {
-                        // ignore all the error thrown by the Channel's DisconnectAsync() method
+                        // 有意吞掉：清理失败不能覆盖上面 catch 到的轮询异常（它才是要向外报告的），
+                        // 也不能让 finally 抛出新异常。但不能静默——留痕，否则"连接没断干净"无人知晓。
+                        this._logger.LogWarning(
+                            disconnectError,
+                            "清理通道连接时出错：入口={entry}",
+                            entry.TagName());
                     }
                 }
             }
@@ -190,7 +193,8 @@ internal class TagGrpRunner : ITagGrpRunner
     /// <c>DisconnectAsync</c> 及 <see cref="DefaultTagGrpRunnerDisconnectStrategy"/>。
     /// <para>
     /// 断开是清理动作，必须尽力完成：即便轮询循环是因为取消而退出，这里也使用
-    /// <see cref="CancellationToken.None"/>（理由见调用点注释）；断开过程中抛出的异常一律吞掉。
+    /// <see cref="CancellationToken.None"/>（理由见调用点注释）；断开过程中抛出的异常一律吞掉
+    /// （不阻断其它通道的清理），但会以 <c>LogLevel.Warning</c> 留痕。
     /// </para>
     /// </summary>
     /// <param name="channels">本轮涉及的通道；空集合表示无需断开，此时仍会按既有契约调用一次策略（参数均为 null）</param>
@@ -204,9 +208,10 @@ internal class TagGrpRunner : ITagGrpRunner
             {
                 disconnect = ch.DisconnectAsync(CancellationToken.None);
             }
-            catch
+            catch (Exception ex)
             {
-                // 发起断开即失败：忽略，继续处理其它通道
+                // 有意吞掉：一个通道"发起断开"失败不应阻断其它通道的清理。但不能静默——留痕。
+                this._logger.LogWarning(ex, "发起断开通道失败：通道={channel}", ch.ChannelName());
             }
             pending.Add((ch, disconnect));
         }
@@ -223,9 +228,10 @@ internal class TagGrpRunner : ITagGrpRunner
             {
                 await this._disconnectStrategy.WaitDisconnectAsync(ch, disconnect);
             }
-            catch
+            catch (Exception ex)
             {
-                // 策略等待失败不应阻断其它通道的清理
+                // 有意吞掉：等待断开失败不应阻断其它通道的清理。但不能静默——留痕（连接可能没断干净）。
+                this._logger.LogWarning(ex, "等待通道断开失败：通道={channel}", ch.ChannelName());
             }
         }
     }

@@ -1,5 +1,6 @@
 using StdUnit.Tags.ComScanner;
 using StdUnit.Tags.ComScanner.Channels;
+using StdUnit.Tags.Tests.Fakes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System;
@@ -321,5 +322,52 @@ public class LineBasedComChannelTests
         };
         var channel = new LineBasedComChannel(descriptor, Logger);
         channel.Dispose();
+    }
+
+    /// <summary>
+    /// 轮询线程读串口失败时：日志必须带通道名，并把<b>异常对象本身</b>交给日志系统
+    /// （只 log <c>ex.Message</c> 会丢掉异常类型与堆栈，现场无法定位）。
+    /// </summary>
+    [Fact]
+    public async Task PollError_ShouldLogChannelNameAndExceptionObject()
+    {
+        var mockPort = new MockSerialPortHandle { FallbackToDefaultOnEmptyQueue = false };
+        var descriptor = new ComChannelDescriptor
+        {
+            Name = "ch-poll",
+            Option = new ComChannelOption
+            {
+                Port = "COM_TEST",
+            },
+        };
+        var logs = new CapturingLoggerProvider();
+        using var factory = LoggerFactory.Create(b => b.AddProvider(logs));
+        var channel = new LineBasedComChannel(descriptor, factory.CreateLogger<LineBasedComChannel>());
+        channel.SerialPortFactory = _ => mockPort;
+
+        using var cts = new CancellationTokenSource();
+        try
+        {
+            await channel.EnsureConnectedAsync(false, cts.Token);
+
+            // 轮询跑在独立线程上，等它把错误记下来
+            var deadline = DateTime.UtcNow.AddSeconds(3);
+            while (logs.Entries.Count == 0 && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(20);
+            }
+
+            var entry = Assert.Single(logs.Entries);
+            Assert.Equal(LogLevel.Error, entry.Level);
+            Assert.Contains("ch-poll", entry.Message);
+            var ex = Assert.IsType<InvalidOperationException>(entry.Exception);
+            Assert.Contains("ReadLineQueue", ex.Message);
+        }
+        finally
+        {
+            cts.Cancel();
+            await channel.DisconnectAsync(CancellationToken.None);
+            channel.Dispose();
+        }
     }
 }

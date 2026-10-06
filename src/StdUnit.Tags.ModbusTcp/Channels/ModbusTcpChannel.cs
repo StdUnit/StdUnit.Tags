@@ -199,7 +199,7 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("通道{ChannelName}断开连接失败：{message}\r\n{stackTrace}", this.ChannelName(), ex.Message, ex.StackTrace);
+                _logger.LogWarning(ex, "通道{ChannelName}断开连接失败", this.ChannelName());
                 _tcpClient = null;
                 tcs.SetException(ex);
             }
@@ -376,7 +376,7 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
             }
             catch (Exception e)
             {
-                _logger.LogWarning("通道={ChannelName} 释放异常:{exception}", channelName, e.Message);
+                _logger.LogWarning(e, "通道={ChannelName} 释放异常", channelName);
             }
             finally
             {

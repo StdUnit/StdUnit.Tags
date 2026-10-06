@@ -248,7 +248,7 @@ public abstract class ComChannelBase<T> : ITagChannel
         catch (Exception ex) when (!ct.IsCancellationRequested && ex is not OperationCanceledException)
         {
             // 只有非关闭引起的异常才尝试重连
-            this._logger.LogError("通道({channel})读取失败：{ex}", this.ChannelName(), ex.Message);
+            this._logger.LogError(ex, "通道({channel})读取失败", this.ChannelName());
             await this.DisconnectAsync(CancellationToken.None);
         }
         catch
