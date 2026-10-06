@@ -18,15 +18,26 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
     protected SimpleFilesDirectTagBase(TagDescriptor descriptor, SimpleFilesTagChannel? thisChannel, TagContainer container)
         : base(descriptor, thisChannel, container)
     {
+        // 旧 key 自 1.0 起不再支持，但也不静默忽略：升级后文件不再自动创建却不报错，会变成难以定位的运行期怪象。
+        if (descriptor.Extras.ContainsKey(LegacyAutoCreateFileAttrName))
+        {
+            throw new TagsProjectConfigurationException(
+                $"SimpleFiles 测点使用了已移除的 XML 属性 {LegacyAutoCreateFileAttrName}，请改为 {AutoCreateFileAttrName}",
+                $"Tag({descriptor.TagName})");
+        }
     }
 
     private bool? _autoCreateFile;
 
     /// <summary>
-    /// XML 属性 key：是否自动创建文件。<br/>
-    /// 新 key 为 camelCase（<c>autoCreateFile</c>）；旧 key <c>AutoCreateFile</c> 暂时兼容，待合适时机移除。
+    /// XML 属性 key：是否自动创建文件（camelCase）。
     /// </summary>
     private const string AutoCreateFileAttrName = "autoCreateFile";
+
+    /// <summary>
+    /// 旧 XML 属性 key（已移除，仅用于给出迁移提示）。
+    /// </summary>
+    private const string LegacyAutoCreateFileAttrName = "AutoCreateFile";
 
     /// <summary>
     /// 是否自动创建文件
@@ -40,9 +51,7 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
                 return this._autoCreateFile.Value;
             }
 
-            // 新 key 优先；旧 key AutoCreateFile 兼容（待合适时机移除）
-            if (!this.TagDescriptor.Extras.TryGetValue(AutoCreateFileAttrName, out var autoCreateFileValue)
-                && !this.TagDescriptor.Extras.TryGetValue("AutoCreateFile", out autoCreateFileValue))
+            if (!this.TagDescriptor.Extras.TryGetValue(AutoCreateFileAttrName, out var autoCreateFileValue))
             {
                 this._autoCreateFile = false;
                 return false;

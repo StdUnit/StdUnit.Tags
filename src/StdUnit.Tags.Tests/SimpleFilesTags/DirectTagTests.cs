@@ -740,44 +740,33 @@ public class DirectTagTests : IDisposable
     }
 
     [Fact]
-    public async Task AutoCreateFile_LegacyKey_StillWorks()
+    public void AutoCreateFile_LegacyKey_ThrowsWithMigrationHint()
     {
-        // 旧 key AutoCreateFile 兼容：新 key 缺失时仍生效
-        var fileName = "legacy_auto.txt";
-        var fullPath = Path.Combine(_tempDir, fileName);
-        Assert.False(File.Exists(fullPath));
-
-        var descriptor = MakeDescriptor("t", fileName, BuiltinTagKinds.INT32);
+        // 旧 key AutoCreateFile 自 1.0 起已移除：报错而不是静默忽略（否则文件不再自动创建却无人察觉）
+        var descriptor = MakeDescriptor("t", "legacy_auto.txt", BuiltinTagKinds.INT32);
         descriptor.Extras = new Dictionary<string, XAttribute>
         {
             ["AutoCreateFile"] = new XAttribute("AutoCreateFile", "true")
         };
-        var tag = CreateTag(descriptor);
 
-        await tag.ReadAsync(CancellationToken.None);
-
-        Assert.True(File.Exists(fullPath));
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => CreateTag(descriptor));
+        Assert.Contains("AutoCreateFile", ex.Message);
+        Assert.Contains("autoCreateFile", ex.Message);
+        Assert.Equal("Tag(t)", ex.Location);
     }
 
     [Fact]
-    public async Task AutoCreateFile_NewKeyTakesPriority_OverLegacyKey()
+    public void AutoCreateFile_LegacyKeyAlongsideNewKey_Throws()
     {
-        // 新 key autoCreateFile 优先：同时配置时以新 key 为准（true），忽略旧 key（false）
-        var fileName = "prio_auto.txt";
-        var fullPath = Path.Combine(_tempDir, fileName);
-        Assert.False(File.Exists(fullPath));
-
-        var descriptor = MakeDescriptor("t", fileName, BuiltinTagKinds.INT32);
+        // 不再有"新 key 优先"的兼容：只要出现旧 key 就报错
+        var descriptor = MakeDescriptor("t", "both_auto.txt", BuiltinTagKinds.INT32);
         descriptor.Extras = new Dictionary<string, XAttribute>
         {
             ["AutoCreateFile"] = new XAttribute("AutoCreateFile", "false"),
             ["autoCreateFile"] = new XAttribute("autoCreateFile", "true"),
         };
-        var tag = CreateTag(descriptor);
 
-        await tag.ReadAsync(CancellationToken.None);
-
-        Assert.True(File.Exists(fullPath));
+        Assert.Throws<TagsProjectConfigurationException>(() => CreateTag(descriptor));
     }
 
     #endregion

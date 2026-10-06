@@ -64,6 +64,10 @@ v1.0 之前只专注于正确性和可靠性，我不推荐外部人员使用—
   - 注：入口识别（`ScanEntries`）遇到入口即停止下探 ⇒ **只有最外层入口才是入口**，嵌套 `isEntry="true"` 不生效（该子树仍由外层入口轮询）；错误配置由默认启用的 `NestedEntryValidator` 拒绝。
 - [x] 文档完善和更新：`docs/` 放框架性内容，详细使用说明放独立文档库。本次补齐 3 篇**概念层**框架文档（刻意不写 API 清单/字段语法——那些属于教程库）：`docs/核心模型.md`（三大概念 + 串行轮询循环 + "用确定性换性能"的取舍与"入口即并发粒度"的结论 + 失败语义）、`docs/外部意图.md`（为什么需要意图 + 环路等待死锁）、`docs/扩展点.md`（分层与依赖方向 + 公开面原则 + 驱动接入形状 + 加载期校验理念），与既有的 `docs/异常处理.md` 交叉引用；README 的"文档"一节列出全部 4 篇。
   - 顺手修正 3 处过期 XML 文档（异常族重构后的残留）：`TagsProjectServiceBuilder.EnableCrossReferenceValidation()` / `AddValidation<T>()` 与 `ITagsProjectValidator`，把"抛 `TagsProjectSchemaException`"改为"抛聚合的 `TagsProjectValidationException`"（`TagsProjectSchemaException` 现在只是它的派生类型、仅用于 XSD 校验）。
+- [x] 1.0 前的兼容残留逐条拍板（不让"临时兼容"混进 1.0）：
+  - [x] SimpleFiles 旧 XML 属性 `AutoCreateFile` **移除**：`SimpleFilesDirectTagBase` 构造函数里显式拒绝（`TagsProjectConfigurationException`，`Location=Tag(名称)`，消息给出改用 `autoCreateFile` 的提示），不再有"新 key 优先"的回退。**移除 ≠ 静默忽略**：升级后文件不再自动创建却不报错，会变成极难定位的运行期怪象，所以选了加载期快速失败。新增 2 个测试（只写旧 key 报错、新旧 key 同时出现也报错），替换原 2 个兼容用例。
+  - ~~移除 `ITagsProject.WriteIntent(...)` 的 `[Obsolete]` 2 参重载~~ **保留**：现场代码在用（本仓库零调用，但库外有真实调用方）。
+  - ~~移除 ComScanner 旧元素名 `<BaundRate>` 的兼容解析~~ **保留**：同上，现场 XML 在用；XSD 已把该写法标为非法，新配置写 `<BaudRate>`。
 - ~~OpcUa和ModbusTcp单通道多入口并发支持~~ **已废弃（不做）**。原说明：当前S7已经做了单通道多入口的串行化，不过OpcUa和ModbusTcp目前只支持“单通道单入口”模型。这可能是一个值得改进的方向，但优先级不是很高：第一，我认为在工业交互的场景下，“单通道单入口”串行轮询机制更合理；其次，对于单设备多入口场景，可以手动建立指向单一设备的多个通道来解决——哪怕是`C#`官方类库，也没有强迫`TcpClient`是线程安全的；第三，多入口并行在很多场景下，对于没有思索过具体细节的新手用户，会带来非常多的困扰。简单的说，我更推崇**单入口多通道**模式。如果将来真要做单通道支持入口并行化，可以参考 ComScanner/S7 设计横展。
   - 废弃补充理由：**这个用法现在会被默认校验器直接拒绝**——`EntryChannelExclusivityValidator`（`UseDefaults = true` 时默认开启）不允许同一通道被多个入口共用，所以“OpcUa/ModbusTcp 不支持单通道多入口”不是潜在缺陷，而是有明确报错的既定约束。真要做单通道多入口并行，必须先让该约束变成可选（那等于放弃“一个通道实例只属于一个入口”的设计，见 `AGENTS.md` 约束 3），代价远大于收益。
 
