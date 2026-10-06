@@ -79,7 +79,7 @@ public class ScriptBasedComChannel<T> : ComChannelBase<T>
             }
             catch (CompilationErrorException ex)
             {
-                this._logger.LogError("脚本编译错误：{exMsg}, {strace}", ex.Message, ex.StackTrace);
+                this._logger.LogError(ex, "脚本编译错误");
                 throw;
             }
         }

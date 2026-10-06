@@ -119,7 +119,7 @@ public class TagChannelDescriptorTests
             Driver = "ModbusTcp",
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => descriptor.ToSimpleFilesTagChannelDescriptor());
+        var ex = Assert.Throws<TagsProjectConfigurationException>(() => descriptor.ToSimpleFilesTagChannelDescriptor());
         Assert.Contains(SimpleFilesNames.DriverName, ex.Message);
     }
 

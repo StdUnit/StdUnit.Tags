@@ -51,7 +51,7 @@ public class ChannelCrossReferenceValidatorTests
             """);
 
         var validator = new ChannelCrossReferenceValidator();
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => validator.Validate(xml));
+        var ex = Assert.Throws<TagsProjectValidationException>(() => validator.Validate(xml));
 
         Assert.Contains("S7-2", ex.Message);
         Assert.Contains("Tag(bit)", ex.Message);
@@ -104,7 +104,7 @@ public class ChannelCrossReferenceValidatorTests
             </Project>
             """);
 
-        Assert.Throws<TagsProjectSchemaException>(() => factory.Create(string.Empty, xml));
+        Assert.Throws<TagsProjectValidationException>(() => factory.Create(string.Empty, xml));
     }
 
     /// <summary>

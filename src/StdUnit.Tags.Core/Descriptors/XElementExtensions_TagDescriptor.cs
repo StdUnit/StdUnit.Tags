@@ -25,15 +25,15 @@ public static class XElementExtensions_TagDescriptor
     /// </summary>
     /// <param name="e"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="TagsProjectXmlException">XML 属性值不合法（name 缺失、endian/access 未知、tagSize 非整数）</exception>
     public static TagDescriptor ToTagDescriptor(this XElement e)
     {
         var tagName = e.GetTagUnionName();
-        var address = e.GetTagUnionAddress(tagName);
-        var tagKind = e.GetTagUnionTagKind(tagName);
-        var tagEndian = e.GetTagUnionEndian(tagName);
+        var address = e.GetTagUnionAddress();
+        var tagKind = e.GetTagUnionTagKind();
+        var tagEndian = e.GetTagUnionEndian();
         var tagChannelName = e.GetTagUnionChannelName();
-        var tagNote = e.GetTagUnionNote(tagName);
+        var tagNote = e.GetTagUnionNote();
 
         var tagdescriptor = new TagDescriptor()
         {
@@ -48,14 +48,16 @@ public static class XElementExtensions_TagDescriptor
                 .ToDictionary(attr => attr.Name.LocalName, attr => attr)
         };
 
-        tagdescriptor.AccessMode = e.GetTagUnionAccess(tagName);
+        tagdescriptor.AccessMode = e.GetTagUnionAccess();
 
         var tagSize = (string?)e.Attribute("tagSize");
         if (!string.IsNullOrEmpty(tagSize))
         {
             if (!int.TryParse(tagSize, out var size))
             {
-                throw new Exception($"Tag(Name={tagName}) 配置了非法大小={tagSize}");
+                throw new TagsProjectXmlException(
+                    $"配置了非法的测点大小 tagSize='{tagSize}'，它必须是一个整数",
+                    e.GetLocationPath());
             }
             tagdescriptor.TagSize = size;
         }

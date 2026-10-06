@@ -79,6 +79,15 @@ public class S7TagCbntBuilder : TagCbntBuilderBase
     private void NormalizeTagAddress()
     {
         var groupAddr = S7AddressParser.Parse(this.TagCbnt.StartAddress);
+        if (groupAddr.Area == AreaKinds.None)
+        {
+            // 相对地址（$$）的含义是"沿用所属组合的区域与 DB 块"，组合自身没有可沿用的上层，
+            // 于是所有子测点的 Area 都会被回填成 None，每轮轮询都在通道层抛"不支持的地址区域类型"。
+            // 这是纯配置错误，在加载期就报出来，不要拖到运行期。
+            throw new TagsProjectAddressException(
+                $"组合 '{this.Name}' 的起始地址 '{this.TagCbnt.StartAddress}' 是相对地址（$$ 表示沿用所属组合的区域与 DB 块），组合自身必须写绝对地址（DB<block>.<start>[.<bit>] 或 MB.<start>[.<bit>]）",
+                $"TagCbnt({this.Name})");
+        }
         foreach (var kvp in this.TagCbnt.Children)
         {
             var tag = kvp.Value;
@@ -88,7 +97,9 @@ public class S7TagCbntBuilder : TagCbntBuilderBase
                 if (addr.Area != groupAddr.Area || addr.BlockNumber != groupAddr.BlockNumber)
                 {
                     var tagname = tag.TagName();
-                    throw new InvalidOperationException($"Tag & Cbnt start address doesn't match(Tag={tagname}, Grp={this.Name}).");
+                    throw new TagsProjectAddressException(
+                        $"测点 '{tagname}' 的地址 '{tag.RawAddress()}' 与所属组合 '{this.Name}' 的起始地址 '{this.TagCbnt.StartAddress}' 不在同一区域/DB 块；若要沿用组合的区域与 DB 块，请写成相对地址（如 '$${addr.StartAddress}'）",
+                        $"TagCbnt({this.Name})/Tag({tagname})");
                 }
             }
             else

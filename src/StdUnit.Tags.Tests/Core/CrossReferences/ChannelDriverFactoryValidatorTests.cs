@@ -56,7 +56,7 @@ public class ChannelDriverFactoryValidatorTests
             </Project>
             """);
 
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => validator.Validate(xml));
+        var ex = Assert.Throws<TagsProjectValidationException>(() => validator.Validate(xml));
         Assert.Contains("NoSuchDriver", ex.Message);
         Assert.Contains("c1", ex.Message);
         Assert.Contains("S7", ex.Message); // 已注册驱动列表里有 S7
@@ -85,7 +85,7 @@ public class ChannelDriverFactoryValidatorTests
             </Project>
             """);
 
-        Assert.Throws<TagsProjectSchemaException>(() => factory.Create(string.Empty, xml));
+        Assert.Throws<TagsProjectValidationException>(() => factory.Create(string.Empty, xml));
     }
 
     /// <summary>端到端：合法 driver 正常构建（含 channel 引用校验器一起启用）。</summary>

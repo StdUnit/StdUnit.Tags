@@ -82,7 +82,7 @@ public class TagUnionExtensions_IsXyz_AsXyz_Tests
     {
         var u = new TagUnion.TagCbnt(CreateFakeCbnt());
 
-        var ex = Assert.Throws<Exception>(() => u.AsTag());
+        var ex = Assert.Throws<InvalidCastException>(() => u.AsTag());
         Assert.Contains("TagCbnt", ex.Message);
         Assert.Contains("ITag", ex.Message);
     }
@@ -92,7 +92,7 @@ public class TagUnionExtensions_IsXyz_AsXyz_Tests
     {
         var u = new TagUnion.TagGrp(CreateFakeGrp());
 
-        var ex = Assert.Throws<Exception>(() => u.AsTag());
+        var ex = Assert.Throws<InvalidCastException>(() => u.AsTag());
         Assert.Contains("TagGrp", ex.Message);
         Assert.Contains("ITag", ex.Message);
     }
@@ -113,7 +113,7 @@ public class TagUnionExtensions_IsXyz_AsXyz_Tests
     {
         var u = new TagUnion.TagUnit(CreateFakeTag());
 
-        var ex = Assert.Throws<Exception>(() => u.AsTagCbnt());
+        var ex = Assert.Throws<InvalidCastException>(() => u.AsTagCbnt());
         Assert.Contains("ITag", ex.Message);
         Assert.Contains("ITagCbnt", ex.Message);
     }
@@ -123,7 +123,7 @@ public class TagUnionExtensions_IsXyz_AsXyz_Tests
     {
         var u = new TagUnion.TagGrp(CreateFakeGrp());
 
-        var ex = Assert.Throws<Exception>(() => u.AsTagCbnt());
+        var ex = Assert.Throws<InvalidCastException>(() => u.AsTagCbnt());
         Assert.Contains("TagGrp", ex.Message);
         Assert.Contains("ITagCbnt", ex.Message);
     }
@@ -144,7 +144,7 @@ public class TagUnionExtensions_IsXyz_AsXyz_Tests
     {
         var u = new TagUnion.TagUnit(CreateFakeTag());
 
-        var ex = Assert.Throws<Exception>(() => u.AsTagGrp());
+        var ex = Assert.Throws<InvalidCastException>(() => u.AsTagGrp());
         Assert.Contains("ITag", ex.Message);
         Assert.Contains("ITagGrp", ex.Message);
     }
@@ -154,7 +154,7 @@ public class TagUnionExtensions_IsXyz_AsXyz_Tests
     {
         var u = new TagUnion.TagCbnt(CreateFakeCbnt());
 
-        var ex = Assert.Throws<Exception>(() => u.AsTagGrp());
+        var ex = Assert.Throws<InvalidCastException>(() => u.AsTagGrp());
         Assert.Contains("TagCbnt", ex.Message);
         Assert.Contains("ITagGrp", ex.Message);
     }

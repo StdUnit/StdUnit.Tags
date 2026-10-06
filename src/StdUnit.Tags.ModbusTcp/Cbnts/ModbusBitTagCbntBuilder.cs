@@ -55,7 +55,9 @@ public class ModbusBitTagCbntBuilder : TagCbntBuilderBase
         {
             if (!byte.TryParse(slaveAttr.Value, out var slave))
             {
-                throw new ArgumentException($"无效的Modbus从站地址:{slaveAttr.Value}");
+                throw new TagsProjectXmlException(
+                    $"无效的Modbus从站地址：{slaveAttr.Value}（必须是 0~255 的整数）",
+                    $"TagCbnt({descriptor.Name})");
             }
             this.Slave = slave;
         }

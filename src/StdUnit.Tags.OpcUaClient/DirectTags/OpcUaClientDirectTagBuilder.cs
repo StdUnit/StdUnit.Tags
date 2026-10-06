@@ -18,7 +18,9 @@ public class OpcUaClientDirectTagBuilder : TagBuilderBase
         }
         else if (this.Channel is not OpcUaClientTagChannel)
         {
-            throw new Exception($"测点({this.Name})配置了通道，但不是{nameof(OpcUaClientTagChannel)}");
+            throw new TagsProjectConfigurationException(
+                $"测点 '{this.Name}' 配置了通道，但不是 {nameof(OpcUaClientTagChannel)}",
+                $"Tag({this.Name})");
         }
         else
         {

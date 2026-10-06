@@ -39,29 +39,13 @@ public class ChannelCrossReferenceValidator : ITagsProjectValidator
             }
             if (!channelNames.Contains(channel))
             {
-                errors.Add($"引用了未声明的通道 '{channel}'（{DescribeLocation(element)}）");
+                errors.Add($"引用了未声明的通道 '{channel}'（{element.GetLocationPath()}）");
             }
         }
 
         if (errors.Count > 0)
         {
-            throw new TagsProjectSchemaException(errors);
+            throw new TagsProjectValidationException(errors);
         }
-    }
-
-    /// <summary>
-    /// 生成测点元素的定位描述（类型 + name 属性 + 父级路径）。
-    /// </summary>
-    private static string DescribeLocation(XElement element)
-    {
-        var parts = new List<string>();
-        for (var cur = element; cur is not null && cur.Name != "Project"; cur = cur.Parent)
-        {
-            if (cur.Name == "TagGrp" || cur.Name == "TagCbnt" || cur.Name == "Tag")
-            {
-                parts.Insert(0, $"{cur.Name.LocalName}({cur.Attribute("name")?.Value ?? "?"})");
-            }
-        }
-        return string.Join(" → ", parts);
     }
 }

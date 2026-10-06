@@ -18,15 +18,26 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
     protected SimpleFilesDirectTagBase(TagDescriptor descriptor, SimpleFilesTagChannel? thisChannel, TagContainer container)
         : base(descriptor, thisChannel, container)
     {
+        // 旧 key 自 1.0 起不再支持，但也不静默忽略：升级后文件不再自动创建却不报错，会变成难以定位的运行期怪象。
+        if (descriptor.Extras.ContainsKey(LegacyAutoCreateFileAttrName))
+        {
+            throw new TagsProjectConfigurationException(
+                $"SimpleFiles 测点使用了已移除的 XML 属性 {LegacyAutoCreateFileAttrName}，请改为 {AutoCreateFileAttrName}",
+                $"Tag({descriptor.TagName})");
+        }
     }
 
     private bool? _autoCreateFile;
 
     /// <summary>
-    /// XML 属性 key：是否自动创建文件。<br/>
-    /// 新 key 为 camelCase（<c>autoCreateFile</c>）；旧 key <c>AutoCreateFile</c> 暂时兼容，待合适时机移除。
+    /// XML 属性 key：是否自动创建文件（camelCase）。
     /// </summary>
     private const string AutoCreateFileAttrName = "autoCreateFile";
+
+    /// <summary>
+    /// 旧 XML 属性 key（已移除，仅用于给出迁移提示）。
+    /// </summary>
+    private const string LegacyAutoCreateFileAttrName = "AutoCreateFile";
 
     /// <summary>
     /// 是否自动创建文件
@@ -40,9 +51,7 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
                 return this._autoCreateFile.Value;
             }
 
-            // 新 key 优先；旧 key AutoCreateFile 兼容（待合适时机移除）
-            if (!this.TagDescriptor.Extras.TryGetValue(AutoCreateFileAttrName, out var autoCreateFileValue)
-                && !this.TagDescriptor.Extras.TryGetValue("AutoCreateFile", out autoCreateFileValue))
+            if (!this.TagDescriptor.Extras.TryGetValue(AutoCreateFileAttrName, out var autoCreateFileValue))
             {
                 this._autoCreateFile = false;
                 return false;
@@ -50,7 +59,9 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
 
             if (!bool.TryParse(autoCreateFileValue.Value, out var autoCreateFile))
             {
-                throw new Exception($"测点({this.TagName()})配置了{AutoCreateFileAttrName}，但无法解析为布尔值：{autoCreateFileValue}");
+                throw new TagsProjectXmlException(
+                    $"测点配置了 {AutoCreateFileAttrName}，但无法解析为布尔值：{autoCreateFileValue.Value}",
+                    $"Tag({this.TagName()})");
             }
 
             this._autoCreateFile = autoCreateFile;
@@ -71,7 +82,16 @@ public abstract class SimpleFilesDirectTagBase<T> : Tag<T, SimpleFilesTagChannel
             return;
         }
         var text = await Compat.FileAsyncCompat.ReadAllTextAsync(path, ct);
-        var value = this.ParseValue(text);
+        T? value;
+        try
+        {
+            value = this.ParseValue(text);
+        }
+        catch (InvalidDataException ex)
+        {
+            // ParseValue 看不到文件路径（子类只拿到文本），这里补上测点与文件，否则系统里几十个文件时无法定位是哪一个
+            throw new InvalidDataException($"Tag({this.TagName()}) 解析文件内容失败：文件={path}；{ex.Message}", ex);
+        }
         this._value = value;
         this.Timestamp = DateTime.UtcNow;
         this.NotifyTagRead(value);

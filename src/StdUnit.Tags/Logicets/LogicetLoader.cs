@@ -61,7 +61,7 @@ internal class LogicetLoader : ILogicetsLoader
             }
             catch (Exception ex)
             {
-                this._logger.LogError("加载Logicet失败：dll={dll}, ex={ex}, strace={strace}", dll, ex.Message, ex.StackTrace);
+                this._logger.LogError(ex, "加载Logicet失败：dll={dll}", dll);
                 if (loader is not null)
                 {
                     try
@@ -130,7 +130,7 @@ internal class LogicetLoader : ILogicetsLoader
                 var (logicet, ex) = LogicetProviderUtils.CreateLogicet(sp, t, channels, tags);
                 if (logicet is null)
                 {
-                    _logger.LogError("构建Logicet错误：t={t}, ex={ex}, strace={strace}", t.Name, ex?.Message, ex?.StackTrace);
+                    _logger.LogError(ex, "构建Logicet错误：t={t}", t.Name);
                     return null;
                 }
                 return logicet;

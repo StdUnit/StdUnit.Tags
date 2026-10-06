@@ -16,7 +16,7 @@ namespace StdUnit.Tags;
 public interface ITagsProjectValidator
 {
     /// <summary>
-    /// 校验项目根元素。不通过时抛出异常（如 <see cref="TagsProjectSchemaException"/>）。
+    /// 校验项目根元素。不通过时抛出异常（聚合的 <see cref="TagsProjectValidationException"/>）。
     /// </summary>
     /// <param name="root">项目根元素（<c>&lt;Project&gt;</c>）</param>
     void Validate(XElement root);

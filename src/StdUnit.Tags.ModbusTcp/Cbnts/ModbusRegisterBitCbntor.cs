@@ -19,7 +19,9 @@ internal class ModbusRegisterBitCbntor : ModbusRegisterCbntorBase
     {
         if (nthBit > 15)
         {
-            throw new ArgumentException($"寄存器位地址超出范围(0~15)，当前 nthBit={nthBit}");
+            throw new TagsProjectAddressException(
+                $"寄存器位地址超出范围(0~15)，当前地址={tagDescriptor.RawAddress}，nthBit={nthBit}",
+                $"Tag({tagDescriptor.TagName})");
         }
         this.NthBit = nthBit;
     }
@@ -44,7 +46,7 @@ internal class ModbusRegisterBitCbntor : ModbusRegisterCbntorBase
         {
             if (value is not bool b)
             {
-                throw new Exception($"不应该为Bit类型的测点赋值一个类型为{value?.GetType().Name}值");
+                throw new ArgumentException($"不应该为Bit类型的测点赋值一个类型为{value?.GetType().Name}值", nameof(value));
             }
             this.EnsureWritable();
             var reg = this.RegCache.Span[this.RegOffset];

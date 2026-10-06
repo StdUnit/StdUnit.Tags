@@ -24,7 +24,7 @@ public class HjzkTagFactory : TagCbntorFactoryBase
     /// </summary>
     /// <param name="tagDescriptor"></param>
     /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="TagsProjectAddressException">地址不是合法的 Hjzk DI 引脚地址</exception>
     public virtual DITagCbntor CreateDITag(TagDescriptor tagDescriptor)
     {
         // normalize the tagsize
@@ -34,7 +34,9 @@ public class HjzkTagFactory : TagCbntorFactoryBase
         }
         var tagAddr = PinAddrUtils.TryParseDI(tagDescriptor.RawAddress, out var addr) ?
             addr :
-            throw new ArgumentException($"Hjzk DI 地址非法({tagDescriptor.RawAddress})");
+            throw new TagsProjectAddressException(
+                $"Hjzk DI 地址非法：{tagDescriptor.RawAddress}（期望形如 DI1/DI2 ... 的引脚地址）",
+                $"Tag({tagDescriptor.TagName})");
         tagDescriptor.NormalizedAddress = addr.ToModbusTcpAddr(this._cbntBuilder.Slave);
 
         var startAddr = DIPinAddr.DI1;
@@ -48,7 +50,7 @@ public class HjzkTagFactory : TagCbntorFactoryBase
     /// </summary>
     /// <param name="tagDescriptor"></param>
     /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="TagsProjectAddressException">地址不是合法的 Hjzk DO 引脚地址</exception>
     public virtual DOTagCbntor CreateDOTag(TagDescriptor tagDescriptor)
     {
         // normalize the tagsize
@@ -58,7 +60,9 @@ public class HjzkTagFactory : TagCbntorFactoryBase
         }
         var tagAddr = PinAddrUtils.TryParseDO(tagDescriptor.RawAddress, out var addr) ?
             addr :
-            throw new ArgumentException($"Hjzk DO 地址非法({tagDescriptor.RawAddress})");
+            throw new TagsProjectAddressException(
+                $"Hjzk DO 地址非法：{tagDescriptor.RawAddress}（期望形如 DO1/DO2 ... 的引脚地址）",
+                $"Tag({tagDescriptor.TagName})");
         tagDescriptor.NormalizedAddress = addr.ToModbusTcpAddr(this._cbntBuilder.Slave);
 
         var startAddr = DOPinAddr.DO1;
@@ -78,7 +82,9 @@ public class HjzkTagFactory : TagCbntorFactoryBase
         {
             BuiltinTagKinds.DI => this.CreateDITag(descriptor) as ITagCbntor,
             BuiltinTagKinds.DO => this.CreateDOTag(descriptor) as ITagCbntor,
-            _ => throw new Exception($"未预料到的测点种类={descriptor.TagKind}")
+            _ => throw new TagsProjectConfigurationException(
+                $"Hjzk 驱动未预料到的测点种类={descriptor.TagKind}（只支持 DI/DO）",
+                $"Tag({descriptor.TagName})")
         };
         return tag;
     }

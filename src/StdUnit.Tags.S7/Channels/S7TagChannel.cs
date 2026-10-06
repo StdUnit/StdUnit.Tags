@@ -69,7 +69,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
                     }
                     catch (Exception ex)
                     {
-                        this._logger.LogWarning("通道{ChannelName}断开连接失败：{message}\r\n{stackTrace}", this.ChannelName(), ex.Message, ex.StackTrace);
+                        this._logger.LogWarning(ex, "通道{ChannelName}断开连接失败", this.ChannelName());
                         this.Client = null;
                         tcs.SetException(ex);
                     }
@@ -116,7 +116,8 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
                 var result = await this.CreateClientAndConnectAsync(ct);
                 if (result.IsError)
                 {
-                    throw new Exception(result.ErrorValue.ToString());
+                    var err = result.ErrorValue;
+                    throw new InvalidOperationException($"通道({channelName}) 连接PLC失败：{this.PlcItem.IpAddr} Rack={this.PlcItem.Rack} Slot={this.PlcItem.Slot}；{err.Text}（{err.Error}）");
                 }
                 this.Client = result.ResultValue;
             },
@@ -162,7 +163,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
     /// <summary>
     /// 读取
     /// </summary>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidOperationException">客户端未连接，或 PLC 返回错误码</exception>
     public virtual async Task<byte[]> ReadAsync(string address, int length, CancellationToken ct)
     {
         var addr = S7AddressParser.Parse(address);
@@ -172,12 +173,12 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
             await this.ExecuteOneByOneAsync(
                 ct =>
                 {
-                    var client = this.Client ?? throw new InvalidOperationException("S7通道客户端为null");
+                    var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法读取：DB{addr.BlockNumber}.{addr.StartAddress}");
                     var code = client.DBRead(addr.BlockNumber, addr.StartAddress, length, buffer);
                     if (code != 0)
                     {
                         var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new Exception(err.Text);
+                        throw new InvalidOperationException($"通道({this.ChannelName()}) 读取DB失败：DB{addr.BlockNumber}.{addr.StartAddress}，长度={length}；{err.Text}（{err.Error}）");
                     }
                     return Task.CompletedTask;
                 },
@@ -189,12 +190,12 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
             await this.ExecuteOneByOneAsync(
                 ct =>
                 {
-                    var client = this.Client ?? throw new InvalidOperationException("S7通道客户端为null");
+                    var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法读取：MB.{addr.StartAddress}");
                     var code = client.MBRead(addr.StartAddress, length, buffer);
                     if (code != 0)
                     {
                         var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new Exception(err.Text);
+                        throw new InvalidOperationException($"通道({this.ChannelName()}) 读取MB失败：MB.{addr.StartAddress}，长度={length}；{err.Text}（{err.Error}）");
                     }
                     return Task.CompletedTask;
                 },
@@ -211,7 +212,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
     /// <summary>
     /// 写入底层
     /// </summary>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidOperationException">客户端未连接，或 PLC 返回错误码</exception>
     public virtual async Task WriteAsync(string address, byte[] buffer, CancellationToken ct)
     {
         var addr = S7AddressParser.Parse(address);
@@ -220,12 +221,12 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
             await this.ExecuteOneByOneAsync(
                 ct =>
                 {
-                    var client = this.Client ?? throw new InvalidOperationException("S7通道客户端为null");
+                    var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法写入：DB{addr.BlockNumber}.{addr.StartAddress}");
                     var code = client.DBWrite(addr.BlockNumber, addr.StartAddress, buffer.Length, buffer);
                     if (code != 0)
                     {
                         var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new Exception(err.Text);
+                        throw new InvalidOperationException($"通道({this.ChannelName()}) 写入DB失败：DB{addr.BlockNumber}.{addr.StartAddress}，长度={buffer.Length}；{err.Text}（{err.Error}）");
                     }
                     return Task.CompletedTask;
                 },
@@ -237,12 +238,12 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
             await this.ExecuteOneByOneAsync(
                 ct =>
                 {
-                    var client = this.Client ?? throw new InvalidOperationException("S7通道客户端为null");
+                    var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法写入：MB.{addr.StartAddress}");
                     var code = client.MBWrite(addr.StartAddress, buffer.Length, buffer);
                     if (code != 0)
                     {
                         var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new Exception(err.Text);
+                        throw new InvalidOperationException($"通道({this.ChannelName()}) 写入MB失败：MB.{addr.StartAddress}，长度={buffer.Length}；{err.Text}（{err.Error}）");
                     }
                     return Task.CompletedTask;
                 },

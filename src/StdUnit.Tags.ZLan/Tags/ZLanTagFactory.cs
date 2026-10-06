@@ -46,7 +46,9 @@ public class ZLanTagFactory : TagCbntorFactoryBase
         {
             BuiltinTagKinds.DI => this.CreateDITag(descriptor) as ITagCbntor,
             BuiltinTagKinds.DO => this.CreateDOTag(descriptor) as ITagCbntor,
-            _ => throw new Exception($"未预料到的测点种类={descriptor.TagKind}")
+            _ => throw new TagsProjectConfigurationException(
+                $"ZLan 驱动未预料到的测点种类={descriptor.TagKind}（只支持 DI/DO）",
+                $"Tag({descriptor.TagName})")
         };
         return tag;
     }

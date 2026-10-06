@@ -39,7 +39,7 @@ public class S7BitTagCbntor : S7TagCbntorBase
         {
             if (value is not bool b)
             {
-                throw new Exception($"不应该为Bit类型的测点赋值一个类型为{value?.GetType().Name}值");
+                throw new ArgumentException($"不应该为Bit类型的测点赋值一个类型为{value?.GetType().Name}值", nameof(value));
             }
             var oldFlags = this.Cache.Span[this.CacheOffset];
             var newFlags = b

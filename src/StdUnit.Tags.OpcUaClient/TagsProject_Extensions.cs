@@ -1,6 +1,8 @@
 using StdUnit.Tags.OpcUaClient.Cbnts;
 using StdUnit.Tags.OpcUaClient.DirectTags;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Opc.Ua;
 
 namespace StdUnit.Tags.OpcUaClient;
 
@@ -13,14 +15,20 @@ public static class TagsProject_Extensions
     /// 添加 OpcUaClient 支持。是 <see cref="AddOpcUaClientChannel"/>、<see cref="AddOpcUaClientTagCbntBuilder"/> 与 <see cref="AddOpcUaClientDirectTagBuilder"/> 的组合
     /// </summary>
     /// <param name="builder"></param>
+    /// <param name="checkIsFailed">
+    /// 判定"某节点的读取是否算失败"的委托；不传则用内置口径 <see cref="OpcUaValueQuality.IsFailed"/>
+    /// （状态码 <c>Bad</c> 才算失败，<c>Uncertain</c> 照原样采集）。
+    /// </param>
     /// <returns></returns>
-    public static TagsProjectServiceBuilder AddOpcUaClientSupport(this TagsProjectServiceBuilder builder)
+    public static TagsProjectServiceBuilder AddOpcUaClientSupport(
+        this TagsProjectServiceBuilder builder,
+        Func<ServiceResult?, DataValue?, bool>? checkIsFailed = null)
     {
 
         builder.Services.AddSingleton<ITagsProjectSchemaProvider, OpcUaClientSchemaProvider>();
 
         builder
-            .AddOpcUaClientChannel()
+            .AddOpcUaClientChannel(checkIsFailed)
             .AddOpcUaClientTagCbntBuilder()
             .AddOpcUaClientDirectTagBuilder();
         return builder;
@@ -32,10 +40,24 @@ public static class TagsProject_Extensions
     /// 作用是在通道的驱动为 <see cref="OpcUaClientNames.DriverName"/> 时，会尝试构建一个通道。
     /// </summary>
     /// <param name="builder"></param>
+    /// <param name="checkIsFailed">
+    /// 判定"某节点的读取是否算失败"的委托；不传则用内置口径 <see cref="OpcUaValueQuality.IsFailed"/>
+    /// （状态码 <c>Bad</c> 才算失败，<c>Uncertain</c> 照原样采集）。<br/>
+    /// 传 <c>(_, _) =&gt; false</c> 表示"任何状态都照原样采集"（读取永不因质量失败，但值可能是 <c>null</c>）；
+    /// 传 <c>(err, value) =&gt; ...</c> 可把 <c>Uncertain</c> 也当作失败。
+    /// </param>
     /// <returns></returns>
-    public static TagsProjectServiceBuilder AddOpcUaClientChannel(this TagsProjectServiceBuilder builder)
+    public static TagsProjectServiceBuilder AddOpcUaClientChannel(
+        this TagsProjectServiceBuilder builder,
+        Func<ServiceResult?, DataValue?, bool>? checkIsFailed = null)
     {
-        builder.Services.AddKeyedSingleton<ITagChannelFactory, OpcUaClientTagChannelFactory>(OpcUaClientNames.DriverName);
+        // 用显式工厂闭包而不是 AddKeyedSingleton<ITagChannelFactory, OpcUaClientTagChannelFactory>()：
+        // 委托是注册时给定的普通参数，不必（也不该）作为一个服务类型塞进容器。
+        builder.Services.AddKeyedSingleton<ITagChannelFactory>(
+            OpcUaClientNames.DriverName,
+            (sp, _) => new OpcUaClientTagChannelFactory(
+                sp.GetRequiredService<ILoggerFactory>(),
+                checkIsFailed));
         builder.ConfigChannelsFactory((sp, composite) =>
         {
             var factory = sp.GetRequiredKeyedService<ITagChannelFactory>(OpcUaClientNames.DriverName);

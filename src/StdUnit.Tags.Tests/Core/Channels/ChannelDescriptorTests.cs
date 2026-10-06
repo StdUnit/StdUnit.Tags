@@ -1,4 +1,4 @@
-﻿using StdUnit.Tags.ModbusTcp;
+using StdUnit.Tags.ModbusTcp;
 using StdUnit.Tags.OpcUaClient;
 using StdUnit.Tags.S7;
 using System;
@@ -98,7 +98,7 @@ public class ChannelDescriptorTests
 ";
         var element = XElement.Parse(xml);
         var descriptor0 = element.ToTagChannelDescriptor();
-        Assert.Throws<ArgumentException>(() => descriptor0.ToS7TagChannelDescriptor());
+        Assert.Throws<TagsProjectXmlException>(() => descriptor0.ToS7TagChannelDescriptor());
     }
 
     [Fact]
@@ -158,6 +158,11 @@ public class ChannelDescriptorTests
 		<UserName>user</UserName>
 		<Password>1</Password>
 	</ServerOpt>
+	<SecurityOpt>
+		<AutoAcceptUntrustedCertificates>true</AutoAcceptUntrustedCertificates>
+		<RejectSHA1SignedCertificates>false</RejectSHA1SignedCertificates>
+		<MinimumCertificateKeySize>1024</MinimumCertificateKeySize>
+	</SecurityOpt>
 </Channel>
 ";
         var element = XElement.Parse(xml);
@@ -171,6 +176,10 @@ public class ChannelDescriptorTests
         Assert.False(serverOpt.UsePassword);
         Assert.Equal("user", serverOpt.UserName);
         Assert.Equal("1", serverOpt.Password);
+        var securityOpt = descriptor1.OpcUaTagChannelOpt.SecurityOpt;
+        Assert.True(securityOpt.AutoAcceptUntrustedCertificates);
+        Assert.False(securityOpt.RejectSHA1SignedCertificates);
+        Assert.Equal((ushort)1024, securityOpt.MinimumCertificateKeySize);
 
 
         var element2 = descriptor1.ToXElement();

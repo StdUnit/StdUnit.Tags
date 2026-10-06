@@ -125,8 +125,8 @@ public static class ITagGrpExtensions
     /// </summary>
     /// <param name="tagGrp"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
-    public static ITagChannel SearchRequiredChannel(this ITagGrp tagGrp) => tagGrp.SearchChannel() ?? throw new Exception($"Channel is not configured : TagGrp({tagGrp.TagName()})");
+    /// <exception cref="InvalidOperationException">自身与祖先都没有配置通道</exception>
+    public static ITagChannel SearchRequiredChannel(this ITagGrp tagGrp) => tagGrp.SearchChannel() ?? throw new InvalidOperationException($"Channel is not configured : TagGrp({tagGrp.TagName()})");
 
     #endregion
 
@@ -241,4 +241,36 @@ public static class ITagGrpExtensions
     }
 
     #endregion
+
+    /// <summary>
+    /// 生成测点组的定位路径（<c>TagGrp(a)/TagGrp(b)</c>），用于加载期错误消息。<br/>
+    /// 分隔符与 <see cref="ITagGrp.Descendant"/> 的路径语法一致（都是 <c>/</c>），便于对照与复制。<br/>
+    /// 承载项目根的内部节点 <c>__main__</c> 会被省略，因此顶层组的路径就是它自己。
+    /// </summary>
+    /// <param name="tagGrp">起始组（含自身），可为 null</param>
+    internal static string GetLocationPath(this ITagGrp? tagGrp)
+    {
+        var parts = new List<string>();
+        for (var cur = tagGrp; cur is not null; cur = cur.Parent)
+        {
+            var name = cur.TagName();
+            if (cur.Parent is null && name == TagsProject.MainGroupName)
+            {
+                continue;
+            }
+            parts.Insert(0, $"TagGrp({name})");
+        }
+        return string.Join("/", parts);
+    }
+
+    /// <summary>
+    /// 生成"父路径 + 子节点"的定位描述，用于加载期错误消息。
+    /// </summary>
+    /// <param name="parent">父级测点组，可为 null</param>
+    /// <param name="childToken">子节点的展示形式，如 <c>Tag(bit)</c>、<c>TagGrp(g1)</c></param>
+    internal static string GetLocationPath(this ITagGrp? parent, string childToken)
+    {
+        var prefix = parent.GetLocationPath();
+        return prefix.Length == 0 ? childToken : $"{prefix}/{childToken}";
+    }
 }

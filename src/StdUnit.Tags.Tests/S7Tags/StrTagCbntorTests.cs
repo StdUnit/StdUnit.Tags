@@ -34,7 +34,7 @@ namespace StdUnit.Tags.Tests.S7Tags
                 TagKind = BuiltinTagKinds.STR,
             };
 
-            Assert.Throws<InvalidDataException>(() =>
+            Assert.Throws<TagsProjectXmlException>(() =>
             {
                 var cbnt = builder.AddTags([descriptor], channel).Build(channel);
                 var tag = cbnt.SelectTag("str1");

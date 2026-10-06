@@ -33,13 +33,30 @@ public class OpcUaClientTagChannel : ITagChannel
     /// <summary>
     /// c'tor
     /// </summary>
-    public OpcUaClientTagChannel(OpcUaClientTagChannelDescriptor descriptor, ILogger<OpcUaClientTagChannel> logger)
+    /// <param name="descriptor"></param>
+    /// <param name="logger"></param>
+    /// <param name="checkIsFailed">
+    /// 判定"某节点的读取是否算失败"的委托；不传则用内置口径 <see cref="OpcUaValueQuality.IsFailed"/>
+    /// （状态码 <c>Bad</c> 才算失败，<c>Uncertain</c> 照原样采集）。<br/>
+    /// 注册时可用 <c>AddOpcUaClientChannel(checkIsFailed: ...)</c> 替换它——例如"把 Uncertain 也算失败"，
+    /// 或"任何状态都照原样采集"（那样读取永不因质量失败，但 <c>Value</c> 可能是 <c>null</c>，需自行承担）。
+    /// </param>
+    public OpcUaClientTagChannel(
+        OpcUaClientTagChannelDescriptor descriptor,
+        ILogger<OpcUaClientTagChannel> logger,
+        Func<ServiceResult?, DataValue?, bool>? checkIsFailed = null)
     {
         _channelOpt = descriptor.OpcUaTagChannelOpt;
         Descriptor = descriptor;
         _logger = logger;
+        _checkIsFailed = checkIsFailed ?? OpcUaValueQuality.IsFailed;
         _appConfig = PrepareOpcUaAppConfig();
     }
+
+    /// <summary>
+    /// 判定"某节点的读取是否算失败"，默认 <see cref="OpcUaValueQuality.IsFailed"/>
+    /// </summary>
+    private readonly Func<ServiceResult?, DataValue?, bool> _checkIsFailed;
 
     /// <summary>
     /// 准备OpcUa的 <see cref="ApplicationConfiguration"/>
@@ -47,6 +64,7 @@ public class OpcUaClientTagChannel : ITagChannel
     /// <returns></returns>
     protected virtual ApplicationConfiguration PrepareOpcUaAppConfig()
     {
+        var securityOpt = _channelOpt.SecurityOpt ?? new OpcUaSecurityOpt();
         var config = new ApplicationConfiguration()
         {
             ApplicationName = "MyClient",
@@ -58,9 +76,9 @@ public class OpcUaClientTagChannel : ITagChannel
                 TrustedIssuerCertificates = new CertificateTrustList { StoreType = @"Directory", StorePath = @"%CommonApplicationData%\OPC Foundation\CertificateStores\UA Certificate Authorities" },
                 TrustedPeerCertificates = new CertificateTrustList { StoreType = @"Directory", StorePath = @"%CommonApplicationData%\OPC Foundation\CertificateStores\UA Applications" },
                 RejectedCertificateStore = new CertificateTrustList { StoreType = @"Directory", StorePath = @"%CommonApplicationData%\OPC Foundation\CertificateStores\RejectedCertificates" },
-                AutoAcceptUntrustedCertificates = true,
-                RejectSHA1SignedCertificates = false,
-                MinimumCertificateKeySize = 1024,
+                AutoAcceptUntrustedCertificates = securityOpt.AutoAcceptUntrustedCertificates,
+                RejectSHA1SignedCertificates = securityOpt.RejectSHA1SignedCertificates,
+                MinimumCertificateKeySize = securityOpt.MinimumCertificateKeySize,
                 NonceLength = 32,
             },
             TransportConfigurations = new TransportConfigurationCollection(),
@@ -76,7 +94,38 @@ public class OpcUaClientTagChannel : ITagChannel
             config.CertificateValidator.CertificateValidation += (s, e) => { e.Accept = e.Error.StatusCode == StatusCodes.BadCertificateUntrusted; };
         }
 
+        WarnOnLooseSecuritySettings(securityOpt);
         return config;
+    }
+
+    /// <summary>
+    /// 宽松的证书校验设置（恰好也是默认值）会降低 TLS 信任强度，构造通道时提醒一次。
+    /// </summary>
+    private void WarnOnLooseSecuritySettings(OpcUaSecurityOpt securityOpt)
+    {
+        var loose = new List<string>();
+        if (securityOpt.AutoAcceptUntrustedCertificates)
+        {
+            loose.Add($"{nameof(OpcUaSecurityOpt.AutoAcceptUntrustedCertificates)}=true");
+        }
+        if (!securityOpt.RejectSHA1SignedCertificates)
+        {
+            loose.Add($"{nameof(OpcUaSecurityOpt.RejectSHA1SignedCertificates)}=false");
+        }
+        if (securityOpt.MinimumCertificateKeySize < 2048)
+        {
+            loose.Add($"{nameof(OpcUaSecurityOpt.MinimumCertificateKeySize)}={securityOpt.MinimumCertificateKeySize}");
+        }
+
+        if (loose.Count == 0)
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "通道({ChannelName})使用偏宽松的证书校验设置：{settings}。这会降低对中间人攻击的防护，生产环境请在 <SecurityOpt> 中收紧（装入受信任证书、拒绝 SHA1、密钥长度不低于 2048）",
+            this.ChannelName(),
+            string.Join("；", loose));
     }
 
     /// <summary>
@@ -160,20 +209,50 @@ public class OpcUaClientTagChannel : ITagChannel
     /// <param name="nodeIds"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
+    /// <exception cref="InvalidOperationException">会话未创建/未连接，或某个节点返回 <c>Bad</c> 状态（任何坏点都会让这次读取失败）</exception>
     public virtual async Task<(DataValueCollection values, IList<ServiceResult> errs)> ReadAsync(IList<NodeId> nodeIds, CancellationToken ct)
     {
         if (this.OpcSession is null)
         {
-            throw new InvalidOperationException("会话未创建");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未创建，无法读取节点");
         }
         if (this.OpcSession.Connected == false)
         {
-            throw new InvalidOperationException("会话未连接");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未连接，无法读取节点");
         }
 
         var (values, errs) = await this.OpcSession.ReadValuesAsync(nodeIds, ct);
+        EnsureNoFailedValues("读取节点", nodeIds, values, errs);
         return (values, errs);
+    }
+
+    /// <summary>
+    /// 只要有节点的读取失败就让这次读取失败（抛异常），不做"跳过坏点、保留上次好值"式的静默降级。<br/>
+    /// 两条理由：(1) 坏点往往是通信/配置问题（<c>BadNotConnected</c>、<c>BadNodeIdUnknown</c>……），
+    /// 只有抛出去才能走 <c>TagGrpRunner</c> 的"崩溃 → 断开全部通道 → 重连"恢复路径，静默跳过恰好把重连路径掐断了；
+    /// (2) 静默跳过对下游毫无可见性（日志不是下游能用的接口），值会被无限期冻结而入口看起来还活着——
+    /// 与 S7/Modbus 驱动"读到错误码就抛"的行为也不一致。<br/>
+    /// "什么算失败"由 <see cref="_checkIsFailed"/> 决定，默认口径是不解释质量（只有 <c>Bad</c> 算失败，<c>Uncertain</c> 照原样采集）。
+    /// </summary>
+    private void EnsureNoFailedValues(string operation, IList<NodeId> nodeIds, DataValueCollection values, IList<ServiceResult> errs)
+    {
+        List<string>? bad = null;
+        var count = Math.Min(nodeIds.Count, values.Count);
+        for (int i = 0; i < count; i++)
+        {
+            var err = i < errs.Count ? errs[i] : null;
+            if (_checkIsFailed(err, values[i]))
+            {
+                bad ??= new List<string>();
+                bad.Add(OpcUaValueQuality.Describe(nodeIds[i], err, values[i]));
+            }
+        }
+
+        if (bad is not null)
+        {
+            throw new InvalidOperationException(
+                $"通道({this.ChannelName()}){operation}失败：{string.Join("；", bad)}");
+        }
     }
 
     /// <summary>
@@ -182,17 +261,16 @@ public class OpcUaClientTagChannel : ITagChannel
     /// <param name="toBeWritten"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidOperationException">会话未创建/未连接，或 OPC UA 返回了坏状态码</exception>
     public virtual async Task WriteAsync(IDictionary<NodeId, DataValue> toBeWritten, CancellationToken ct)
     {
         if (this.OpcSession is null)
         {
-            throw new InvalidOperationException("会话未创建");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未创建，无法写入节点");
         }
         if (this.OpcSession.Connected == false)
         {
-            throw new InvalidOperationException("会话未连接");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未连接，无法写入节点");
         }
 
         var writeValues = new WriteValueCollection();
@@ -210,7 +288,7 @@ public class OpcUaClientTagChannel : ITagChannel
         }
 
         // 远程写入
-        var resp = await this.OpcSession.WriteAsync(null, writeValues, CancellationToken.None);
+        var resp = await this.OpcSession.WriteAsync(null, writeValues, ct);
         ClientBase.ValidateResponse(resp.Results, writeValues);
         ClientBase.ValidateDiagnosticInfos(resp.DiagnosticInfos, writeValues);
 
@@ -221,7 +299,7 @@ public class OpcUaClientTagChannel : ITagChannel
                 .Where(r => StatusCode.IsNotGood(r.Status))
                 .Select(r => new WriteValueErr(r.WriteValue.NodeId, r.Status))
                 .ToList();
-            throw new Exception($"通道写入失败:通道={this.ChannelName()}。异常={string.Join(";", notgoods)}。");
+            throw new InvalidOperationException($"通道写入失败:通道={this.ChannelName()}。异常={string.Join(";", notgoods)}。");
         }
     }
 
@@ -231,19 +309,23 @@ public class OpcUaClientTagChannel : ITagChannel
     /// <param name="nodeId"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
+    /// <exception cref="InvalidOperationException">会话未创建/未连接，或该节点返回 <c>Bad</c> 状态</exception>
     public virtual async Task<DataValue> ReadValueAsync(NodeId nodeId, CancellationToken ct)
     {
         if (this.OpcSession is null)
         {
-            throw new InvalidOperationException("会话未创建");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未创建，无法读取节点值：{nodeId}");
         }
         if (this.OpcSession.Connected == false)
         {
-            throw new InvalidOperationException("会话未连接");
+            throw new InvalidOperationException($"通道({this.ChannelName()}) 的OPC UA会话未连接，无法读取节点值：{nodeId}");
         }
 
         var value = await this.OpcSession.ReadValueAsync(nodeId, ct);
+        if (_checkIsFailed(null, value))
+        {
+            throw new InvalidOperationException($"通道({this.ChannelName()})读取节点值失败：{OpcUaValueQuality.Describe(nodeId, null, value)}");
+        }
         return value;
     }
 
@@ -278,7 +360,7 @@ public class OpcUaClientTagChannel : ITagChannel
             }
             catch (Exception e)
             {
-                _logger.LogWarning("通道={ChannelName} 释放异常:{exception}", channelName, e.Message);
+                _logger.LogWarning(e, "通道={ChannelName} 释放异常", channelName);
             }
             finally
             {

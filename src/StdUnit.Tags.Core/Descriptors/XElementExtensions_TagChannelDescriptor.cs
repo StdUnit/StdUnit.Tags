@@ -12,11 +12,15 @@ public static class XElementExtensions_TagChannelDescriptor
     /// </summary>
     /// <param name="e"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="TagsProjectXmlException">通道元素未配置 name 或 driver 属性</exception>
     public static TagChannelDescriptor ToTagChannelDescriptor(this XElement e)
     {
-        var name = e.Attribute("name")?.Value ?? throw new Exception($"通道元素未配置元素名({e.Name.LocalName})");
-        var driver = e.Attribute("driver")?.Value ?? throw new Exception($"通道元素未配置驱动({e.Name.LocalName})"); ;
+        var name = e.Attribute("name")?.Value ?? throw new TagsProjectXmlException(
+            $"通道元素 <{e.Name.LocalName}> 未配置 name 属性",
+            e.GetLocationPath());
+        var driver = e.Attribute("driver")?.Value ?? throw new TagsProjectXmlException(
+            $"通道元素 <{e.Name.LocalName}> 未配置 driver 属性",
+            e.GetLocationPath());
 
         var descriptor = new TagChannelDescriptor()
         {

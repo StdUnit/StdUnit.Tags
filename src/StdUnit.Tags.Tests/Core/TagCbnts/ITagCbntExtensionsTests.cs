@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using StdUnit.Tags;
@@ -50,7 +51,7 @@ public class ITagCbntExtensionsTests
     {
         var cbnt = new TestByteTagCbnt(new TagCbntDescriptor { Name = "g" });
 
-        Assert.Throws<Exception>(() => cbnt.SelectTag("nonexistent"));
+        Assert.Throws<KeyNotFoundException>(() => cbnt.SelectTag("nonexistent"));
     }
 
     #endregion
@@ -113,7 +114,7 @@ public class ITagCbntExtensionsTests
     {
         var cbnt = new TestByteTagCbnt(new TagCbntDescriptor { Name = "g" });
 
-        var ex = Assert.Throws<Exception>(() => cbnt.SearchRequiredChannel());
+        var ex = Assert.Throws<InvalidOperationException>(() => cbnt.SearchRequiredChannel());
         Assert.Contains("Channel is not configured", ex.Message);
         Assert.Contains("g", ex.Message);
     }

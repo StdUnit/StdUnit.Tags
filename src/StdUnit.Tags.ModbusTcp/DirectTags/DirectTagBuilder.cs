@@ -24,7 +24,9 @@ public partial class ModbusTcpDirectTagBuilder : TagBuilderBase
         }
         else if (this.Channel is not ModbusTcpChannel)
         {
-            throw new Exception($"测点({this.Name})配置了通道，但不是{nameof(ModbusTcpChannel)}");
+            throw new TagsProjectConfigurationException(
+                $"测点 '{this.Name}' 配置了通道，但不是 {nameof(ModbusTcpChannel)}",
+                $"Tag({this.Name})");
         }
         else
         {

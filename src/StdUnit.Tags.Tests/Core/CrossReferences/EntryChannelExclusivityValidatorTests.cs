@@ -77,7 +77,7 @@ public class EntryChannelExclusivityValidatorTests
     [Fact]
     public void Validate_SiblingEntriesShareChannel_Throws()
     {
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => Validate("""
+        var ex = Assert.Throws<TagsProjectValidationException>(() => Validate("""
             <Project>
                 <Channel name="S7-1" driver="S7"><IpAddr>localhost</IpAddr></Channel>
                 <TagGrp name="entryA" isEntry="true" channel="S7-1">
@@ -98,7 +98,7 @@ public class EntryChannelExclusivityValidatorTests
     [Fact]
     public void Validate_EntriesInheritSameChannelFromCommonAncestor_Throws()
     {
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => Validate("""
+        var ex = Assert.Throws<TagsProjectValidationException>(() => Validate("""
             <Project>
                 <Channel name="S7-1" driver="S7"><IpAddr>localhost</IpAddr></Channel>
                 <TagGrp name="root" channel="S7-1">
@@ -113,14 +113,14 @@ public class EntryChannelExclusivityValidatorTests
             """));
 
         Assert.Contains("S7-1", ex.Message);
-        Assert.Contains("TagGrp(root) → TagGrp(entryA)", ex.Message);
+        Assert.Contains("TagGrp(root)/TagGrp(entryA)", ex.Message);
     }
 
     /// <summary>入口主通道与另一入口子树中 Tag 上声明的通道同名（同一实例）→ 拒绝。</summary>
     [Fact]
     public void Validate_TagChannelInOneEntryConflictsWithOtherEntryChannel_Throws()
     {
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => Validate("""
+        var ex = Assert.Throws<TagsProjectValidationException>(() => Validate("""
             <Project>
                 <Channel name="S7-1" driver="S7"><IpAddr>localhost</IpAddr></Channel>
                 <TagGrp name="entryA" isEntry="true" channel="S7-1">
@@ -143,7 +143,7 @@ public class EntryChannelExclusivityValidatorTests
     [Fact]
     public void Validate_NoOpConnectionChannelSharedAcrossEntries_StillThrows()
     {
-        var ex = Assert.Throws<TagsProjectSchemaException>(() => Validate("""
+        var ex = Assert.Throws<TagsProjectValidationException>(() => Validate("""
             <Project>
                 <Channel name="file" driver="SimpleFiles"><BaseDir>D:/temp</BaseDir></Channel>
                 <TagGrp name="entryA" isEntry="true" channel="file">
@@ -276,7 +276,7 @@ public class EntryChannelExclusivityValidatorTests
             </Project>
             """);
 
-        Assert.Throws<TagsProjectSchemaException>(() => factory.Create(string.Empty, xml));
+        Assert.Throws<TagsProjectValidationException>(() => factory.Create(string.Empty, xml));
     }
 
     #endregion

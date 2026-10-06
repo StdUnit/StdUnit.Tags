@@ -60,7 +60,7 @@ public class EntryChannelExclusivityValidator : ITagsProjectValidator
         foreach (var kvp in usages)
         {
             var entries = kvp.Value
-                .Select(e => DescribePath(e, root))
+                .Select(e => e.GetLocationPath())
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
             if (entries.Count <= 1)
@@ -69,14 +69,12 @@ public class EntryChannelExclusivityValidator : ITagsProjectValidator
             }
 
             errors.Add(
-                $"通道 '{kvp.Key}' 被多个入口共用：{string.Join("、", entries)}。" +
-                "入口的运行器拥有连接的生命周期（崩溃/取消时会断开该入口相关的全部通道），" +
-                "跨入口共用会导致一方断开另一方正在使用的连接；请为每个入口配置独立的通道");
+                $"通道 '{kvp.Key}' 被多个入口共用：{string.Join("、", entries)}。入口的运行器拥有连接的生命周期（崩溃/取消时会断开该入口相关的全部通道），跨入口共用会导致一方断开另一方正在使用的连接；请为每个入口配置独立的通道");
         }
 
         if (errors.Count > 0)
         {
-            throw new TagsProjectSchemaException(errors);
+            throw new TagsProjectValidationException(errors);
         }
     }
 
@@ -194,22 +192,4 @@ public class EntryChannelExclusivityValidator : ITagsProjectValidator
     /// <param name="element"></param>
     private static bool IsEntryElement(XElement element)
         => string.Equals(element.Attribute("isEntry")?.Value, "true", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// 生成元素的定位描述（类型 + name 属性 + 父级路径），用于错误消息。
-    /// </summary>
-    /// <param name="element"></param>
-    /// <param name="root">项目根元素</param>
-    private static string DescribePath(XElement element, XElement root)
-    {
-        var parts = new List<string>();
-        for (var cur = element; cur is not null && cur != root; cur = cur.Parent)
-        {
-            if (cur.Name.LocalName is "TagGrp" or "TagCbnt" or "Tag")
-            {
-                parts.Insert(0, $"{cur.Name.LocalName}({cur.Attribute("name")?.Value ?? "?"})");
-            }
-        }
-        return string.Join(" → ", parts);
-    }
 }

@@ -80,6 +80,35 @@ var dir = TestPaths.Fixture("OpcUaClientTags", "DirectTags");
     }
 
     [Fact]
+    public async Task DirectTag_ReadAsync_WhenValueIsBad_KeepsPreviousValue()
+    {
+        var channel = new FakeOpcUaClientTagChannel();
+        var grp = new TagGrp(new TagGrpDescriptor { Name = "grp", IsEntry = true }, channel);
+        var container = TagContainer.From(grp);
+        var descriptor = new TagDescriptor
+        {
+            TagName = "v1",
+            RawAddress = "ns=4;s=Demo.Var1",
+        };
+
+        channel.SetReadValue("ns=4;s=Demo.Var1", new DataValue { Value = 123 });
+        var tag = new OpcUaClientDirectTag(descriptor, channel, container);
+        await tag.ReadAsync(CancellationToken.None);
+        var goodTimestamp = tag.Timestamp;
+
+        var eventFired = false;
+        tag.OnTagRead += (_, _) => eventFired = true;
+        channel.FailRead = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tag.ReadAsync(CancellationToken.None));
+
+        // 读取失败（Bad → 通道抛异常）时，值/通知/时间戳都不应被改动
+        Assert.Equal(123, tag.Value);
+        Assert.False(eventFired);
+        Assert.Equal(goodTimestamp, tag.Timestamp);
+    }
+
+    [Fact]
     public async Task DirectTag_WriteAsync_WritesFakeChannelValue()
     {
         var channel = new FakeOpcUaClientTagChannel();
@@ -128,6 +157,9 @@ var dir = TestPaths.Fixture("OpcUaClientTags", "DirectTags");
         private readonly Dictionary<string, DataValue> _reads = new();
         private readonly Dictionary<string, DataValue> _writes = new();
 
+        /// <summary>置为 true 时读取直接失败，用于验证"读取失败不改动测点状态"。</summary>
+        public bool FailRead { get; set; }
+
         public void SetReadValue(string nodeId, DataValue value)
         {
             _reads[nodeId] = value;
@@ -147,6 +179,10 @@ var dir = TestPaths.Fixture("OpcUaClientTags", "DirectTags");
 
         public override Task<DataValue> ReadValueAsync(NodeId nodeId, CancellationToken ct)
         {
+            if (FailRead)
+            {
+                throw new InvalidOperationException($"通道(fake-opcua)读取节点值失败：节点={nodeId} 状态码=0x80340000(BadNodeIdUnknown)");
+            }
             if (!_reads.TryGetValue(nodeId.ToString(), out var value))
             {
                 throw new InvalidOperationException($"No fake read value configured for NodeId={nodeId}");

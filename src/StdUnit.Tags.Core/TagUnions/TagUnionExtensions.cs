@@ -110,11 +110,11 @@ public static class TagUnionExtensions
     /// </summary>
     /// <param name="tagunion"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidCastException">当前节点不是直接测点</exception>
     public static ITag AsTag(this TagUnion tagunion) => tagunion.Map(
         tagunit => tagunit,
-        tagcbnt => throw new Exception($"{tagcbnt.TagName()} is a {nameof(ITagCbnt)} intead of a {nameof(ITag)}"),
-        taggrp => throw new Exception($"{taggrp.TagName()} is a {nameof(ITagGrp)} intead of a {nameof(ITag)}")
+        tagcbnt => throw new InvalidCastException($"{tagcbnt.TagName()} is a {nameof(ITagCbnt)} intead of a {nameof(ITag)}"),
+        taggrp => throw new InvalidCastException($"{taggrp.TagName()} is a {nameof(ITagGrp)} intead of a {nameof(ITag)}")
         );
 
     /// <summary>
@@ -122,11 +122,11 @@ public static class TagUnionExtensions
     /// </summary>
     /// <param name="tagunion"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidCastException">当前节点不是测点组合</exception>
     public static ITagCbnt AsTagCbnt(this TagUnion tagunion) => tagunion.Map(
-        tagunit => throw new Exception($"{tagunit.TagName()} is a {nameof(ITag)} intead of a {nameof(ITagCbnt)}"),
+        tagunit => throw new InvalidCastException($"{tagunit.TagName()} is a {nameof(ITag)} intead of a {nameof(ITagCbnt)}"),
         tagcbnt => tagcbnt,
-        taggrp => throw new Exception($"{taggrp.TagName()} is a {nameof(ITagGrp)} intead of a {nameof(ITagCbnt)}")
+        taggrp => throw new InvalidCastException($"{taggrp.TagName()} is a {nameof(ITagGrp)} intead of a {nameof(ITagCbnt)}")
     );
 
     /// <summary>
@@ -134,10 +134,10 @@ public static class TagUnionExtensions
     /// </summary>
     /// <param name="tagunion"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidCastException">当前节点不是测点组</exception>
     public static ITagGrp AsTagGrp(this TagUnion tagunion) => tagunion.Map(
-        tagunit => throw new Exception($"{tagunit.TagName()} is a {nameof(ITag)} intead of a {nameof(ITagGrp)}"),
-        tagcbnt => throw new Exception($"{tagcbnt.TagName()} is a {nameof(ITagCbnt)} intead of a {nameof(ITagGrp)}"),
+        tagunit => throw new InvalidCastException($"{tagunit.TagName()} is a {nameof(ITag)} intead of a {nameof(ITagGrp)}"),
+        tagcbnt => throw new InvalidCastException($"{tagcbnt.TagName()} is a {nameof(ITagCbnt)} intead of a {nameof(ITagGrp)}"),
         taggrp => taggrp
     );
     #endregion

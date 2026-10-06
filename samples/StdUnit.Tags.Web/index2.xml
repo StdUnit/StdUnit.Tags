@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       xsi:noNamespaceSchemaLocation="../../src/StdUnit.Tags.Core/Schemas/tagsproject.xsd"
       xmlns:s7="tags:s7"
@@ -39,6 +39,11 @@
 			<ua:UserName>user</ua:UserName>
 			<ua:Password>1</ua:Password>
 		</ua:ServerOpt>
+		<ua:SecurityOpt>
+			<ua:AutoAcceptUntrustedCertificates>true</ua:AutoAcceptUntrustedCertificates>
+			<ua:RejectSHA1SignedCertificates>false</ua:RejectSHA1SignedCertificates>
+			<ua:MinimumCertificateKeySize>1024</ua:MinimumCertificateKeySize>
+		</ua:SecurityOpt>
 	</Channel>
 	<Channel name="COM-1" driver="COM">
 		<com:Port>COM1</com:Port>

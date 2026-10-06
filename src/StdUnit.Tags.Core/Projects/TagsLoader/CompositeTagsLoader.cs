@@ -120,7 +120,27 @@ public class CompositeTagsLoader : ITagsLoader
         }
         else
         {
-            throw new NotImplementedException($"不支持的 ITagsDescriptor 类型: {descriptor.GetType().FullName}");
+            throw new TagsProjectConfigurationException($"不支持的 {nameof(ITagsDescriptor)} 类型: {descriptor.GetType().FullName}");
+        }
+    }
+
+    /// <summary>
+    /// 确保同一个父节点下的测点名唯一。<br/>
+    /// 底层 <see cref="ITagGrp.Children"/> 是字典，重名时字典自身抛出的
+    /// "An item with the same key has already been added" 既没有路径上下文、也难以定位，
+    /// 因此在这里提前拦截，错误消息带上完整路径。
+    /// </summary>
+    /// <param name="parent">父级测点组</param>
+    /// <param name="childKind">子节点类型名（Tag / TagCbnt / TagGrp）</param>
+    /// <param name="childName">子节点名称</param>
+    /// <exception cref="TagsProjectConfigurationException">同名子节点已存在</exception>
+    protected static void EnsureChildNameAvailable(ITagGrp parent, string childKind, string childName)
+    {
+        if (parent.Children.ContainsKey(childName))
+        {
+            throw new TagsProjectConfigurationException(
+                $"测点名重复：{childKind}({childName})。同一个父节点下的测点名必须唯一，请修改其中一个的名称",
+                parent.GetLocationPath($"{childKind}({childName})"));
         }
     }
 
@@ -134,6 +154,7 @@ public class CompositeTagsLoader : ITagsLoader
             availableChannels.FirstOrDefault(c => c.ChannelName() == grpDescriptor.ChannelName);
 
         var thisGrp = new TagGrp(grpDescriptor, thisChannel);
+        EnsureChildNameAvailable(parent, "TagGrp", thisTagName);
         parent.AddTag(thisGrp);
         foreach (var child in grpDescriptor.Children)
         {
@@ -159,7 +180,7 @@ public class CompositeTagsLoader : ITagsLoader
     /// <param name="parent"></param>
     /// <param name="cbntDescriptor"></param>
     /// <param name="availableChannels"></param>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="TagsProjectConfigurationException">通道未声明 / 未注册对应的构建器 / 测点重名</exception>
     protected virtual void LoadTagCbnt(ITagGrp parent, TagCbntDescriptor cbntDescriptor, IReadOnlyList<ITagChannel> availableChannels)
     {
         var thisChannel = string.IsNullOrEmpty(cbntDescriptor.ChannelName) ?
@@ -167,18 +188,23 @@ public class CompositeTagsLoader : ITagsLoader
             availableChannels.FirstOrDefault(c => c.ChannelName() == cbntDescriptor.ChannelName);
         if (!string.IsNullOrEmpty(cbntDescriptor.ChannelName) && thisChannel is null)
         {
-            throw new Exception($"未找到名称为 {cbntDescriptor.ChannelName} 的通道");
+            throw new TagsProjectConfigurationException(
+                $"测点组合 '{cbntDescriptor.Name}' 引用了未声明的通道 '{cbntDescriptor.ChannelName}'（已声明的通道: {DescribeChannels(availableChannels)}）",
+                parent.GetLocationPath($"TagCbnt({cbntDescriptor.Name})"));
         }
         var channel = thisChannel ?? parent.SearchRequiredChannel();
 
         var builder = this.ChooseTagCbntBuilder(channel, cbntDescriptor) ??
-            throw new Exception($"未注册相应的TagCbntBuilder: 通道（Name={channel.ChannelName()}, Driver={channel.Driver()}), Element={cbntDescriptor.Name}");
+            throw new TagsProjectConfigurationException(
+                $"未注册能处理测点组合 '{cbntDescriptor.Name}' 的 TagCbntBuilder：通道（Name={channel.ChannelName()}, Driver={channel.Driver()}）。请确认已通过 AddXxxSupport() 注册了对应驱动的支持",
+                parent.GetLocationPath($"TagCbnt({cbntDescriptor.Name})"));
         var cbntors = cbntDescriptor.Children.ToList();
         var cbntBuilder = builder
             .WithParent(parent)
             .WithChannel(thisChannel)
             .AddTags(cbntors, channel);
         var cbnt = cbntBuilder.Build(channel);
+        EnsureChildNameAvailable(parent, "TagCbnt", cbntDescriptor.Name);
         parent.AddTag(cbnt);
         return;
     }
@@ -189,8 +215,7 @@ public class CompositeTagsLoader : ITagsLoader
     /// <param name="parent"></param>
     /// <param name="tagDescriptor"></param>
     /// <param name="availableChannels"></param>
-    /// <exception cref="Exception"></exception>
-    /// <exception cref="NotImplementedException"></exception>
+    /// <exception cref="TagsProjectConfigurationException">通道未声明 / 未注册对应的构建器 / 测点重名</exception>
     protected virtual void LoadDirectTag(ITagGrp parent, TagDescriptor tagDescriptor, IReadOnlyList<ITagChannel> availableChannels)
     {
         var thisChannel = string.IsNullOrEmpty(tagDescriptor.ChannelName) ?
@@ -198,17 +223,35 @@ public class CompositeTagsLoader : ITagsLoader
             availableChannels.FirstOrDefault(c => c.ChannelName() == tagDescriptor.ChannelName);
         if (!string.IsNullOrEmpty(tagDescriptor.ChannelName) && thisChannel is null)
         {
-            throw new Exception($"未找到名称为 {tagDescriptor.ChannelName} 的通道");
+            throw new TagsProjectConfigurationException(
+                $"测点 '{tagDescriptor.TagName}' 引用了未声明的通道 '{tagDescriptor.ChannelName}'（已声明的通道: {DescribeChannels(availableChannels)}）",
+                parent.GetLocationPath($"Tag({tagDescriptor.TagName})"));
         }
         var channel = thisChannel ?? parent.SearchRequiredChannel();
 
         var builder = this.ChooseDirectTagBuilder(channel, tagDescriptor) ??
-            throw new NotImplementedException($"未注册相应的 DirectTagBuilder: 通道（Name={channel.ChannelName()}, Driver={channel.Driver()}), Element={tagDescriptor.TagName}");
+            throw new TagsProjectConfigurationException(
+                $"未注册能处理测点 '{tagDescriptor.TagName}' 的 DirectTagBuilder：通道（Name={channel.ChannelName()}, Driver={channel.Driver()}）。请确认已通过 AddXxxSupport() 注册了对应驱动的支持",
+                parent.GetLocationPath($"Tag({tagDescriptor.TagName})"));
         var tag = builder
             .WithParent(parent)
             .WithChannel(thisChannel)
             .Build(channel);
+        EnsureChildNameAvailable(parent, "Tag", tagDescriptor.TagName);
         parent.AddTag(tag);
+    }
+
+    /// <summary>
+    /// 把已声明的通道名拼成一行，用于"引用了未声明的通道"这类错误消息。
+    /// </summary>
+    /// <param name="channels"></param>
+    private static string DescribeChannels(IReadOnlyList<ITagChannel> channels)
+    {
+        if (channels.Count == 0)
+        {
+            return "（无）";
+        }
+        return string.Join(", ", channels.Select(c => c.ChannelName()).OrderBy(n => n, StringComparer.Ordinal));
     }
 
     /// <summary>

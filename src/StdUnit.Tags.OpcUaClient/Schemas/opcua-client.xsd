@@ -3,7 +3,7 @@
   OpcUaClient 驱动：Channel 专属子元素 schema
   命名空间：tags:opcuaclient
   对应运行时类型：OpcUaClientTagChannelDescriptor（src/StdUnit.Tags.OpcUaClient/Channels/OpcUaClientTagChannelDescriptor.cs）
-  默认值（见 ToOpcUaClientTagChannelDescriptor / ParseSreverOpt）：
+  默认值（见 ToOpcUaClientTagChannelDescriptor / ParseSreverOpt / ParseSecurityOpt）：
     ClientName=StdUnitTagsOpcUaClient，DiscoveryUrl=localhost，UsePassword=false，
     UserName=空，Password=空。
   用法：
@@ -16,8 +16,14 @@
           <ua:UserName>user</ua:UserName>
           <ua:Password>1</ua:Password>
         </ua:ServerOpt>
+        <ua:SecurityOpt>
+          <ua:AutoAcceptUntrustedCertificates>false</ua:AutoAcceptUntrustedCertificates>
+          <ua:RejectSHA1SignedCertificates>true</ua:RejectSHA1SignedCertificates>
+          <ua:MinimumCertificateKeySize>2048</ua:MinimumCertificateKeySize>
+        </ua:SecurityOpt>
       </Channel>
     </root>
+  注意：SecurityOpt 的默认值偏宽松（与旧版本的硬编码行为一致），未显式收紧时通道会在构造时输出警告。
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
            xmlns="tags:opcuaclient"
@@ -33,7 +39,22 @@
     </xs:sequence>
   </xs:complexType>
 
+  <xs:complexType name="SecurityOptType">
+    <xs:sequence>
+      <xs:element name="AutoAcceptUntrustedCertificates" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="RejectSHA1SignedCertificates" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="MinimumCertificateKeySize" minOccurs="0">
+        <xs:simpleType>
+          <xs:restriction base="xs:unsignedShort">
+            <xs:minInclusive value="1"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
   <xs:element name="ClientName" type="xs:string"/>
   <xs:element name="ServerOpt" type="ServerOptType"/>
+  <xs:element name="SecurityOpt" type="SecurityOptType"/>
 
 </xs:schema>

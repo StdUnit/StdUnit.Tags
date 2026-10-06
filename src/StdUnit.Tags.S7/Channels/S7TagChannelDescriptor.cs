@@ -63,18 +63,21 @@ public static class TagChannelDescriptor_S7Extensions
     /// </summary>
     /// <param name="descriptor"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="TagsProjectConfigurationException">当前描述符的驱动不是 <see cref="S7Names.DriverName"/></exception>
+    /// <exception cref="TagsProjectXmlException">Rack / Slot / ConnectionType 无法解析成整数</exception>
     public static S7TagChannelDescriptor ToS7TagChannelDescriptor(this TagChannelDescriptor descriptor)
     {
         if (descriptor.Driver != S7Names.DriverName)
         {
-            throw new InvalidOperationException($"通道驱动错误：期望 {S7Names.DriverName}，而当前为{descriptor.Driver}");
+            throw new TagsProjectConfigurationException(
+                $"通道驱动错误：期望 {S7Names.DriverName}，而当前为{descriptor.Driver}",
+                $"Channel({descriptor.Name})");
         }
         if (descriptor is S7TagChannelDescriptor d)
         {
             return d;
         }
+        var location = $"Channel({descriptor.Name})";
         var res = new S7TagChannelDescriptor
         {
             Name = descriptor.Name,
@@ -88,17 +91,17 @@ public static class TagChannelDescriptor_S7Extensions
                 (short)0 :
                 short.TryParse(rackEle.Value, out var rack) ?
                     rack :
-                    throw new ArgumentException($"配置的Rack无法解析成short({rackEle.Value})"),
+                    throw new TagsProjectXmlException($"配置的 Rack 无法解析成 short：{rackEle.Value}", location),
             Slot = !descriptor.Extras.TryGetValue(nameof(S7TagChannelDescriptor.Slot), out var slotEle) ?
                 (short)1 :
                 short.TryParse(slotEle.Value, out var slot) ?
                     slot :
-                    throw new ArgumentException($"配置的Slot无法解析成short({slotEle.Value})"),
+                    throw new TagsProjectXmlException($"配置的 Slot 无法解析成 short：{slotEle.Value}", location),
             ConnectionType = !descriptor.Extras.TryGetValue(nameof(S7TagChannelDescriptor.ConnectionType), out var connTypeEle) ?
                 (ushort)3 :
                 ushort.TryParse(connTypeEle.Value, out var connType) ?
                     connType :
-                    throw new ArgumentException($"配置的ConnectionType无法解析成ushort({connTypeEle.Value})"),
+                    throw new TagsProjectXmlException($"配置的 ConnectionType 无法解析成 ushort：{connTypeEle.Value}", location),
         };
         return res;
     }

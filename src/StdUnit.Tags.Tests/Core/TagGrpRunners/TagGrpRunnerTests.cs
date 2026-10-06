@@ -197,7 +197,9 @@ public class TagGrpRunnerTests
         entry.IsEnabled = true;
         entry.ReadAsyncThrows = new InvalidOperationException("模拟读取异常");
 
-        using var cts = new CancellationTokenSource(2000);
+        // 不用带截止期的 ct 来"到点停循环"：本用例的结束条件是碰撞回调里主动取消，
+        // 截止期只是多余的时间猜测（负载高时会先到期，导致断言看到的是取消而不是碰撞）。
+        using var cts = new CancellationTokenSource();
         Exception? capturedEx = null;
         var crashedFired = false;
 
@@ -209,8 +211,8 @@ public class TagGrpRunnerTests
             return Task.CompletedTask;
         };
 
-        // Act
-        await RunUntilCancelled(runner, entry, cts.Token);
+        // Act（WaitAsync 只作兜底：卡住时快速失败，不参与流程控制）
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
 
         // Assert
         Assert.True(crashedFired, "TurnCrashed 应被触发");
@@ -228,14 +230,16 @@ public class TagGrpRunnerTests
         entry.IsEnabled = true;
         entry.ReadAsyncThrows = new InvalidOperationException("模拟读取异常");
 
-        using var cts = new CancellationTokenSource(2000);
-
+        // 不要给 runner 一个会到期的 ct：本用例断言"碰撞回调抛出的异常向外传播"，
+        // 而一旦截止期先到期，外层 finally 的 Task.Delay(delay, ct) 会把结果变成 TaskCanceledException，
+        // 掩盖真实断言（曾因此在负载高时偶发失败）。兜底改用 WaitAsync —— 超时抛 TimeoutException，
+        // 不参与 runner 的取消语义。
         runner.RunnerCrashed += (grp, ch, ex) =>
             throw new InvalidOperationException("错误处理也抛异常");
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            runner.StartAsync(entry, cts.Token));
+            runner.StartAsync(entry, CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(15));
 
         Assert.Contains("错误处理也抛异常", ex.Message);
     }
@@ -248,10 +252,13 @@ public class TagGrpRunnerTests
         entry.Descriptor!.ScanInterval = 10;
         entry.IsEnabled = true;
 
-        using var cts = new CancellationTokenSource(100);
+        using var cts = new CancellationTokenSource();
 
-        // Act
-        await RunUntilCancelled(runner, entry, cts.Token);
+        // 第一次读之后立刻取消：不靠"100ms 内必须跑完一轮"这种固定延时（负载高时会偶发失败）
+        entry.OnRead = () => cts.Cancel();
+
+        // Act（WaitAsync 只作兜底）
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
 
         // Assert
         Assert.True(entry.ReadAsyncCallCount >= 1, "取消前应至少执行了一次 ReadAsync");
@@ -289,6 +296,80 @@ public class TagGrpRunnerTests
         Assert.True(channel.DisconnectAsyncCallCount >= 1, "取消时清理路径应调用 DisconnectAsync");
         Assert.False(channel.LastDisconnectTokenWasCancelled,
             "DisconnectAsync 不应收到已取消的 token——否则通道内部会立刻抛 OCE 导致连接不断开");
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenDisconnectThrows_SwallowsButLogs()
+    {
+        // 清理路径有意吞掉 DisconnectAsync 的异常（不阻断清理、不让 StartAsync 失败），
+        // 但必须留痕——否则"连接没断干净"无人知晓。
+        // Arrange
+        var logs = new CapturingLoggerProvider();
+        var channel = new RecordingChannel(new TagChannelDescriptor { Name = "fake-channel" })
+        {
+            DisconnectThrows = new InvalidOperationException("发起断开-boom"),
+        };
+        var entry = new MockTagGrp(new TagGrpDescriptor { Name = "test-entry", ScanInterval = 10 })
+        {
+            Channel = channel,
+            IsEnabled = true,
+        };
+        using var loggerFactory = new LoggerFactory();
+        loggerFactory.AddProvider(logs);
+        var runner = new TagGrpRunner(new MockProject(), loggerFactory.CreateLogger<TagGrpRunner>());
+
+        using var cts = new CancellationTokenSource();
+        runner.TurnProcess += (_, _) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        };
+
+        // Act——不应抛出
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
+
+        // Assert
+        Assert.True(channel.DisconnectAsyncCallCount >= 1);
+        var warning = Assert.Single(logs.Entries, e => e.Exception?.Message == "发起断开-boom");
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.Contains("fake-channel", warning.Message); // 消息里带上通道名
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenDisconnectStrategyThrows_SwallowsButLogs()
+    {
+        // 等待断开失败同样只吞掉 + 留痕（连接可能没断干净）。
+        // Arrange
+        var logs = new CapturingLoggerProvider();
+        var channel = new RecordingChannel(new TagChannelDescriptor { Name = "fake-channel" });
+        var entry = new MockTagGrp(new TagGrpDescriptor { Name = "test-entry", ScanInterval = 10 })
+        {
+            Channel = channel,
+            IsEnabled = true,
+        };
+        using var loggerFactory = new LoggerFactory();
+        loggerFactory.AddProvider(logs);
+        var strategy = new RecordingDisconnectStrategy((_, _) => throw new InvalidOperationException("等待断开-boom"));
+        var runner = new TagGrpRunner(
+            new MockProject(),
+            loggerFactory.CreateLogger<TagGrpRunner>(),
+            disconnectStrategy: strategy);
+
+        using var cts = new CancellationTokenSource();
+        runner.TurnProcess += (_, _) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        };
+
+        // Act——不应抛出
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
+
+        // Assert
+        Assert.True(strategy.CallCount >= 1);
+        var warning = Assert.Single(logs.Entries, e => e.Exception?.Message == "等待断开-boom");
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.Contains("fake-channel", warning.Message);
     }
 
     [Fact]
@@ -527,17 +608,23 @@ public class TagGrpRunnerTests
         var project = new MockProject();
         var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance, mockStrategy);
 
-        using var cts = new CancellationTokenSource(2000);
+        using var cts = new CancellationTokenSource();
         var crashCount = 0;
 
         runner.RunnerCrashed += (_, _, _) =>
         {
             crashCount++;
+
+            // 攒够两次崩溃就停：不靠"2000ms 内必须崩够两次"这种固定延时（负载高时会偶发失败）
+            if (crashCount >= 2)
+            {
+                cts.Cancel();
+            }
             return Task.CompletedTask;
         };
 
-        // Act
-        await RunUntilCancelled(runner, entry, cts.Token);
+        // Act（WaitAsync 只作兜底）
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
 
         // Assert — 应发生多次崩溃且每次传入的 consecutiveFailureCount 递增
         Assert.True(crashCount >= 2, $"至少应发生2次崩溃，实际={crashCount}");
@@ -571,6 +658,7 @@ public class TagGrpRunnerTests
         //   3 → 停止
         var phase = 0;
         var totalCrashes = 0;
+        var disabledReadCount = 0;
 
         entry.OnRead = () =>
         {
@@ -580,24 +668,34 @@ public class TagGrpRunnerTests
             }
         };
 
+        // 复位在轮询循环内部完成，外部观察不到它的结束时刻；但 IsEnabled 每轮外循环只读一次，
+        // 而复位就在"读到 false"那一轮的末尾。因此用读取次数做确定性同步：
+        // 第 2 次读到 false 时才重新启用——此时复位必然已完成（同一线程串行）。
+        // 不要用 Task.Delay 猜这个时刻：负载高时定时器会先于复位触发，断言随机会挂。
+        entry.OnIsEnabledRead = () =>
+        {
+            if (phase != 1)
+            {
+                return;
+            }
+
+            disabledReadCount++;
+            if (disabledReadCount >= 2)
+            {
+                entry.IsEnabled = true;
+                phase = 2;
+            }
+        };
+
         runner.RunnerCrashed += (_, _, _) =>
         {
             totalCrashes++;
 
             if (phase == 0 && totalCrashes >= 3)
             {
-                // 已累计 3 次失败，禁用 entry 以触发复位
+                // 已累计 3 次失败，禁用 entry 以触发复位（何时重新启用由 OnIsEnabledRead 决定）
                 phase = 1;
                 entry.IsEnabled = false;
-                // 1 秒后重新启用（确保禁用的外循环迭代已完成复位）
-                _ = Task.Delay(1000, cts.Token).ContinueWith(_ =>
-                {
-                    if (!cts.IsCancellationRequested)
-                    {
-                        entry.IsEnabled = true;
-                        phase = 2;
-                    }
-                }, TaskContinuationOptions.NotOnCanceled);
             }
             else if (phase == 2 && totalCrashes >= 6)
             {
@@ -608,8 +706,8 @@ public class TagGrpRunnerTests
             return Task.CompletedTask;
         };
 
-        // Act
-        await RunUntilCancelled(runner, entry, cts.Token);
+        // Act（WaitAsync 只作兜底：本用例无截止期，卡住时至少能快速失败而不是挂住）
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
 
         // Assert
         Assert.True(mockStrategy.CallCount >= 6);
@@ -641,7 +739,29 @@ public class TagGrpRunnerTests
         public ITagGrp AddTag(ITag tag) => this;
         public ITagGrp AddTag(ITagCbnt tagCbnt) => this;
         public ITagGrp AddTag(ITagGrp tagGrp) => this;
-        public bool IsEnabled { get; set; } = true;
+        private bool _isEnabled = true;
+
+        /// <summary>
+        /// 是否使能。轮询循环每轮外循环只读一次，且复位（<c>_consecutiveFailures = 0</c>）发生在
+        /// "读到 false"那一轮的末尾——因此可以用 <see cref="OnIsEnabledRead"/> 做确定性同步，
+        /// 替代"等固定时间猜复位已完成"。
+        /// </summary>
+        public bool IsEnabled
+        {
+            get
+            {
+                // 回调先于取值生效：回调里改写 IsEnabled 后，本次读取就返回新值。
+                OnIsEnabledRead?.Invoke();
+                return _isEnabled;
+            }
+            set => _isEnabled = value;
+        }
+
+        /// <summary>
+        /// 读取 <see cref="IsEnabled"/> 时的回调（在取值前调用）。
+        /// </summary>
+        public Action? OnIsEnabledRead { get; set; }
+
         public TagGrpDescriptor Descriptor { get; set; }
         public ITagChannel? Channel { get; set; }
 
@@ -775,10 +895,21 @@ public class TagGrpRunnerTests
         /// </summary>
         public TaskCompletionSource<bool>? SlowDisconnect { get; set; }
 
+        /// <summary>
+        /// 若不为 null，DisconnectAsync 会抛出该异常——用于验证清理路径吞掉异常但会留痕。
+        /// </summary>
+        public Exception? DisconnectThrows { get; set; }
+
         public Task DisconnectAsync(CancellationToken ct)
         {
             DisconnectAsyncCallCount++;
             LastDisconnectTokenWasCancelled = ct.IsCancellationRequested;
+
+            if (DisconnectThrows is not null)
+            {
+                throw DisconnectThrows;
+            }
+
             return SlowDisconnect is not null ? SlowDisconnect.Task : Task.CompletedTask;
         }
 

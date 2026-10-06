@@ -35,7 +35,9 @@ internal class ModbusTcpDirectTagFactory
             BuiltinTagKinds.FLOAT => CreateFloatTag(descriptor, addr, channel),
 
 
-            _ => throw new Exception($"未预料到的测点种类={descriptor.TagKind}")
+            _ => throw new TagsProjectConfigurationException(
+                $"ModbusTcp 驱动未预料到的测点种类={descriptor.TagKind}",
+                $"Tag({descriptor.TagName})")
         };
         return tag;
     }
@@ -76,7 +78,9 @@ internal class ModbusTcpDirectTagFactory
             return new OutputCoilDirectTag(descriptor, thisChannel, this._container);
         }
 
-        throw new NotImplementedException();
+        throw new TagsProjectConfigurationException(
+            $"BIT 型测点的地址区域 {addr.Area} 无法构建测点（支持 InputContacts/OutputCoils/InputRegisters/HoldingRegisters）",
+            $"Tag({descriptor.TagName})");
     }
     #endregion
 

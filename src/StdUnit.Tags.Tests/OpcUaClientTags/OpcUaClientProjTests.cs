@@ -46,6 +46,12 @@ public class OpcUaClientProjTests
         Assert.True(channel.ServerOpt.UsePassword);
         Assert.Equal("user-1", channel.ServerOpt.UserName);
         Assert.Equal("pass-1", channel.ServerOpt.Password);
+        // SecurityOpt 也走 XML → 描述符 → 通道这条链路
+        var descriptor = Assert.IsType<OpcUaClientTagChannelDescriptor>(channel.Descriptor);
+        var securityOpt = descriptor.OpcUaTagChannelOpt.SecurityOpt;
+        Assert.False(securityOpt.AutoAcceptUntrustedCertificates);
+        Assert.True(securityOpt.RejectSHA1SignedCertificates);
+        Assert.Equal((ushort)2048, securityOpt.MinimumCertificateKeySize);
 
         // Test Tags
         var g3 = proj.Tags.SelectGrp("g4");

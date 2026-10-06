@@ -61,7 +61,7 @@ public class TagContainerExtensionsTests
         var grp = new TagGrp(new TagGrpDescriptor { Name = "g" }, null);
         var container = TagContainer.From(grp);
 
-        Assert.Throws<Exception>(() => container.SearchRequiredChannel());
+        Assert.Throws<InvalidOperationException>(() => container.SearchRequiredChannel());
     }
     #endregion
 }

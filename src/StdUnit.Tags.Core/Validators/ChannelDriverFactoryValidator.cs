@@ -51,7 +51,7 @@ public class ChannelDriverFactoryValidator : ITagsProjectValidator
 
         if (errors.Count > 0)
         {
-            throw new TagsProjectSchemaException(errors);
+            throw new TagsProjectValidationException(errors);
         }
     }
 }

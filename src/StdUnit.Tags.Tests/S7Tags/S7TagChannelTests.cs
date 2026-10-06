@@ -130,8 +130,12 @@ public class S7TagChannelTests
     {
         var (channel, mock) = CreateChannel(connectToResult: -1); // non-zero = error
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => channel.EnsureConnectedAsync(force: false, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => channel.EnsureConnectedAsync(force: false, CancellationToken.None));
+        // 连接失败必须能定位到"哪个通道、连哪个端点、底层错误码"
         Assert.Contains("test-channel", ex.Message);
+        Assert.Contains("连接PLC失败", ex.Message);
+        Assert.Contains("Rack=", ex.Message);
+        Assert.Contains("OsSockerError=", ex.Message);
     }
 
     [Fact]
@@ -207,8 +211,11 @@ public class S7TagChannelTests
     {
         var (channel, _) = CreateChannel();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.ReadAsync("DB1.100", 3, CancellationToken.None));
+        // 多通道入口里，消息必须能定位到通道与地址
+        Assert.Contains("test-channel", ex.Message);
+        Assert.Contains("DB1.100", ex.Message);
     }
 
     [Fact]
@@ -217,9 +224,15 @@ public class S7TagChannelTests
         var (channel, mock) = CreateChannel(dbReadResult: -2);
         channel.Client = mock;
 
-        var ex = await Assert.ThrowsAsync<Exception>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.ReadAsync("DB1.100", 3, CancellationToken.None));
         Assert.Contains("Unknown error", ex.Message);
+        // 通道名 + 操作 + 地址 + 长度 + 错误码明细，缺一不可（否则轮询日志里定位不到现场）
+        Assert.Contains("test-channel", ex.Message);
+        Assert.Contains("读取DB失败", ex.Message);
+        Assert.Contains("DB1.100", ex.Message);
+        Assert.Contains("长度=3", ex.Message);
+        Assert.Contains("OsSockerError=", ex.Message);
     }
 
     #endregion
@@ -245,8 +258,12 @@ public class S7TagChannelTests
         var (channel, mock) = CreateChannel(mbReadResult: -3);
         channel.Client = mock;
 
-        await Assert.ThrowsAsync<Exception>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.ReadAsync("MB.100", 2, CancellationToken.None));
+        Assert.Contains("test-channel", ex.Message);
+        Assert.Contains("读取MB失败", ex.Message);
+        Assert.Contains("MB.100", ex.Message);
+        Assert.Contains("长度=2", ex.Message);
     }
 
     #endregion
@@ -271,8 +288,10 @@ public class S7TagChannelTests
     {
         var (channel, _) = CreateChannel();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.WriteAsync("DB1.200", [0x10], CancellationToken.None));
+        Assert.Contains("test-channel", ex.Message);
+        Assert.Contains("DB1.200", ex.Message);
     }
 
     [Fact]
@@ -281,8 +300,12 @@ public class S7TagChannelTests
         var (channel, mock) = CreateChannel(dbWriteResult: -4);
         channel.Client = mock;
 
-        await Assert.ThrowsAsync<Exception>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.WriteAsync("DB1.200", [0x10], CancellationToken.None));
+        Assert.Contains("test-channel", ex.Message);
+        Assert.Contains("写入DB失败", ex.Message);
+        Assert.Contains("DB1.200", ex.Message);
+        Assert.Contains("长度=1", ex.Message);
     }
 
     #endregion
@@ -306,8 +329,12 @@ public class S7TagChannelTests
         var (channel, mock) = CreateChannel(mbWriteResult: -5);
         channel.Client = mock;
 
-        await Assert.ThrowsAsync<Exception>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.WriteAsync("MB.200", [0x30], CancellationToken.None));
+        Assert.Contains("test-channel", ex.Message);
+        Assert.Contains("写入MB失败", ex.Message);
+        Assert.Contains("MB.200", ex.Message);
+        Assert.Contains("长度=1", ex.Message);
     }
 
     #endregion

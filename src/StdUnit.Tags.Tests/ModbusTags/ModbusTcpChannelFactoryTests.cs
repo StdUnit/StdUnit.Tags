@@ -68,7 +68,7 @@ public class ModbusTcpChannelFactoryTests
             Driver = "S7",
         };
 
-        Assert.Throws<InvalidOperationException>(() => factory.Create(descriptor));
+        Assert.Throws<TagsProjectConfigurationException>(() => factory.Create(descriptor));
     }
 
     [Fact]

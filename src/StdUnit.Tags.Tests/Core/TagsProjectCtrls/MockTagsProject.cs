@@ -31,6 +31,12 @@ internal class MockTagsProject : ITagsProject
     public bool RunAsyncThrows { get; set; }
 
     /// <summary>
+    /// 如果为 true，<see cref="Dispose"/> 会在计数之后抛出 InvalidOperationException。<br/>
+    /// 用于验证清理路径「吞掉异常但必须留痕」的语义。
+    /// </summary>
+    public bool DisposeThrows { get; set; }
+
+    /// <summary>
     /// 添加模拟通道以便验证 DisconnectAsync 调用。
     /// </summary>
     public void AddChannel(ITagChannel channel) => _channels.Add(channel);
@@ -63,6 +69,11 @@ internal class MockTagsProject : ITagsProject
     public void Dispose()
     {
         DisposeCallCount++;
+
+        if (DisposeThrows)
+        {
+            throw new InvalidOperationException("模拟的 Dispose 异常");
+        }
     }
 
     public XElement? GetRootElement() => null;

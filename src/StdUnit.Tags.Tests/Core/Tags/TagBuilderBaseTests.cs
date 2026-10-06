@@ -126,7 +126,7 @@ public class TagBuilderBaseTests
         var builder = CreateBuilder(channel, parent, CreateDescriptor());
 
         // Act & Assert
-        var ex = Assert.Throws<Exception>(() => builder.Build(null!));
+        var ex = Assert.Throws<InvalidOperationException>(() => builder.Build(null!));
         Assert.Contains("未配置通道", ex.Message);
     }
 

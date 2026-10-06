@@ -42,6 +42,6 @@ public class TestModbusAddressParsing
     [InlineData("60001.0")]
     public void TestPattern_WrongArea(string addr)
     {
-        Assert.Throws<Exception>(() => ModBusTcpAddressParser.Parse(addr));
+        Assert.Throws<TagsProjectAddressException>(() => ModBusTcpAddressParser.Parse(addr));
     }
 }

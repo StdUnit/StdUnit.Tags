@@ -38,14 +38,14 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
         {
             if (this.OnStartingException != null)
             {
-                var handled = await this.OnStartingException(new Exception("当前测点项目已经启动！"));
+                var handled = await this.OnStartingException(new InvalidOperationException("当前测点项目已经启动！"));
                 if (handled)
                 {
                     return;
                 }
             }
 
-            throw new Exception("当前测点项目已经启动！");
+            throw new InvalidOperationException("当前测点项目已经启动！");
         }
 
         using var scope = this._ssf.CreateScope();
@@ -84,13 +84,18 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
         }
         finally
         {
-            if (this.Project is not null)
+            var project = this.Project;
+            if (project is not null)
             {
                 try
                 {
-                    this.Project.Dispose();
+                    project.Dispose();
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // 有意吞掉：清理失败不应覆盖轮询阶段抛出的原始异常。但不能静默——留痕以便定位资源泄漏。
+                    this._logger.LogWarning(ex, "释放测点项目失败（项目根目录={ProjectRoot}），资源可能未完全释放", project.ProjectRoot);
+                }
                 finally
                 {
                     this.Project = null;
@@ -120,12 +125,17 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
                 {
                     project.Dispose();
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // 有意吞掉：释放失败不应阻断后续的通道断开。但不能静默——留痕以便定位资源泄漏。
+                    this._logger.LogWarning(ex, "释放测点项目异常（项目根目录={ProjectRoot}），资源可能未完全释放", project.ProjectRoot);
+                }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore error when cancelling
+            // 有意吞掉：取消失败（如 CTS 已释放）不应阻断后续的通道断开。但不能静默——留痕。
+            this._logger.LogWarning(ex, "取消测点项目轮询时出错（项目根目录={ProjectRoot}）", project?.ProjectRoot);
         }
         var oldchannels = project?.Channels;
         try
@@ -135,6 +145,7 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
             {
                 foreach (var ch in oldchannels)
                 {
+                    var channelName = ch?.ChannelName() ?? "null";
                     try
                     {
                         if (ch is not null)
@@ -142,18 +153,20 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
                             await ch.DisconnectAsync(CancellationToken.None);
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
-
+                        // 有意吞掉：一个通道断开失败不应阻断其它通道的清理。但不能静默——留痕以便确认连接是否真的断开了。
+                        this._logger.LogWarning(ex, "断开通道失败：通道={Channel}", channelName);
                     }
                 }
             }
 
             this.StartedOrStopped?.Invoke(this, new TagsProjectEventArgs(false, null));
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore errors thrown by StartedOrStopped event handlers
+            // 有意吞掉：StartedOrStopped 的事件处理器抛错不应让 StopAsync 失败。但不能静默——留痕。
+            this._logger.LogWarning(ex, "向 StartedOrStopped 事件处理器派发\"已停止\"通知时出错");
         }
 
         Interlocked.Exchange(ref _lock, 0);

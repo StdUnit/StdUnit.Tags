@@ -62,7 +62,7 @@ public class OpcUaClientTagCbntTests
     {
         var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "myCbnt", StartAddress = "ns=1" });
 
-        var ex = Assert.Throws<Exception>(() => cbnt["nonexistent"]);
+        var ex = Assert.Throws<KeyNotFoundException>(() => cbnt["nonexistent"]);
         Assert.Contains("myCbnt", ex.Message);
         Assert.Contains("nonexistent", ex.Message);
     }
@@ -77,7 +77,7 @@ public class OpcUaClientTagCbntTests
             Channel = new FakeSimpleChannel(),
         };
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => cbnt.ReadAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => cbnt.ReadAsync(CancellationToken.None));
         Assert.Contains(nameof(OpcUaClientTagChannel), ex.Message);
     }
 
@@ -89,7 +89,7 @@ public class OpcUaClientTagCbntTests
             Channel = new FakeSimpleChannel(),
         };
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => cbnt.WriteAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => cbnt.WriteAsync(CancellationToken.None));
         Assert.Contains(nameof(OpcUaClientTagChannel), ex.Message);
     }
 
@@ -200,6 +200,155 @@ public class OpcUaClientTagCbntTests
     }
 
     #endregion
+
+    /// <summary>
+    /// 通道把"节点状态为 Bad"判为读取失败时，cbnt 不应改动缓存、也不应发通知——
+    /// 异常原样向上传播给 runner 的重试/崩溃处理。
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_WhenChannelThrows_KeepsBagAndNotificationsUntouched()
+    {
+        var channel = new MockOpcUaChannel("mock");
+        var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "c", StartAddress = "ns=1" })
+        {
+            Channel = channel,
+        };
+        var d1 = new TagDescriptor { TagName = "t1", RawAddress = "ns=1;s=Var1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        var child = new OpcUaClientTagCbntor(d1, cbnt, 0, 0);
+        cbnt.Children.Add("t1", child);
+        var eventFired = false;
+        child.OnTagRead += (_, _) => eventFired = true;
+
+        channel.ReadAsyncOverride = (_, _) => throw new InvalidOperationException("读取节点失败：节点=ns=1;s=Var1 状态码=0x80340000(BadNodeIdUnknown)");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => cbnt.ReadAsync(CancellationToken.None));
+
+        Assert.Contains("BadNodeIdUnknown", ex.Message);
+        Assert.Empty(cbnt.Bag);
+        Assert.False(eventFired);
+    }
+
+    [Fact]
+    public async Task ReadAsync_WhenResultCountMismatches_ThrowsWithContext()
+    {
+        var channel = new MockOpcUaChannel("mock");
+        var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "c", StartAddress = "ns=1" })
+        {
+            Channel = channel,
+        };
+        var d1 = new TagDescriptor { TagName = "t1", RawAddress = "ns=1;s=Var1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        cbnt.Children.Add("t1", new OpcUaClientTagCbntor(d1, cbnt, 0, 0));
+        channel.ReadAsyncOverride = (_, _) => Task.FromResult<(DataValueCollection, IList<ServiceResult>)>((
+            new DataValueCollection(),
+            new List<ServiceResult>()));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => cbnt.ReadAsync(CancellationToken.None));
+
+        Assert.Contains("mock", ex.Message);
+        Assert.Contains("c", ex.Message);
+    }
+
+    /// <summary>
+    /// "子测点 ↔ NodeId"映射是缓存的（轮询高频路径只构建一次）；若加载后又有子节点增删，
+    /// 必须按数量校验重建，而不是沿用旧映射（漏读 / 下标错位）。
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_WhenChildrenChangedAfterFirstRead_RebuildsNodeMap()
+    {
+        var channel = new MockOpcUaChannel("mock");
+        var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "c", StartAddress = "ns=1" })
+        {
+            Channel = channel,
+        };
+        var d1 = new TagDescriptor { TagName = "t1", RawAddress = "ns=1;s=Var1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        var d2 = new TagDescriptor { TagName = "t2", RawAddress = "ns=1;s=Var2", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        var child1 = new OpcUaClientTagCbntor(d1, cbnt, 0, 0);
+        var child2 = new OpcUaClientTagCbntor(d2, cbnt, 0, 0);
+        cbnt.Children.Add("t1", child1);
+
+        channel.ReadAsyncOverride = (nodeIds, _) =>
+        {
+            var values = new DataValueCollection();
+            var errs = new List<ServiceResult>();
+            for (int i = 0; i < nodeIds.Count; i++)
+            {
+                values.Add(new DataValue { Value = 1 });
+                errs.Add(null!);
+            }            return Task.FromResult<(DataValueCollection, IList<ServiceResult>)>((values, errs));
+        };
+
+        await cbnt.ReadAsync(CancellationToken.None);
+        Assert.Single(cbnt.Bag);
+
+        // 映射缓存已建立后再加一个子测点
+        cbnt.Children.Add("t2", child2);
+        await cbnt.ReadAsync(CancellationToken.None);
+
+        Assert.Equal(2, cbnt.Bag.Count);
+        Assert.True(cbnt.Bag.ContainsKey(child1.NodeId));
+        Assert.True(cbnt.Bag.ContainsKey(child2.NodeId));
+    }
+
+    /// <summary>
+    /// 两个子测点指向同一个 NodeId（别名）是合法配置：写入时只写一次，不再抛"已添加相同键"。
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_WithAliasedNodeId_WritesOnceWithoutThrowing()
+    {
+        var channel = new MockOpcUaChannel("mock");
+        var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "c", StartAddress = "ns=1" })
+        {
+            Channel = channel,
+        };
+        var d1 = new TagDescriptor { TagName = "a", RawAddress = "ns=1;s=Var1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        var d2 = new TagDescriptor { TagName = "b", RawAddress = "ns=1;s=Var1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        var a = new OpcUaClientTagCbntor(d1, cbnt, 0, 0);
+        var b = new OpcUaClientTagCbntor(d2, cbnt, 0, 0);
+        cbnt.Children.Add("a", a);
+        cbnt.Children.Add("b", b);
+        Assert.Equal(a.NodeId, b.NodeId);
+
+        a.Value = 1;
+        b.Value = 2;
+
+        IDictionary<NodeId, DataValue>? written = null;
+        channel.WriteAsyncOverride = (dict, _) =>
+        {
+            written = dict;
+            return Task.CompletedTask;
+        };
+
+        await cbnt.WriteAsync(CancellationToken.None);
+
+        Assert.NotNull(written);
+        Assert.Single(written);
+        Assert.False(a.IsDirty);
+        Assert.False(b.IsDirty);
+    }
+
+    /// <summary>
+    /// 脏但缓存里没值（只有绕开 <c>Value</c> setter 直接置 <c>IsDirty = true</c> 才会）：
+    /// 必须抛带通道/测点/节点上下文的错，而不是静默跳过（否则"标记了要写却什么都没写"无人知晓）。
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_WhenDirtyButNoCachedValue_ThrowsWithContext()
+    {
+        var channel = new MockOpcUaChannel("mock");
+        var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "c", StartAddress = "ns=1" })
+        {
+            Channel = channel,
+        };
+        var d1 = new TagDescriptor { TagName = "t1", RawAddress = "ns=1;s=Var1", TagKind = BuiltinTagKinds.INT32, TagSize = 4 };
+        var child = new OpcUaClientTagCbntor(d1, cbnt, 0, 0);
+        cbnt.Children.Add("t1", child);
+        child.IsDirty = true;   // 绕开 Value setter
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => cbnt.WriteAsync(CancellationToken.None));
+
+        Assert.Contains("mock", ex.Message);
+        Assert.Contains("t1", ex.Message);
+        Assert.Contains(child.NodeId.ToString(), ex.Message);
+    }
 
     private class FakeSimpleChannel : ITagChannel
     {

@@ -67,7 +67,7 @@ public struct S7Address
 
     /// 转成 TagAddress 字符串
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Area 不是已知的区域类型</exception>
     public override string ToString()
     {
         var str = this.Area switch
@@ -75,7 +75,7 @@ public struct S7Address
             AreaKinds.MB => $"MB.{StartAddress}",
             AreaKinds.DB => $"DB{BlockNumber}.{StartAddress}",
             AreaKinds.None => $"$${StartAddress}",
-            _ => throw new Exception($"未预料的S7 Area类型={this.Area}")
+            _ => throw new ArgumentOutOfRangeException(nameof(this.Area), this.Area, "未预料的S7 Area类型")
         };
         if (!UseBit)
         {
@@ -91,7 +91,7 @@ public struct S7Address
     /// 如果输入的地址是"DB200.100"，则格式化结果也是"DB200.100"
     /// </summary>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Area 不是已知的区域类型</exception>
     public string Format()
     {
         var str = (this.BlockSpecified, this.Area) switch
@@ -99,7 +99,7 @@ public struct S7Address
             (false, _) => $"$${StartAddress}",
             (true, AreaKinds.MB) => $"MB.{StartAddress}",
             (true, AreaKinds.DB) => $"DB{BlockNumber}.{StartAddress}",
-            _ => throw new Exception($"未预料的S7 Area类型={this.Area}")
+            _ => throw new ArgumentOutOfRangeException(nameof(this.Area), this.Area, "未预料的S7 Area类型")
         };
         if (!UseBit)
         {
@@ -119,25 +119,26 @@ public static class S7AddressParser
     /// </summary>
     /// <param name="addr"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="TagsProjectAddressException">地址字符串不是合法的 S7 地址</exception>
     public static S7Address Parse(string addr)
     {
         var addrspan = addr.AsSpan();
         if (addrspan.Length < 2)
         {
-            throw new Exception($"S7地址格式错误:{addr}长度不足2");
+            throw new TagsProjectAddressException(
+                $"S7地址 '{addr}' 格式错误：长度不足2（期望 DB<block>.<start>[.<bit>] / MB.<start>[.<bit>] / $$<start>[.<bit>]）");
         }
 
         // $$开头表示引用TagCbnt的AreaKind和BlockNumber，地址字符串中不包含AreaKind和BlockNumber信息
         if (addrspan[0] == '$' && addrspan[1] == '$')
         {
-            return ParseRelativeAddress(addrspan.Slice(2));
+            return ParseRelativeAddress(addr, addrspan.Slice(2));
         }
 
         // MB. 开头表示MB区地址，地址字符串中不包含AreaKind和BlockNumber信息
         if (addrspan.Length >= 3 && addrspan[0] == 'M' && addrspan[1] == 'B' && addrspan[2] == '.')
         {
-            return ParseMBAddress(addrspan.Slice(3));
+            return ParseMBAddress(addr, addrspan.Slice(3));
         }
 
         // DB开头表示DB区地址，地址字符串中包含AreaKind和BlockNumber信息
@@ -146,12 +147,14 @@ public static class S7AddressParser
             var q = ParseDBAddressWithNthBit(addr).OrElse(_ => ParseDBAddressWithoutNthBit(addr));
             if (q.IsError)
             {
-                throw new Exception($"非法的S7DB地址({addr})格式: {q.ErrorValue}");
+                throw new TagsProjectAddressException(
+                    $"非法的S7 DB地址 '{addr}'：{q.ErrorValue}（期望 DB<block>.<start>[.<bit>]）");
             }
             return q.ResultValue;
         }
 
-        throw new Exception($"非法的S7地址格式:{addr}");
+        throw new TagsProjectAddressException(
+            $"非法的S7地址 '{addr}'（期望 DB<block>.<start>[.<bit>] / MB.<start>[.<bit>] / $$<start>[.<bit>]）");
     }
 
     private static FSharpResult<S7Address, string> ParseDBAddressWithNthBit(string addr)
@@ -255,23 +258,29 @@ public static class S7AddressParser
     /// <summary>
     /// 解析MB地址，输入类似于"2000.1"
     /// </summary>
-    /// <param name="span"></param>
+    /// <param name="originalAddr">原始地址字符串，仅用于错误消息</param>
+    /// <param name="span">去掉 "MB." 前缀后的地址片段</param>
     /// <returns></returns>
-    private static S7Address ParseMBAddress(ReadOnlySpan<char> span)
+    /// <exception cref="TagsProjectAddressException">地址片段不是合法的 MB 地址</exception>
+    private static S7Address ParseMBAddress(string originalAddr, ReadOnlySpan<char> span)
     {
         var index = span.IndexOf('.');
         var useBit = index > 0;
         if (useBit)
         {
-            var startSpan = span.Slice(0, index + 1);
+            // 必须排除 '.' 本身（Slice 的结束索引是开区间），否则 "2000.1" 会被切成 "2000."，
+            // int.TryParse 必然失败——即 MB 的位寻址地址永远解析不了。
+            var startSpan = span.Slice(0, index);
             if (!TryParseInt(startSpan, out var start))
             {
-                throw new Exception($"S7地址不合法: 无法解析起始地址");
+                throw new TagsProjectAddressException(
+                    $"S7地址 '{originalAddr}' 不合法：无法把起始地址 '{startSpan.ToString()}' 解析成整数");
             }
 
             if (!TryParseByte(span.Slice(index + 1), out var nthBit))
             {
-                throw new Exception($"S7地址不合法: 无法解析位地址");
+                throw new TagsProjectAddressException(
+                    $"S7地址 '{originalAddr}' 不合法：无法把位地址 '{span.Slice(index + 1).ToString()}' 解析成整数");
             }
             return new S7Address()
             {
@@ -287,7 +296,8 @@ public static class S7AddressParser
         {
             if (!TryParseInt(span, out var start))
             {
-                throw new Exception($"S7地址不合法: 无法解析起始地址");
+                throw new TagsProjectAddressException(
+                    $"S7地址 '{originalAddr}' 不合法：无法把起始地址 '{span.ToString()}' 解析成整数");
             }
             return new S7Address()
             {
@@ -301,7 +311,14 @@ public static class S7AddressParser
 
     }
 
-    private static S7Address ParseRelativeAddress(ReadOnlySpan<char> span)
+    /// <summary>
+    /// 解析相对地址（<c>$$</c> 前缀），输入类似于"104.3"。
+    /// </summary>
+    /// <param name="originalAddr">原始地址字符串，仅用于错误消息</param>
+    /// <param name="span">去掉 "$$" 前缀后的地址片段</param>
+    /// <returns></returns>
+    /// <exception cref="TagsProjectAddressException">地址片段不是合法的相对地址</exception>
+    private static S7Address ParseRelativeAddress(string originalAddr, ReadOnlySpan<char> span)
     {
         var index = span.IndexOf('.');
         var useBit = index > 0;
@@ -310,12 +327,14 @@ public static class S7AddressParser
             var startSpan = span.Slice(0, index);
             if (!TryParseInt(startSpan, out var start))
             {
-                throw new Exception($"S7地址不合法: 无法解析起始地址");
+                throw new TagsProjectAddressException(
+                    $"S7地址 '{originalAddr}' 不合法：无法把起始地址 '{startSpan.ToString()}' 解析成整数");
             }
 
             if (!TryParseByte(span.Slice(index + 1), out var nthBit))
             {
-                throw new Exception($"S7地址不合法: 无法解析位地址");
+                throw new TagsProjectAddressException(
+                    $"S7地址 '{originalAddr}' 不合法：无法把位地址 '{span.Slice(index + 1).ToString()}' 解析成整数");
             }
             return new S7Address()
             {
@@ -332,7 +351,8 @@ public static class S7AddressParser
         {
             if (!TryParseInt(span, out var start))
             {
-                throw new Exception($"S7地址不合法: 无法解析起始地址");
+                throw new TagsProjectAddressException(
+                    $"S7地址 '{originalAddr}' 不合法：无法把起始地址 '{span.ToString()}' 解析成整数");
             }
             return new S7Address()
             {

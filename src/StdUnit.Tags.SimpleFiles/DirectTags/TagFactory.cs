@@ -15,7 +15,8 @@ internal class SimpleFilesDirectTagFactory
         var channel = _parent.SearchRequiredChannel();
         if (channel is not SimpleFilesTagChannel simpleFilesChannel)
         {
-            throw new Exception($"通道类型不匹配，期望={nameof(SimpleFilesTagChannel)}，实际={channel.GetType().Name}");
+            throw new TagsProjectConfigurationException(
+                $"通道类型不匹配，期望={nameof(SimpleFilesTagChannel)}，实际={channel.GetType().Name}");
         }
         return simpleFilesChannel;
     }
@@ -123,7 +124,9 @@ internal class SimpleFilesDirectTagFactory
             BuiltinTagKinds.FLOAT => CreateFloatTag(descriptor, thisChannel),
             BuiltinTagKinds.DOUBLE => CreateDoubleTag(descriptor, thisChannel),
             BuiltinTagKinds.STR => CreateStringTag(descriptor, thisChannel),
-            _ => throw new Exception($"未预料到的测点种类={descriptor.TagKind}")
+            _ => throw new TagsProjectConfigurationException(
+                $"SimpleFiles 驱动未预料到的测点种类={descriptor.TagKind}",
+                $"Tag({descriptor.TagName})")
         };
         return tag;
 

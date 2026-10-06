@@ -14,11 +14,12 @@ public static class XElementExtensions_TagCbntDescriptor
     /// </summary>
     /// <param name="thisElement"></param>
     /// <returns></returns>
+    /// <exception cref="TagsProjectXmlException">XML 属性值不合法（name 缺失、access 未知、子测点属性非法）</exception>
     public static TagCbntDescriptor ToTagCbntDescriptor(this XElement thisElement)
     {
         var thisTagName = thisElement.GetTagUnionName();
         var thisChannelName = thisElement.GetTagUnionChannelName();
-        var address = thisElement.GetTagUnionAddress(thisTagName);
+        var address = thisElement.GetTagUnionAddress();
         var isEnabled = !string.Equals(thisElement.Attribute("isEnabled")?.Value, "false", StringComparison.OrdinalIgnoreCase);
 
         var descriptor = new TagCbntDescriptor
@@ -29,7 +30,7 @@ public static class XElementExtensions_TagCbntDescriptor
             IsEnabled = isEnabled,
         };
 
-        descriptor.AccessMode = thisElement.GetTagUnionAccess(thisTagName);
+        descriptor.AccessMode = thisElement.GetTagUnionAccess();
 
         // 处理额外特性
         foreach (var attr in thisElement.Attributes())
