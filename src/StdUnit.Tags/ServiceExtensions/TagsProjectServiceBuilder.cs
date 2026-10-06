@@ -142,8 +142,8 @@ public class TagsProjectServiceBuilder
     /// <see cref="NestedEntryValidator"/>（嵌套在入口内的 isEntry 不生效）、
     /// <see cref="EntryChannelExclusivityValidator"/>（同一个通道不被多个入口共用）。<br/>
     /// 启用后，<see cref="ITagsProjectFactory.Create"/> / <c>MakeProject</c> 在加载通道与测点之前，
-    /// 校验 XSD 无法表达的引用关系与结构约束；不通过时抛出 <see cref="TagsProjectSchemaException"/>，
-    /// 错误带完整路径上下文，在加载期报错而不是运行时才暴露。<br/>
+    /// 校验 XSD 无法表达的引用关系与结构约束；不通过时抛出 <see cref="TagsProjectValidationException"/>
+    /// （明细在 <c>Errors</c> 里），错误带完整路径上下文，在加载期报错而不是运行时才暴露。<br/>
     /// <b>默认已启用</b>（见 <see cref="UseDefaults"/> 路径下的 AddDefaults）；
     /// 本方法为幂等显式调用（语义文档化）。
     /// </summary>
@@ -166,7 +166,7 @@ public class TagsProjectServiceBuilder
     /// b.AddValidation&lt;MyValidator&gt;();                         // 自定义校验器
     /// </code>
     /// 校验器在 <see cref="ITagsProjectFactory.Create"/> / <c>MakeProject</c> 加载通道与测点之前执行，
-    /// 不通过时抛出异常（如 <see cref="TagsProjectSchemaException"/>）。
+    /// 不通过时抛出异常（如聚合的 <see cref="TagsProjectValidationException"/>）。
     /// </summary>
     /// <typeparam name="TValidator">校验器实现类型（实现 <see cref="ITagsProjectValidator"/>）</typeparam>
     /// <returns></returns>
