@@ -9,8 +9,15 @@ using System.Xml.Linq;
 namespace StdUnit.Tags.ZLan;
 
 
+/// <summary>
+/// ZLan 通道描述符：在 <see cref="ModbusTcpTagChannelDescriptor"/> 基础上把 <see cref="TagChannelDescriptor.Driver"/>
+/// 固定为 <see cref="ZLanTcpNames.DriverName"/>。
+/// </summary>
 public class ZLanTcpTagChannelDescriptor : ModbusTcpTagChannelDescriptor
 {
+    /// <summary>
+    /// c'tor：驱动名固定为 <see cref="ZLanTcpNames.DriverName"/>。
+    /// </summary>
     public ZLanTcpTagChannelDescriptor()
     {
         this.Driver = ZLanTcpNames.DriverName;
@@ -18,6 +25,9 @@ public class ZLanTcpTagChannelDescriptor : ModbusTcpTagChannelDescriptor
 }
 
 
+/// <summary>
+/// <see cref="TagChannelDescriptor"/> → <see cref="ZLanTcpTagChannelDescriptor"/> 的转换。
+/// </summary>
 public static class TagChannelDescriptor_S7Extensions
 {
     /// <exception cref="TagsProjectConfigurationException">当前描述符的驱动不是 <see cref="ZLanTcpNames.DriverName"/></exception>

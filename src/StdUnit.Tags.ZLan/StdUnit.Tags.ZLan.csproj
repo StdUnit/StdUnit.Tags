@@ -4,8 +4,6 @@
     <Description>ZLan 远程IO 通信支持（建立在 ModbusTcp 之上）</Description>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
-    <!-- 本项目尚未补 XML 注释（46 个公开成员），暂不生成文档文件；补齐后删掉本行即可继承 src/Directory.Build.props 的 true -->
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\StdUnit.Tags.ModbusTcp\StdUnit.Tags.ModbusTcp.csproj" />
