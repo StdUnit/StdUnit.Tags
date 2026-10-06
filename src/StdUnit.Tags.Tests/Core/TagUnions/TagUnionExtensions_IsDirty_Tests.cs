@@ -18,7 +18,7 @@ public class TagUnionExtensions_IsDirty_Tests
         public event TagSyncEventHandler OnTagRead { add { } remove { } }
         public event TagSyncEventHandler OnTagWritten { add { } remove { } }
 
-        public bool IsScaned { get; set; }
+        public bool IsScanned { get; set; }
         public bool IsDirty { get; set; }
         public ITagChannel? Channel => null;
 
@@ -44,7 +44,7 @@ public class TagUnionExtensions_IsDirty_Tests
         public int ScanInterval { get; set; }
         public bool IsEnabled { get; set; } = true;
         public TagCbntDescriptor Descriptor { get; set; }
-        public bool IsScaned { get; set; }
+        public bool IsScanned { get; set; }
         public ITagChannel? Channel { get; set; }
         public string StartAddress { get; set; } = string.Empty;
 

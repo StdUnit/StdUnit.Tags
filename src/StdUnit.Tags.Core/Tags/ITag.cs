@@ -92,7 +92,7 @@ public interface ITag
     /// <summary>
     /// 是否被扫描过
     /// </summary>
-    public bool IsScaned { get; set; }
+    public bool IsScanned { get; set; }
 
     /// <summary>
     /// 标识数据是否发生变化，如果发生变化，会在输出阶段刷写到硬件底层

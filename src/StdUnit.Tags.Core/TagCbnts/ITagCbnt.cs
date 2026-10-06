@@ -37,7 +37,7 @@ public interface ITagCbnt
     /// <summary>
     /// 是否被扫描过
     /// </summary>
-    bool IsScaned { get; set; }
+    bool IsScanned { get; set; }
 
 
     #region 底层硬件相关

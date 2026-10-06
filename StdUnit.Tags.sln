@@ -55,8 +55,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		src\StdUnit.Tags.Core\Schemas\tagsproject.xsd = src\StdUnit.Tags.Core\Schemas\tagsproject.xsd
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BC7B9A0A-80B1-47C1-BF70-D1393A0B4CCC}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StdUnit.Tags.Tests.NetCoreOnly", "src\StdUnit.Tags.Tests.NetCoreOnly\StdUnit.Tags.Tests.NetCoreOnly.csproj", "{A1C37BF0-5B93-4861-A936-5DD114C3C22B}"
 EndProject
 Global
@@ -158,7 +156,6 @@ Global
 		{E2692008-195A-C185-D028-DE241F2612A2} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{AD9C0AFC-1563-8496-7306-C3DA50242547} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{CFD0A797-F315-4012-A3A7-5FDC703B0A6A} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
-		{A1C37BF0-5B93-4861-A936-5DD114C3C22B} = {BC7B9A0A-80B1-47C1-BF70-D1393A0B4CCC}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6FF52024-3F01-4AC2-B991-CEE89ACF9FFC}

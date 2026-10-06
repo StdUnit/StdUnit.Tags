@@ -80,7 +80,7 @@ internal abstract class TagCbnt<T> : ITagCbnt where T : unmanaged
     public bool IsEnabled { get; set; }
 
     /// <inheritdoc/>
-    public bool IsScaned { get; set; }
+    public bool IsScanned { get; set; }
 
     /// <inheritdoc/>
     public abstract Task ReadAsync(CancellationToken ct);

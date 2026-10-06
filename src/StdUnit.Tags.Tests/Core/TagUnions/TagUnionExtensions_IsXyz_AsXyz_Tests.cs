@@ -23,7 +23,7 @@ public class TagUnionExtensions_IsXyz_AsXyz_Tests
         public DateTime Timestamp { get; set; }
         public event TagSyncEventHandler? OnTagRead { add { } remove { } }
         public event TagSyncEventHandler? OnTagWritten { add { } remove { } }
-        public bool IsScaned { get; set; }
+        public bool IsScanned { get; set; }
         public bool IsDirty { get; set; }
         public ITagChannel? Channel => null;
         public TagContainer? Parent { get; set; }
