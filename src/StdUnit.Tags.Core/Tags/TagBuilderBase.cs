@@ -123,7 +123,7 @@ public abstract class TagBuilderBase
     {
         if (channel is null)
         {
-            throw new Exception($"测点({this.Name})未配置通道");
+            throw new InvalidOperationException($"测点({this.Name})未配置通道");
         }
 
         if (this._createTag is not null)

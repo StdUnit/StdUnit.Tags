@@ -154,7 +154,7 @@ public class TagsProjectCtrlTests
         await Task.Delay(200);
 
         // 第二次启动应抛出异常
-        var ex = await Assert.ThrowsAsync<Exception>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             ctrl.StartPollAsync("test_dir", new XElement("Project"), (_, _, _) => Task.CompletedTask));
 
         Assert.Contains("已经启动", ex.Message);
@@ -207,7 +207,7 @@ public class TagsProjectCtrlTests
 
         await Task.Delay(200);
 
-        var ex = await Assert.ThrowsAsync<Exception>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             ctrl.StartPollAsync("test_dir", new XElement("Project"), (_, _, _) => Task.CompletedTask));
 
         Assert.Contains("已经启动", ex.Message);

@@ -35,22 +35,24 @@ public class TagGrp : ITagGrp
     public IDictionary<string, TagUnion> Children { get; } = new Dictionary<string, TagUnion>();
 
     /// <inheritdoc/>
+    /// <exception cref="KeyNotFoundException">指定的子测点名不存在</exception>
     public TagUnion this[string tagName] => Children.TryGetValue(tagName, out var tag) ?
         tag :
-        throw new Exception($"TagGrp({this.TagName()}) has no child who's name={tagName}");
+        throw new KeyNotFoundException($"TagGrp({this.TagName()}) has no child who's name={tagName}");
 
     /// <summary>
     /// 获取子节点，支持路径访问，例如：`"tagGrp1/tagGrp2/tagCbnt1"`<br/>
     /// </summary>
     /// <param name="path"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="ArgumentException">path 为空</exception>
+    /// <exception cref="KeyNotFoundException">路径中的某一段不存在</exception>
     public virtual TagUnion Descendant(string path)
     {
         var segments = path.Split('/');
         if (segments.Length == 0)
         {
-            throw new Exception($"invalid tag path={path}");
+            throw new ArgumentException($"invalid tag path={path}", nameof(path));
         }
         TagUnion tagunion = this[segments[0]];
         for (int idx = 1; idx < segments.Length; idx++)

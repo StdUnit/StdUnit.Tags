@@ -78,12 +78,12 @@ public abstract record TagUnion
     /// </summary>
     /// <param name="tagName"></param>
     /// <returns></returns>
-    /// <exception cref="Exception">
-    /// </exception>
+    /// <exception cref="InvalidOperationException">当前节点是叶测点，本身没有子节点</exception>
+    /// <exception cref="KeyNotFoundException">指定的子测点名不存在</exception>
     public TagUnion this[string tagName]
     {
         get => this.Map(
-            tagunit => throw new Exception($"Tag(Name={tagunit.TagName()} has not child) "),
+            tagunit => throw new InvalidOperationException($"Tag(Name={tagunit.TagName()} has not child) "),
             tagcbnt => new TagUnit(tagcbnt[tagName]),
             taggrp => taggrp[tagName]
             );

@@ -19,8 +19,15 @@
 /// <see cref="TagsProjectAddressException"/>（地址无法解析）、
 /// <see cref="TagsProjectConfigurationException"/>（配置语义不自洽）、
 /// <see cref="TagsProjectValidationException"/>（校验器聚合错误）。
+/// <para>
+/// <b>注意范围</b>：本类型只覆盖<b>加载期</b>。运行期（读写 / 连接 / 清理）错误不使用自定义类型，
+/// 一律是语义最贴近的 BCL 类型（<see cref="ArgumentException"/>、<see cref="InvalidOperationException"/>、
+/// <see cref="InvalidCastException"/>、<see cref="KeyNotFoundException"/> 等），
+/// 一个核心的决策依据是，不管异常来自哪里，以及是什么原因导致，runner 都应该会统一 <c>catch (Exception)</c> 交给重试策略与 <c>RunnerCrashed</c>——
+/// 所以<b>不存在</b>一个"能兜住本库全部异常"的根类型，请按加载期/运行期分别处理。
+/// </para>
 /// </summary>
-public abstract class TagsProjectLoadException : TagsProjectException
+public abstract class TagsProjectLoadException : Exception
 {
     /// <summary>
     /// c'tor

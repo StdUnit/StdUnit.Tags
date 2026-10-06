@@ -21,9 +21,10 @@ internal class OpcUaClientTagCbnt : ITagCbnt
     /// <inheritdoc/>
     public IDictionary<string, ITagCbntor> Children { get; } = new Dictionary<string, ITagCbntor>();
     /// <inheritdoc/>
+    /// <exception cref="KeyNotFoundException">指定的子测点名不存在</exception>
     public ITagCbntor this[string tagName] => this.Children.TryGetValue(tagName, out var tag) ?
         tag :
-        throw new Exception($"TagCbnt({this.TagName()}) has no child who's name={tagName}");
+        throw new KeyNotFoundException($"TagCbnt({this.TagName()}) has no child who's name={tagName}");
 
     /// <inheritdoc/>
     public bool IsEnabled { get; set; }
@@ -64,7 +65,7 @@ internal class OpcUaClientTagCbnt : ITagCbnt
         var channel = this.SearchChannel() as OpcUaClientTagChannel;
         if (channel is null)
         {
-            throw new Exception($"TagCbnt({this.TagName()}) 通道应为{nameof(OpcUaClientTagChannel)},实际为{channel?.GetType()}");
+            throw new InvalidOperationException($"TagCbnt({this.TagName()}) 通道应为{nameof(OpcUaClientTagChannel)},实际为{channel?.GetType()}");
         }
         var nodeIds = this.Children
             .Select(child =>
@@ -72,7 +73,7 @@ internal class OpcUaClientTagCbnt : ITagCbnt
                 var cbntor = child.Value as OpcUaClientTagCbntor;
                 if (cbntor is null)
                 {
-                    throw new Exception($"TagCbnt({this.TagName()}) 下的子标签({child.Key}) 应为{nameof(OpcUaClientTagCbntor)},实际为{child.Value.GetType()}");
+                    throw new InvalidOperationException($"TagCbnt({this.TagName()}) 下的子标签({child.Key}) 应为{nameof(OpcUaClientTagCbntor)},实际为{child.Value.GetType()}");
                 }
                 return this.GetNodeIdByTagName(cbntor);
             })
@@ -103,7 +104,7 @@ internal class OpcUaClientTagCbnt : ITagCbnt
         var channel = this.SearchChannel() as OpcUaClientTagChannel;
         if (channel is null)
         {
-            throw new Exception($"TagCbnt({this.TagName()}) 通道应为{nameof(OpcUaClientTagChannel)},实际为{channel?.GetType()}");
+            throw new InvalidOperationException($"TagCbnt({this.TagName()}) 通道应为{nameof(OpcUaClientTagChannel)},实际为{channel?.GetType()}");
         }
         var toBeWritten = this.Children
             .Where(c => c.Value.IsDirty)
@@ -112,7 +113,7 @@ internal class OpcUaClientTagCbnt : ITagCbnt
                 var cbntor = child.Value as OpcUaClientTagCbntor;
                 if (cbntor is null)
                 {
-                    throw new Exception($"TagCbnt({this.TagName()}) 下的子标签({child.Key}) 应为{nameof(OpcUaClientTagCbntor)},实际为{child.Value.GetType()}");
+                    throw new InvalidOperationException($"TagCbnt({this.TagName()}) 下的子标签({child.Key}) 应为{nameof(OpcUaClientTagCbntor)},实际为{child.Value.GetType()}");
                 }
                 var nodeId = this.GetNodeIdByTagName(cbntor);
                 return new KeyValuePair<NodeId, DataValue>(

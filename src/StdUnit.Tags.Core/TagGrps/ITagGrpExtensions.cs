@@ -125,8 +125,8 @@ public static class ITagGrpExtensions
     /// </summary>
     /// <param name="tagGrp"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
-    public static ITagChannel SearchRequiredChannel(this ITagGrp tagGrp) => tagGrp.SearchChannel() ?? throw new Exception($"Channel is not configured : TagGrp({tagGrp.TagName()})");
+    /// <exception cref="InvalidOperationException">自身与祖先都没有配置通道</exception>
+    public static ITagChannel SearchRequiredChannel(this ITagGrp tagGrp) => tagGrp.SearchChannel() ?? throw new InvalidOperationException($"Channel is not configured : TagGrp({tagGrp.TagName()})");
 
     #endregion
 

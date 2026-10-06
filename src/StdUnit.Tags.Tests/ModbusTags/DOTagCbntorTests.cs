@@ -67,7 +67,7 @@ public class DOTagCbntorTests
     {
         var (_, tag) = CreateContext();
 
-        var ex = Assert.Throws<Exception>(() => tag.Value = 42);
+        var ex = Assert.Throws<ArgumentException>(() => tag.Value = 42);
         Assert.Contains("Bit类型", ex.Message);
     }
 

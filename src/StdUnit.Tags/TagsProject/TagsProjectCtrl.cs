@@ -38,14 +38,14 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
         {
             if (this.OnStartingException != null)
             {
-                var handled = await this.OnStartingException(new Exception("当前测点项目已经启动！"));
+                var handled = await this.OnStartingException(new InvalidOperationException("当前测点项目已经启动！"));
                 if (handled)
                 {
                     return;
                 }
             }
 
-            throw new Exception("当前测点项目已经启动！");
+            throw new InvalidOperationException("当前测点项目已经启动！");
         }
 
         using var scope = this._ssf.CreateScope();

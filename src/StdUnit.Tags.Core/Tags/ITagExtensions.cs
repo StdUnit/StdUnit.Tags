@@ -95,12 +95,12 @@ public static class ITagExtensions
     /// <typeparam name="TTag"></typeparam>
     /// <param name="tag"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidCastException">当前测点不是 <typeparamref name="TTag"/> 类型</exception>
     public static TTag AsTag<TTag>(this ITag tag) where TTag : ITag
     {
         if (tag is not TTag t)
         {
-            throw new Exception($"{tag.GetType()} is not {typeof(TTag)}");
+            throw new InvalidCastException($"{tag.GetType()} is not {typeof(TTag)}");
         }
         return t;
     }
@@ -135,10 +135,10 @@ public static class ITagExtensions
     /// </summary>
     /// <param name="tag"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidOperationException">自身与祖先都没有配置通道</exception>
     public static ITagChannel SearchRequiredChannel(this ITag tag) =>
         tag.SearchChannel() ??
-        throw new Exception($"相关测点未配置通道 : Tag({tag.TagName()})");
+        throw new InvalidOperationException($"相关测点未配置通道 : Tag({tag.TagName()})");
 
     /// <summary>
     /// 向上冒泡检索入口

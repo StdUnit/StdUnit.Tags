@@ -67,7 +67,7 @@ public struct S7Address
 
     /// 转成 TagAddress 字符串
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Area 不是已知的区域类型</exception>
     public override string ToString()
     {
         var str = this.Area switch
@@ -75,7 +75,7 @@ public struct S7Address
             AreaKinds.MB => $"MB.{StartAddress}",
             AreaKinds.DB => $"DB{BlockNumber}.{StartAddress}",
             AreaKinds.None => $"$${StartAddress}",
-            _ => throw new Exception($"未预料的S7 Area类型={this.Area}")
+            _ => throw new ArgumentOutOfRangeException(nameof(this.Area), this.Area, "未预料的S7 Area类型")
         };
         if (!UseBit)
         {
@@ -91,7 +91,7 @@ public struct S7Address
     /// 如果输入的地址是"DB200.100"，则格式化结果也是"DB200.100"
     /// </summary>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="ArgumentOutOfRangeException">Area 不是已知的区域类型</exception>
     public string Format()
     {
         var str = (this.BlockSpecified, this.Area) switch
@@ -99,7 +99,7 @@ public struct S7Address
             (false, _) => $"$${StartAddress}",
             (true, AreaKinds.MB) => $"MB.{StartAddress}",
             (true, AreaKinds.DB) => $"DB{BlockNumber}.{StartAddress}",
-            _ => throw new Exception($"未预料的S7 Area类型={this.Area}")
+            _ => throw new ArgumentOutOfRangeException(nameof(this.Area), this.Area, "未预料的S7 Area类型")
         };
         if (!UseBit)
         {

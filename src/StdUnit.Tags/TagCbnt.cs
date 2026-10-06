@@ -73,7 +73,7 @@ internal abstract class TagCbnt<T> : ITagCbnt where T : unmanaged
     /// <inheritdoc/>
     public ITagCbntor this[string tagName] => this.Children.TryGetValue(tagName, out var tag) ?
         tag :
-        throw new Exception($"TagCbnt({this.TagName()}) has no child who's name={tagName}");
+        throw new KeyNotFoundException($"TagCbnt({this.TagName()}) has no child who's name={tagName}");
     #endregion
 
     /// <inheritdoc/>

@@ -116,7 +116,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
                 var result = await this.CreateClientAndConnectAsync(ct);
                 if (result.IsError)
                 {
-                    throw new Exception(result.ErrorValue.ToString());
+                    throw new InvalidOperationException(result.ErrorValue.ToString());
                 }
                 this.Client = result.ResultValue;
             },
@@ -162,7 +162,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
     /// <summary>
     /// 读取
     /// </summary>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidOperationException">客户端未连接，或 PLC 返回错误码</exception>
     public virtual async Task<byte[]> ReadAsync(string address, int length, CancellationToken ct)
     {
         var addr = S7AddressParser.Parse(address);
@@ -177,7 +177,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
                     if (code != 0)
                     {
                         var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new Exception(err.Text);
+                        throw new InvalidOperationException(err.Text);
                     }
                     return Task.CompletedTask;
                 },
@@ -194,7 +194,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
                     if (code != 0)
                     {
                         var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new Exception(err.Text);
+                        throw new InvalidOperationException(err.Text);
                     }
                     return Task.CompletedTask;
                 },
@@ -211,7 +211,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
     /// <summary>
     /// 写入底层
     /// </summary>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidOperationException">客户端未连接，或 PLC 返回错误码</exception>
     public virtual async Task WriteAsync(string address, byte[] buffer, CancellationToken ct)
     {
         var addr = S7AddressParser.Parse(address);
@@ -225,7 +225,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
                     if (code != 0)
                     {
                         var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new Exception(err.Text);
+                        throw new InvalidOperationException(err.Text);
                     }
                     return Task.CompletedTask;
                 },
@@ -242,7 +242,7 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
                     if (code != 0)
                     {
                         var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new Exception(err.Text);
+                        throw new InvalidOperationException(err.Text);
                     }
                     return Task.CompletedTask;
                 },

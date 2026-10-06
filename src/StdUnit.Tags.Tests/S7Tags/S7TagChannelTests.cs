@@ -130,7 +130,7 @@ public class S7TagChannelTests
     {
         var (channel, mock) = CreateChannel(connectToResult: -1); // non-zero = error
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => channel.EnsureConnectedAsync(force: false, CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => channel.EnsureConnectedAsync(force: false, CancellationToken.None));
         Assert.Contains("test-channel", ex.Message);
     }
 
@@ -217,7 +217,7 @@ public class S7TagChannelTests
         var (channel, mock) = CreateChannel(dbReadResult: -2);
         channel.Client = mock;
 
-        var ex = await Assert.ThrowsAsync<Exception>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.ReadAsync("DB1.100", 3, CancellationToken.None));
         Assert.Contains("Unknown error", ex.Message);
     }
@@ -245,7 +245,7 @@ public class S7TagChannelTests
         var (channel, mock) = CreateChannel(mbReadResult: -3);
         channel.Client = mock;
 
-        await Assert.ThrowsAsync<Exception>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.ReadAsync("MB.100", 2, CancellationToken.None));
     }
 
@@ -281,7 +281,7 @@ public class S7TagChannelTests
         var (channel, mock) = CreateChannel(dbWriteResult: -4);
         channel.Client = mock;
 
-        await Assert.ThrowsAsync<Exception>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.WriteAsync("DB1.200", [0x10], CancellationToken.None));
     }
 
@@ -306,7 +306,7 @@ public class S7TagChannelTests
         var (channel, mock) = CreateChannel(mbWriteResult: -5);
         channel.Client = mock;
 
-        await Assert.ThrowsAsync<Exception>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => channel.WriteAsync("MB.200", [0x30], CancellationToken.None));
     }
 

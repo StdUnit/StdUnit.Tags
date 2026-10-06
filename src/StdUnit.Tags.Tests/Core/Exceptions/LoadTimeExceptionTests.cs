@@ -23,7 +23,8 @@ public class LoadTimeExceptionTests
 
     /// <summary>
     /// XSD 校验异常同时是"校验异常"和"加载期异常"：老代码 catch TagsProjectSchemaException 不受影响，
-    /// 新代码 catch 基类即可统一处理。
+    /// 新代码 catch 基类即可统一处理。父链直接落在 <see cref="Exception"/> 上——
+    /// 库里**没有**"能兜住全部异常"的根类型（运行期用 BCL 类型）。
     /// </summary>
     [Fact]
     public void SchemaException_DerivesFromValidationAndLoadException()
@@ -33,7 +34,7 @@ public class LoadTimeExceptionTests
 
         Assert.IsAssignableFrom<TagsProjectValidationException>(ex);
         Assert.IsAssignableFrom<TagsProjectLoadException>(ex);
-        Assert.IsAssignableFrom<TagsProjectException>(ex);
+        Assert.Same(typeof(Exception), typeof(TagsProjectLoadException).BaseType);
         Assert.Same(errors, ex.Errors);
         Assert.Contains("schema", ex.Message);
         Assert.Contains("第一处", ex.Message);

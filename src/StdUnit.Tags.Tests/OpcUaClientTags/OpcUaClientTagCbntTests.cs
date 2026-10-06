@@ -62,7 +62,7 @@ public class OpcUaClientTagCbntTests
     {
         var cbnt = new OpcUaClientTagCbnt(new TagCbntDescriptor { Name = "myCbnt", StartAddress = "ns=1" });
 
-        var ex = Assert.Throws<Exception>(() => cbnt["nonexistent"]);
+        var ex = Assert.Throws<KeyNotFoundException>(() => cbnt["nonexistent"]);
         Assert.Contains("myCbnt", ex.Message);
         Assert.Contains("nonexistent", ex.Message);
     }
@@ -77,7 +77,7 @@ public class OpcUaClientTagCbntTests
             Channel = new FakeSimpleChannel(),
         };
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => cbnt.ReadAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => cbnt.ReadAsync(CancellationToken.None));
         Assert.Contains(nameof(OpcUaClientTagChannel), ex.Message);
     }
 
@@ -89,7 +89,7 @@ public class OpcUaClientTagCbntTests
             Channel = new FakeSimpleChannel(),
         };
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => cbnt.WriteAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => cbnt.WriteAsync(CancellationToken.None));
         Assert.Contains(nameof(OpcUaClientTagChannel), ex.Message);
     }
 

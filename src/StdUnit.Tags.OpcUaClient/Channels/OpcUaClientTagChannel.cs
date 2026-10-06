@@ -182,8 +182,7 @@ public class OpcUaClientTagChannel : ITagChannel
     /// <param name="toBeWritten"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    /// <exception cref="Exception"></exception>
+    /// <exception cref="InvalidOperationException">会话未创建/未连接，或 OPC UA 返回了坏状态码</exception>
     public virtual async Task WriteAsync(IDictionary<NodeId, DataValue> toBeWritten, CancellationToken ct)
     {
         if (this.OpcSession is null)
@@ -221,7 +220,7 @@ public class OpcUaClientTagChannel : ITagChannel
                 .Where(r => StatusCode.IsNotGood(r.Status))
                 .Select(r => new WriteValueErr(r.WriteValue.NodeId, r.Status))
                 .ToList();
-            throw new Exception($"通道写入失败:通道={this.ChannelName()}。异常={string.Join(";", notgoods)}。");
+            throw new InvalidOperationException($"通道写入失败:通道={this.ChannelName()}。异常={string.Join(";", notgoods)}。");
         }
     }
 

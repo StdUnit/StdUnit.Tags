@@ -364,7 +364,7 @@ public class ModbusTcpChannelTests
         var (channel, _) = CreateChannel();
         await channel.EnsureConnectedAsync(false, CancellationToken.None);
 
-        await Assert.ThrowsAsync<Exception>(() =>
+        await Assert.ThrowsAsync<ArgumentException>(() =>
             channel.WriteRegistersAsync("1~30001", new ushort[] { 1 }, CancellationToken.None));
     }
 
@@ -374,7 +374,7 @@ public class ModbusTcpChannelTests
         var (channel, _) = CreateChannel();
         await channel.EnsureConnectedAsync(false, CancellationToken.None);
 
-        await Assert.ThrowsAsync<Exception>(() =>
+        await Assert.ThrowsAsync<ArgumentException>(() =>
             channel.WriteBitsAsync("1~10001", new bool[] { true }, CancellationToken.None));
     }
 
@@ -384,7 +384,7 @@ public class ModbusTcpChannelTests
         var (channel, _) = CreateChannel();
         await channel.EnsureConnectedAsync(false, CancellationToken.None);
 
-        await Assert.ThrowsAsync<Exception>(() =>
+        await Assert.ThrowsAsync<ArgumentException>(() =>
             channel.ReadRegistersAsync("1~00001", 1, CancellationToken.None));
     }
 

@@ -254,7 +254,7 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
             return flags.ToArray();
         }
 
-        throw new Exception($"ReadBitsAsync 仅支持位空间(InputContacts/OutputCoils)，当前地址区域={addr.Area}");
+        throw new ArgumentException($"ReadBitsAsync 仅支持位空间(InputContacts/OutputCoils)，当前地址区域={addr.Area}", nameof(address));
     }
 
     /// <inheritdoc/>
@@ -263,7 +263,7 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
         var addr = ModBusTcpAddressParser.Parse(address);
         if (addr.Area != RegisterKinds.OutputCoils)
         {
-            throw new Exception($"WriteBitsAsync 仅支持线圈(OutputCoils)，当前地址区域={addr.Area}");
+            throw new ArgumentException($"WriteBitsAsync 仅支持线圈(OutputCoils)，当前地址区域={addr.Area}", nameof(address));
         }
         await ModbusMaster!.WriteMultipleCoilsAsync(addr.SlaveAddress, addr.StartPoint, bits);
     }
@@ -308,7 +308,7 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
             return points;
         }
 
-        throw new Exception($"ReadRegistersAsync 仅支持寄存器区域(Holding/Input)，当前地址区域={addr.Area}");
+        throw new ArgumentException($"ReadRegistersAsync 仅支持寄存器区域(Holding/Input)，当前地址区域={addr.Area}", nameof(address));
     }
 
 
@@ -318,7 +318,7 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
         var addr = ModBusTcpAddressParser.Parse(address);
         if (addr.Area != RegisterKinds.HoldingRegisters)
         {
-            throw new Exception($"WriteRegistersAsync 仅支持保持寄存器(Holding)，当前地址区域={addr.Area}");
+            throw new ArgumentException($"WriteRegistersAsync 仅支持保持寄存器(Holding)，当前地址区域={addr.Area}", nameof(address));
         }
 
         var payload = GetArray(registers);

@@ -30,8 +30,8 @@ public static class ITagCbntExtensions
     /// </summary>
     /// <param name="tagcbnt"></param>
     /// <returns></returns>
-    /// <exception cref="Exception"></exception>
-    public static ITagChannel SearchRequiredChannel(this ITagCbnt tagcbnt) => tagcbnt.SearchChannel() ?? throw new Exception($"Channel is not configured : TagCbnt({tagcbnt.TagName()})");
+    /// <exception cref="InvalidOperationException">自身与祖先都没有配置通道</exception>
+    public static ITagChannel SearchRequiredChannel(this ITagCbnt tagcbnt) => tagcbnt.SearchChannel() ?? throw new InvalidOperationException($"Channel is not configured : TagCbnt({tagcbnt.TagName()})");
 
     /// <summary>
     /// 获取解析后的访问模式。<br/>

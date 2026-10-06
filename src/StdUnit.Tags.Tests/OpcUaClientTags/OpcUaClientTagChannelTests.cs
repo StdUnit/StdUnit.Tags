@@ -181,7 +181,7 @@ public class OpcUaClientTagChannelTests
         var channel = CreateChannel(sessionMock);
         await channel.EnsureConnectedAsync(false, CancellationToken.None);
 
-        var ex = await Assert.ThrowsAsync<Exception>(() =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             channel.WriteAsync(new Dictionary<NodeId, DataValue> { [nodeId] = new DataValue { Value = 123 } }, CancellationToken.None));
         Assert.Contains("写入失败", ex.Message);
     }

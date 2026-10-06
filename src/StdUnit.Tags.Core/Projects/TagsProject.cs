@@ -203,25 +203,26 @@ internal class TagsProject : ITagsProject
 
 
     /// <inheritdoc/>
+    /// <exception cref="InvalidOperationException">项目未初始化（通道/测点/逻辑组件为空，或没有任何入口测点组）</exception>
     public virtual Task RunAsync(CancellationToken ct)
     {
         if (this.Channels == null || this.Channels.Count == 0)
         {
-            throw new Exception($"通道集为空");
+            throw new InvalidOperationException($"通道集为空");
         }
         if (this.Tags == null)
         {
-            throw new Exception("测点集为空");
+            throw new InvalidOperationException("测点集为空");
         }
         if (this.Logicets == null)
         {
-            throw new Exception("逻辑组件集为空");
+            throw new InvalidOperationException("逻辑组件集为空");
         }
 
         var entries = this.GetEntries();
         if (entries.Count == 0)
         {
-            throw new Exception("未配置入口测点组");
+            throw new InvalidOperationException("未配置入口测点组");
         }
 
         var tasks = new ConcurrentBag<Task>();
@@ -291,7 +292,7 @@ internal class TagsProject : ITagsProject
     {
         if (this.IntentCapacity <= 0)
         {
-            throw new Exception($"IntentCapacity 必须大于 0, 当前={this.IntentCapacity}");
+            throw new ArgumentOutOfRangeException(nameof(this.IntentCapacity), this.IntentCapacity, "IntentCapacity 必须大于 0");
         }
 
         return Channel.CreateBounded<IntentCompletion>(new BoundedChannelOptions(capacity: this.IntentCapacity)
