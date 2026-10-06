@@ -39,7 +39,7 @@ dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./Tes
 
 - **有标准库就用标准库。** 跨框架差异用调用点的 `#if NETFRAMEWORK` 或项目内 `Compat/` 目录的单点垫片（如 `StdUnit.Tags.Core/Compat/ReferenceEqualityComparer.cs`、各驱动的 `Compat/*.cs`）。
 - **不要把 `#if` 铺到调用点满屏幕，也不要用 `#if` 去条件修饰公共 API**（那会给库使用者制造两套签名）。
-- 每新增一个项目级 TFM，记得同步 `<LangVersion>latest</LangVersion>`：net472 默认 C# 7.3，`Nullable=enable` 会直接报 CS8630。
+- `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 由 `src/Directory.Build.props` 统一提供，新建项目不用再写这几项（net472 默认 C# 7.3，少写一次就少一次 CS8630）；`TargetFrameworks` 仍写在各 csproj（存在 net8-only 项目）。不生成 XML 文档的项目在本项目显式写 `<GenerateDocumentationFile>false</GenerateDocumentationFile>`（现有：BlazorLib、两个测试项目；BlazorLib 是"尚未补注释"的历史包袱）。
 - net472 缺 init-only setter 时，在 `paket.references` 里加 `IsExternalInit`（已有先例：Core / StdUnit.Tags / ComScanner / OpcUaClient / SimpleFiles）。
 - **net472 的引用程序集没有可空标注**，`string.IsNullOrEmpty` 之类的 BCL 后置条件看不到，会出现 net472 专属的 CS8601/CS8603/CS8604 假阳性。改用语言级判空（`x is null || x.Length == 0`），**不要用 `NoWarn` 压掉**。
 - 不要用 `| Select-Object -First n` 过滤 `dotnet paket`/`dotnet build` 的长输出：会在第 n 行处终止上游进程。先 `Out-File` 再 grep。
@@ -82,7 +82,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 
 ## 约定
 
-- 所有项目 `ImplicitUsings` + `Nullable` 开启，`LangVersion latest`，生成 XML 文档文件。
+- 公共编译设置（`ImplicitUsings` + `Nullable` + `LangVersion latest` + XML 文档文件）与 NuGet 包元数据（作者/授权/仓库/项目主页/标签/README）统一在 `src/Directory.Build.props`；**新增会被发布的包时，务必在自己 csproj 里补一行 `<Description>`**（否则 nuget.org 上只会显示 SDK 占位文本 `Package Description`），并把项目名加进 `src/publish-packages.ps1` 的列表。
 - 驱动包内的 DI 扩展类约定**同名** `TagsProject_Extensions`，各自位于自己的命名空间（如 `StdUnit.Tags.S7`）。
 - 驱动名常量集中在 `XxxNames.DriverName`（如 `S7Names.DriverName = "S7"`、`ComDriverNames.DriverName = "COM"`）；XML 中的 `driver="..."` 必须与之完全一致。
 - 每个驱动的支持注册收口为 `.AddXxxSupport()`，实现为细粒度注册（`AddXxxChannel` / `AddXxxTagCbntBuilder` / `AddXxxDirectTagBuilder`）的组合。新增驱动请沿用这个形状。可选的"策略/判定"类扩展点按这个形状走：**注册扩展方法的可选参数 → 注册时闭包构造工厂 → 通道 ctor 的可选参数（默认用内置实现）**，例：OpcUa 的 `checkIsFailed`（`AddOpcUaClientSupport(checkIsFailed:)` → `OpcUaClientTagChannelFactory` → `OpcUaClientTagChannel` ctor，默认 `OpcUaValueQuality.IsFailed`）；不要把它做成需要用户自己组装的服务类型。
