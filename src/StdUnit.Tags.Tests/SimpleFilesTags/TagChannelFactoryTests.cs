@@ -43,17 +43,18 @@ public class SimpleFilesTagChannelFactoryTests
     public void Factory_Create_WithBaseDir_SetsSettings()
     {
         var factory = new SimpleFilesTagChannelFactory(NullLoggerFactory.Instance);
+        var baseDir = TestPaths.TempPath("tags");
         var descriptor = new SimpleFilesTagChannelDescriptor
         {
             Name = "factory-ch-dir",
             Driver = SimpleFilesNames.DriverName,
-            BaseDir = @"C:\tags",
+            BaseDir = baseDir,
         };
 
         var channel = factory.Create(descriptor);
 
         var simpleFilesChannel = Assert.IsType<SimpleFilesTagChannel>(channel);
-        Assert.Equal(@"C:\tags", simpleFilesChannel.Settings.BaseDir);
+        Assert.Equal(baseDir, simpleFilesChannel.Settings.BaseDir);
     }
 
     [Fact]
@@ -65,12 +66,13 @@ public class SimpleFilesTagChannelFactoryTests
             Name = "factory-ch-extras",
             Driver = SimpleFilesNames.DriverName,
         };
-        descriptor.Extras["BaseDir"] = new XElement("BaseDir", @"C:\extras-dir");
+        var baseDirFromExtras = TestPaths.TempPath("extras-dir");
+        descriptor.Extras["BaseDir"] = new XElement("BaseDir", baseDirFromExtras);
 
         var channel = factory.Create(descriptor);
 
         var simpleFilesChannel = Assert.IsType<SimpleFilesTagChannel>(channel);
-        Assert.Equal(@"C:\extras-dir", simpleFilesChannel.Settings.BaseDir);
+        Assert.Equal(baseDirFromExtras, simpleFilesChannel.Settings.BaseDir);
     }
 
     [Fact]

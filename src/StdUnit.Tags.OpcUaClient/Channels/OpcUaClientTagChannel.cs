@@ -65,6 +65,7 @@ public class OpcUaClientTagChannel : ITagChannel
     protected virtual ApplicationConfiguration PrepareOpcUaAppConfig()
     {
         var securityOpt = _channelOpt.SecurityOpt ?? new OpcUaSecurityOpt();
+        var storeRoot = GetCertificateStoreRoot(securityOpt);
         var config = new ApplicationConfiguration()
         {
             ApplicationName = "MyClient",
@@ -72,10 +73,10 @@ public class OpcUaClientTagChannel : ITagChannel
             ApplicationType = ApplicationType.Client,
             SecurityConfiguration = new SecurityConfiguration
             {
-                ApplicationCertificate = new CertificateIdentifier { StoreType = @"Directory", StorePath = @"%CommonApplicationData%\OPC Foundation\CertificateStores\MachineDefault", SubjectName = "MyClientSubjectName" },
-                TrustedIssuerCertificates = new CertificateTrustList { StoreType = @"Directory", StorePath = @"%CommonApplicationData%\OPC Foundation\CertificateStores\UA Certificate Authorities" },
-                TrustedPeerCertificates = new CertificateTrustList { StoreType = @"Directory", StorePath = @"%CommonApplicationData%\OPC Foundation\CertificateStores\UA Applications" },
-                RejectedCertificateStore = new CertificateTrustList { StoreType = @"Directory", StorePath = @"%CommonApplicationData%\OPC Foundation\CertificateStores\RejectedCertificates" },
+                ApplicationCertificate = new CertificateIdentifier { StoreType = "Directory", StorePath = Path.Combine(storeRoot, "MachineDefault"), SubjectName = "MyClientSubjectName" },
+                TrustedIssuerCertificates = new CertificateTrustList { StoreType = "Directory", StorePath = Path.Combine(storeRoot, "UA Certificate Authorities") },
+                TrustedPeerCertificates = new CertificateTrustList { StoreType = "Directory", StorePath = Path.Combine(storeRoot, "UA Applications") },
+                RejectedCertificateStore = new CertificateTrustList { StoreType = "Directory", StorePath = Path.Combine(storeRoot, "RejectedCertificates") },
                 AutoAcceptUntrustedCertificates = securityOpt.AutoAcceptUntrustedCertificates,
                 RejectSHA1SignedCertificates = securityOpt.RejectSHA1SignedCertificates,
                 MinimumCertificateKeySize = securityOpt.MinimumCertificateKeySize,
@@ -96,6 +97,32 @@ public class OpcUaClientTagChannel : ITagChannel
 
         WarnOnLooseSecuritySettings(securityOpt);
         return config;
+    }
+
+    /// <summary>
+    /// 证书库根目录：优先用 <see cref="OpcUaSecurityOpt.CertificateStoreRoot"/>，未配置时取
+    /// <see cref="Environment.SpecialFolder.CommonApplicationData"/> 下的 <c>OPC Foundation/CertificateStores</c>。<br/>
+    /// <br/>
+    /// 为什么不再写 <c>@"%CommonApplicationData%\OPC Foundation\..."</c> 字面量：那是 OPC UA 栈的占位符，
+    /// 而它的替换是**纯字符串拼接、不做分隔符规范化**（实测 1.5.374.126）。在 Linux 上会得到
+    /// <c>/usr/share\OPC Foundation\CertificateStores\MachineDefault</c>——一个名字里带反斜杠的目录，
+    /// 层级完全不对，随后 <c>Utils.GetAbsoluteFilePath</c> 直接抛 "File does not exist"。
+    /// 这里用 <c>Path.Combine</c> 拼，两个平台都得到正确的目录层级。
+    /// </summary>
+    private static string GetCertificateStoreRoot(OpcUaSecurityOpt securityOpt)
+    {
+        // 注意：net472 的引用程序集没有可空标注，string.IsNullOrWhiteSpace 的后置条件在那边看不到（会误报 CS8603），
+        // 所以这里用语言级判空。
+        var configured = securityOpt.CertificateStoreRoot;
+        if (configured is not null && configured.Trim().Length > 0)
+        {
+            return configured;
+        }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "OPC Foundation",
+            "CertificateStores");
     }
 
     /// <summary>

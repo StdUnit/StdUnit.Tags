@@ -111,19 +111,18 @@ public class TagsProjectSchemaTests
 
         var samples = new[]
         {
-            @"Samples\Web\index.xml",
-            @"Samples\Web\index2.xml",
-            @"Samples\Web\index-plugin.xml",
-            @"Samples\WpfDemo\index.xml",
-            @"Samples\WpfDemo\index-2.xml",
-            @"Samples\NixMonitor\index.xml",
+            TestPaths.Fixture("Samples", "Web", "index.xml"),
+            TestPaths.Fixture("Samples", "Web", "index2.xml"),
+            TestPaths.Fixture("Samples", "Web", "index-plugin.xml"),
+            TestPaths.Fixture("Samples", "WpfDemo", "index.xml"),
+            TestPaths.Fixture("Samples", "WpfDemo", "index-2.xml"),
+            TestPaths.Fixture("Samples", "NixMonitor", "index.xml"),
         };
-        foreach (var rel in samples)
+        foreach (var path in samples)
         {
-            var path = Path.Combine(AppContext.BaseDirectory, rel);
             Assert.True(File.Exists(path), $"示例文件未复制到输出目录: {path}");
             var errors = Validate(set, XDocument.Load(path));
-            Assert.True(errors.Count == 0, $"{rel} 校验失败: {string.Join(" | ", errors)}");
+            Assert.True(errors.Count == 0, $"{path} 校验失败: {string.Join(" | ", errors)}");
         }
     }
 

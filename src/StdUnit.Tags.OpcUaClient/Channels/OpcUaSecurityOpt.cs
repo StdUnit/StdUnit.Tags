@@ -23,4 +23,16 @@ public class OpcUaSecurityOpt
     /// 类型与底层 <c>Opc.Ua.SecurityConfiguration.MinimumCertificateKeySize</c> 一致（<see cref="ushort"/>），避免隐式转换。
     /// </summary>
     public ushort MinimumCertificateKeySize { get; set; } = 1024;
+
+    /// <summary>
+    /// 证书库根目录，默认 <c>null</c> ⇒ 使用 <see cref="Environment.SpecialFolder.CommonApplicationData"/>
+    /// 下的 <c>OPC Foundation/CertificateStores</c>（Windows：<c>%ProgramData%\OPC Foundation\CertificateStores</c>；
+    /// Linux：<c>/usr/share/OPC Foundation/CertificateStores</c>）。<br/>
+    /// 四个库（<c>MachineDefault</c> / <c>UA Certificate Authorities</c> / <c>UA Applications</c> / <c>RejectedCertificates</c>）
+    /// 都是本目录的子目录。<br/>
+    /// <b>Linux 上注意</b>：默认位置通常需要 root 才能写入；以普通用户运行时请在此显式指定一个可写目录
+    /// （例如 <c>/home/you/.local/share/OPC Foundation/CertificateStores</c>）。<br/>
+    /// 取值按原样使用（不做分隔符或占位符替换），写相对路径时会相对进程当前目录。
+    /// </summary>
+    public string? CertificateStoreRoot { get; set; }
 }

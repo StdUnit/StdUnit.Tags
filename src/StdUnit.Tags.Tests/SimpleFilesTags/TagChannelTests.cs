@@ -16,7 +16,8 @@ public class TagChannelTests
     [Fact]
     public void Channel_Constructor_SetsProperties()
     {
-        var settings = new SimpleFilesSettings(@"C:\base");
+        var baseDir = TestPaths.TempPath("base");
+        var settings = new SimpleFilesSettings(baseDir);
         var logger = NullLogger<SimpleFilesTagChannel>.Instance;
         var channel = new SimpleFilesTagChannel(
             new SimpleFilesTagChannelDescriptor()
@@ -35,7 +36,8 @@ public class TagChannelTests
     [Fact]
     public void Channel_MakePath_WithBaseDir_CombinesPath()
     {
-        var settings = new SimpleFilesSettings(@"C:\base");
+        var baseDir = TestPaths.TempPath("base");
+        var settings = new SimpleFilesSettings(baseDir);
         var descriptor = new SimpleFilesTagChannelDescriptor()
         {
             Name = "ch",
@@ -43,9 +45,10 @@ public class TagChannelTests
         };
         var channel = new SimpleFilesTagChannel(descriptor, NullLogger<SimpleFilesTagChannel>.Instance);
 
-        var path = channel.MakePath(@"sub\file.txt");
+        // 相对地址用正斜杠书写：Windows 的 API 同样接受 '/'，Linux 上则只有 '/' 才是分隔符
+        var path = channel.MakePath("sub/file.txt");
 
-        Assert.Equal(Path.Combine(@"C:\base", @"sub\file.txt"), path);
+        Assert.Equal(Path.Combine(baseDir, "sub/file.txt"), path);
     }
 
     [Fact]
@@ -59,9 +62,11 @@ public class TagChannelTests
         };
         var channel = new SimpleFilesTagChannel(descriptor, NullLogger<SimpleFilesTagChannel>.Instance);
 
-        var path = channel.MakePath(@"C:\absolute\path.txt");
+        // 绝对路径必须是"两个平台都真 rooted"的，否则本用例在 Linux 上并不在测绝对地址
+        var absoluteAddress = TestPaths.TempPath("absolute.txt");
+        var path = channel.MakePath(absoluteAddress);
 
-        Assert.Equal(@"C:\absolute\path.txt", path);
+        Assert.Equal(absoluteAddress, path);
     }
 
     [Fact]

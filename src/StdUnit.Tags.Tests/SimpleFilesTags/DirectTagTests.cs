@@ -825,11 +825,15 @@ public class DirectTagTests : IDisposable
         var channel = new SimpleFilesTagChannel(chdescriptor, logger);
         var grp = new TagGrp(new TagGrpDescriptor { Name = "g", IsEntry = true }, channel);
 
-        var descriptor = MakeDescriptor("t", @"C:\absolute\path.txt", BuiltinTagKinds.INT32);
+        // 绝对地址用运行时临时目录：字面量 @"C:\absolute\path.txt" 在 Linux 上不是 rooted 路径，
+        // 这个用例本来想验证"BaseDir 为空时地址原样保留"，那条断言在两个平台都成立，
+        // 但一旦有人把 settings.BaseDir 改成非空（或 MakePath 改为判定 rooted），字面量 C:\ 就会让两个平台跑出不同结果。
+        var absoluteAddress = TestPaths.TempPath("absolute.txt");
+        var descriptor = MakeDescriptor("t", absoluteAddress, BuiltinTagKinds.INT32);
         var factory = new SimpleFilesDirectTagFactory(grp.IntoTagContainer());
         var tag = factory.Create(descriptor, channel);
 
-        Assert.Equal(@"C:\absolute\path.txt", tag.NormalizedAddress());
+        Assert.Equal(absoluteAddress, tag.NormalizedAddress());
     }
 
     #endregion
