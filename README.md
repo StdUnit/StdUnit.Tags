@@ -32,17 +32,7 @@
 2. 处理逻辑
 3. 刷写底层
 
-> **正式版本（`1.0.0` 及以后）发布到 nuget.org；预览版本只发布在我的测试源上**。
-> 如果你使用`nuget`管理并需要预览版，请参照[示例](https://github.com/newbienewbie/StdUnit.Tags.WPFDemo/blob/867a5063bc65ec16f77692d4c56ce9da5a38dc3c/nuget.config#L3-L8)，额外指定包源为 https://baget.stdunit.com/v3/index.json ；
-> 如果你使用`paket`管理，参照本项目[paket.dependencies](https://github.com/newbienewbie/StdUnit.Tags/blob/b4ef40f2952fa75d7154db03782c2b5f98be914c/paket.dependencies#L1-L2) 指定包源。
-> 我个人建议你使用`paket`管理依赖，这样哪怕我和nuget.org都破产跑路了，你的本地代码也能完全断网的情况下离线编译。
-
-警告：假设版本号是`<major>.<minor>.<patch>`:
-- 在`v1.0`版本之前，每个`minor`版本的跳变，可能会引入新特性和破坏性更新。
-- 在`v1.0`版本之后，每个`major`版本的跳变，可能会引入新特性和破坏性更新。
-
-各版本的用户可见变化见 [CHANGELOG.md](./CHANGELOG.md)。
-
+> **正式版本（`1.0.0` 及以后）发布到 [nuget.org](https://www.nuget.org/packages/StdUnit.Tags)。** 主要变化参见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## Quick Start
 

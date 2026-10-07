@@ -32,7 +32,7 @@ CI（`.github/workflows/dotnet.yml`）有**两个 job**：
 
 - SDK 固定为 **8.0.102**（`global.json`，`rollForward: minor`）。
 - 依赖用 **Paket** 管理。**不要 `dotnet add package`**：请改 `paket.dependencies` 后运行 `dotnet paket install`（会更新 `paket.lock`）。
-- 包源有两个：nuget.org 与私有测试源 `https://baget.stdunit.com/v3/index.json`。离线编译依赖 `nuget-package-caches/`。
+- 包源有两个：nuget.org 与私有测试源 `https://baget.stdunit.com/v3/index.json`（**后者只是本仓库自身的构建源**——`paket.dependencies` 里列着它；包已发布到 nuget.org，消费方不需要知道私有源）。离线编译依赖 `nuget-package-caches/`。
 - `paket.dependencies` 普遍使用 `lowest_matching: true` ⇒ 默认取**最低匹配版本**；升级必须显式改版本号。
 - 改了 `paket.dependencies`/`paket.lock` 后若 `obj/<proj>.<tfm>.paket.resolved` 没刷新，删掉 `paket-files/paket.restore.cached` 与 `obj/*.paket.resolved`、`*.paket.references.cached` 再 restore。
 
