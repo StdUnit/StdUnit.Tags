@@ -1,7 +1,7 @@
 # This workflow will build a .NET project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
 
-name: Release
+name: Release (baget.stdunit.com)
 
 on:
   workflow_dispatch:
@@ -26,13 +26,14 @@ jobs:
     - name: Restore dependencies
       working-directory: .
       run: dotnet paket restore
+    # 用 Release 配置构建与测试：打包脚本本来就是 -c Release，这样"验的"和"发的"是同一份产物
     - name: build 
       working-directory: .
-      run: dotnet build StdUnit.Tags.sln
+      run: dotnet build StdUnit.Tags.sln -c Release --nologo
 
     - name: Test with Coverage
       working-directory: .
-      run: dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+      run: dotnet test -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --nologo
 
     - name: Upload Coverage to Codecov
       uses: codecov/codecov-action@v4

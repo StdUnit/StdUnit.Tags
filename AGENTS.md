@@ -24,7 +24,7 @@ dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./Tes
 
 CI（`.github/workflows/dotnet.yml`）有**两个 job**：
 - **`build`（ubuntu-latest，权威）**：整解 `dotnet build StdUnit.Tags.sln -c Release`（含 net472 的**编译**校验——引用程序集由 SDK 隐式引入的 `Microsoft.NETFramework.ReferenceAssemblies` 提供）+ `dotnet test -f net8.0`（带覆盖率上报 codecov）。
-- **`net472-on-mono`（ubuntu-22.04）**：用镜像**预装的 Mono** 跑 `dotnet test -f net472`，让 net472 的**运行**测试也自动化、又不占 Windows runner 的排队时间。**mono ≠ .NET Framework**，它绿只说明"大概率没退化"，权威结果仍是 `release.yml`（发版时 windows-latest 全 TFM）+ 本机 Windows。当前是**硬性把关**（未设 `continue-on-error`）；万一出现 mono 专有的伪失败，可在 job 上加 `continue-on-error: true` 降级为补充信号。mono job 红时先看是不是"mono 与真框架的差异"，别急着改产品代码。
+- **`net472-on-mono`（ubuntu-22.04）**：用镜像**预装的 Mono** 跑 `dotnet test -f net472`，让 net472 的**运行**测试也自动化、又不占 Windows runner 的排队时间。**mono ≠ .NET Framework**，它绿只说明"大概率没退化"，（权威结果仍归发版工作流 `release-nuget.yml` / `release-baget.yml`，windows-latest 全 TFM）+ 本机 Windows。当前是**硬性把关**（未设 `continue-on-error`）；万一出现 mono 专有的伪失败，可在 job 上加 `continue-on-error: true` 降级为补充信号。mono job 红时先看是不是"mono 与真框架的差异"，别急着改产品代码。
 - 为何钉 `ubuntu-22.04`：只有该镜像预装 Mono（`ubuntu-latest`/24.04 没有）；镜像退役后改成 `apt-get install -y mono-complete` 即可。
 - 参考实测（2026-10，WSL/Ubuntu 22.04 + mono 6.8）：net472 **1028 全绿**，与 Windows 真 .NET Framework 的 1028 逐一致。
 - 改了 `Compat/*` 或 `#if NETFRAMEWORK` 分支时，仍建议在本机 Windows 上跑一次 `-f net472`（或在 PR 里看 `net472-on-mono`）。

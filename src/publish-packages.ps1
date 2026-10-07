@@ -2,18 +2,28 @@
     [Parameter(Mandatory=$true)]
     [string]$packageVersion,
     [string]$nugetSource = $Env:NugetSource,
-    [string]$nugetKey = $Env:NugetApiKey
+    [string]$nugetKey = $Env:NugetApiKey,
+    # 只打包、不推送：首次发版前用它验证产物（14 个包能不能 pack 出来），或排障时不污染包源
+    [switch]$SkipPush
 )
 
-
-if([String]::IsNullOrEmpty($nugetSource))
+# 版本号必须先校验：nuget.org 上的版本不可撤销，手误（漏一段、写成 1.0、覆盖已发版本）代价很大
+if ($packageVersion -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$')
 {
-    throw "NugetSource is empty";
+    throw "packageVersion 必须是 <major>.<minor>.<patch>[-<prerelease>] 形式（如 1.0.0 或 1.0.0-rc.1），当前为：$packageVersion";
 }
 
-if([String]::IsNullOrEmpty($nugetKey))
+if (-not $SkipPush)
 {
-    throw "NugetKey is empty";
+    if([String]::IsNullOrEmpty($nugetSource))
+    {
+        throw "NugetSource is empty";
+    }
+
+    if([String]::IsNullOrEmpty($nugetKey))
+    {
+        throw "NugetKey is empty";
+    }
 }
 
 $projects = @(
@@ -54,11 +64,18 @@ $projects | ForEach-Object -Process{
             throw
         }
 
-        # --skip-duplicate：发布中途失败后重跑时，已推上去的包不再让整条流水线失败
-        dotnet nuget push -s "$($nugetSource)" -k "$($nugetKey)" --skip-duplicate ./bin/Release/$($projName).$($packageVersion).nupkg
-        if($LASTEXITCODE -ne 0)
+        if ($SkipPush)
         {
-            throw
+            Write-Host "[-] -SkipPush：已生成 $(Join-Path $distPath "bin/Release/$($projName).$($packageVersion).nupkg")，跳过推送"
+        }
+        else
+        {
+            # --skip-duplicate：发布中途失败后重跑时，已推上去的包不再让整条流水线失败
+            dotnet nuget push -s "$($nugetSource)" -k "$($nugetKey)" --skip-duplicate ./bin/Release/$($projName).$($packageVersion).nupkg
+            if($LASTEXITCODE -ne 0)
+            {
+                throw
+            }
         }
 
     }

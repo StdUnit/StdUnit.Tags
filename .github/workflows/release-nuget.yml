@@ -1,0 +1,69 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: Release (nuget.org)
+
+on:
+  workflow_dispatch:
+    inputs:
+      releaseVersion:
+        description: 'Release Version'
+        required: true
+jobs:
+  build:
+    permissions:
+      id-token: write  # enable GitHub OIDC token issuance for this job
+      contents: read   # 让 checkout 能读到仓库内容
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.102
+
+    - name: Restore Tool dependencies
+      working-directory: .
+      run: dotnet tool restore
+
+    - name: Restore dependencies
+      working-directory: .
+      run: dotnet paket restore
+
+    # 用 Release 配置构建与测试：打包脚本本来就是 -c Release，这样"验的"和"发的"是同一份产物
+    - name: build 
+      working-directory: .
+      run: dotnet build StdUnit.Tags.sln -c Release --nologo
+
+    - name: Test with Coverage
+      working-directory: .
+      run: dotnet test -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --nologo
+
+    - name: Upload Coverage to Codecov
+      uses: codecov/codecov-action@v4
+      env:
+        PYTHONUTF8: 1
+      with:
+        # `files` is a comma-separated list of explicit files, not a glob.
+        # Now that Tests multi-targets net8.0;net472 there are several
+        # coverage.cobertura.xml reports, so point the uploader at the folder
+        # (the CLI searches it recursively) instead of expanding a glob.
+        directory: ./TestResults
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: true
+        verbose: true
+
+    # Get a short-lived NuGet API key
+    - name: nuget.org login (OIDC → temp API key)
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ secrets.NUGET_USER }}  # Recommended: use a secret like for your nuget.org username (profile name), NOT your email address
+
+    - name: push
+      working-directory: ./src
+      run: dotnet pwsh ./publish-packages.ps1 -packageVersion ${{ github.event.inputs.releaseVersion }} -nugetKey ${{steps.login.outputs.NUGET_API_KEY}} -nugetSource https://api.nuget.org/v3/index.json
+
