@@ -39,9 +39,8 @@ public interface ITagsProjectCtrl
     /// });
     /// ]]></example>
     /// <br/>
-    /// 注意1：如果你调用了<see cref="StopAsync"/>
-    /// 请务必等待该异步方法完成再调用<see cref="StartPollAsync(string?, XElement?, Func{ITagsProject,IServiceProvider, CancellationToken, Task})"/>，
-    /// 否则，可能会导致新创建的项目被清理。<br/>
+    /// 注意1：<see cref="StopAsync"/> 会等待轮询循环退出（有界），所以「<c>await StopAsync()</c> 之后再调用本方法」是安全的；
+    /// 但不要"发了停止就不管"地并发启动，否则旧循环的收尾可能清理掉刚创建的项目。<br/>
     /// <br/>
     /// 注意2：hook回调的第二个参数 <c>IServiceProvider</c> 的有效期与本次启动的测点项目一致，
     /// 即从 hook 调用开始，直到 <see cref="StartPollAsync"/> 返回（测点项目停止）为止。
@@ -56,7 +55,11 @@ public interface ITagsProjectCtrl
     Task StartPollAsync(string? dir, XElement? root, Func<ITagsProject, IServiceProvider, CancellationToken, Task> hook);
 
     /// <summary>
-    /// 停止测点项目轮询，会导致测点项目停止并释放相关资源。
+    /// 停止测点项目轮询，会导致测点项目停止并释放相关资源。<br/>
+    /// 语义：<b>发取消信号 → 等待轮询循环退出（有界）→ 释放项目 → 断开通道 → 触发 <see cref="StartedOrStopped"/> 的"已停止"事件</b>。<br/>
+    /// 因此返回后可以安全地复用通道实例/项目目录或替换 XML；"已停止"事件也因此是确定性信号。<br/>
+    /// 唯一的例外是底层驱动不响应取消：此时等待会在 <c>PollExitWaitTimeout</c>（默认 30s）后超时，
+    /// 记一条 Warning 并继续清理，不再等待循环退出。
     /// </summary>
     /// <returns></returns>
     Task StopAsync();

@@ -31,6 +31,11 @@ internal class MockTagsProject : ITagsProject
     public bool RunAsyncThrows { get; set; }
 
     /// <summary>
+    /// 如果为 true，<see cref="RunAsync"/> 永不退出（模拟"驱动不响应取消"），用于验证 StopAsync 的超时兜底。
+    /// </summary>
+    public bool RunAsyncNeverCompletes { get; set; }
+
+    /// <summary>
     /// 如果为 true，<see cref="Dispose"/> 会在计数之后抛出 InvalidOperationException。<br/>
     /// 用于验证清理路径「吞掉异常但必须留痕」的语义。
     /// </summary>
@@ -58,6 +63,12 @@ internal class MockTagsProject : ITagsProject
         if (RunAsyncThrows)
         {
             throw new InvalidOperationException("模拟的 RunAsync 异常");
+        }
+
+        if (RunAsyncNeverCompletes)
+        {
+            // 永不完成：模拟驱动不响应取消（StopAsync 只能等超时）
+            return new TaskCompletionSource<bool>().Task;
         }
 
         // 阻塞直到被取消，模拟正在运行的测点项目

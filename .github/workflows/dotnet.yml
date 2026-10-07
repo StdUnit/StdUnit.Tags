@@ -89,4 +89,4 @@ jobs:
       run: mono --version
 
     - name: Test (net472 on mono)
-      run: dotnet test src/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj -f net472 --nologo
+      run: dotnet test src/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj --nologo

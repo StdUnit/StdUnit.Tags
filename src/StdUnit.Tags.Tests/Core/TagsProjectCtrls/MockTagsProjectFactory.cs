@@ -32,6 +32,11 @@ internal class MockTagsProjectFactory : ITagsProjectFactory
     /// </summary>
     public bool CreateThrows { get; set; }
 
+    /// <summary>
+    /// 如果为 true，创建的项目的 <see cref="MockTagsProject.RunAsync"/> 永不退出（模拟驱动不响应取消）。
+    /// </summary>
+    public bool ProjectRunAsyncNeverCompletes { get; set; }
+
     public string? CapturedProjRoot { get; private set; }
     public XElement? CapturedRoot { get; private set; }
 
@@ -45,7 +50,7 @@ internal class MockTagsProjectFactory : ITagsProjectFactory
             throw new InvalidOperationException("模拟的工厂异常");
         }
 
-        var project = new MockTagsProject();
+        var project = new MockTagsProject { RunAsyncNeverCompletes = this.ProjectRunAsyncNeverCompletes };
         project.Initialize(projRoot, root);
         _createdProjects.Add(project);
         return project;
