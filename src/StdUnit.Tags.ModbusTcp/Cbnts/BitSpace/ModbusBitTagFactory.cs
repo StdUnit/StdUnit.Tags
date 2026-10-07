@@ -1,4 +1,4 @@
-﻿namespace StdUnit.Tags.ModbusTcp;
+namespace StdUnit.Tags.ModbusTcp;
 
 
 /// <summary>
@@ -81,6 +81,9 @@ public class ModbusBitTagFactory : TagCbntorFactoryBase
     /// <inheritdoc/>
     public override ITagCbntor CreateTag(TagDescriptor descriptor)
     {
+        // 位空间测点只有一位，既没有寄存器顺序也没有字节顺序，写 interpret 一定是误解
+        ModbusInterpret.Reject(descriptor, "位空间测点(DI/DO)", $"Tag({descriptor.TagName})");
+
         var tag = descriptor.TagKind switch
         {
             // 1000x 离散输入

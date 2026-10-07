@@ -1,8 +1,13 @@
-﻿namespace StdUnit.Tags.ModbusTcp;
+namespace StdUnit.Tags.ModbusTcp;
 
 /// <summary>
-/// 多寄存器 DirectTag 基类：读写基于 <see cref="IModbusRegisterChannel"/>（寄存器数组，NModbus 已按线序解析）。
-/// 字节序解读完全在测点层（<see cref="GetValueFromRegisters"/> / <see cref="FillRegisters"/>），通道层不做任何字节序调整。
+/// 多寄存器 DirectTag 基类：读写基于 <see cref="IModbusRegisterChannel"/>（寄存器数组，NModbus 已按协议解析成数值）。
+/// 字节序解读完全在测点层（<see cref="GetValueFromRegisters"/> / <see cref="FillRegisters"/>），通道层不做任何字节序调整。<br/>
+/// <br/>
+/// <b>主机端序不参与</b>：<c>ushort[]</c> 里是 NModbus 已还原好的数值，端序已由协议在寄存器内部固定，
+/// 所以排布由两个属性分工表达：<c>endian</c> = 每个 16 位单元内部两个字节的顺序（与 S7 同名同义），
+/// 32/64 位里单元之间的顺序由 <c>interpret</c> 表达（见 <see cref="ModbusValueInterpreter{T}"/>）。
+/// 完整推导与实证见项目根目录的 Notes.md。
 /// </summary>
 internal abstract class MultipleBytesDirectTag<T> : Tag<T, ModbusTcpChannel>
     where T : unmanaged, IEquatable<T>
@@ -37,8 +42,8 @@ internal abstract class MultipleBytesDirectTag<T> : Tag<T, ModbusTcpChannel>
 
     /// <summary>
     /// 从寄存器数组解读物理值。<br/>
-    /// <paramref name="registers"/> = 设备寄存器值（NModbus 按线序解析，标准设备 = 物理值）。<br/>
-    /// 字节序（含寄存器内部颠倒、寄存器间 word order）在此处按 EndianKind 解读。
+    /// <paramref name="registers"/> = 设备寄存器值（NModbus 按协议解析成数值，标准设备 = 物理值）。<br/>
+    /// 排布（每单元内部字节序 + 单元之间的顺序）在此处按 <c>endian</c> + <c>interpret</c> 解读。
     /// </summary>
     protected abstract T GetValueFromRegisters(ReadOnlySpan<ushort> registers);
 

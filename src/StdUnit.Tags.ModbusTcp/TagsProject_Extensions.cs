@@ -76,7 +76,8 @@ public static class TagsProject_Extensions
     /// <summary>
     /// 注册ModbusTcp支持——仅注册<see cref="ModbusRegisterTagCbntBuilder"/>，不注册ChannelFactory/DirectTagBuilder/BitTagCbntBuilder <br/>
     /// 作用是在通道的驱动为 <see cref="ModbusTcpNames.DriverName"/> 时，会尝试构建一个寄存器空间（保持寄存器/输入寄存器）测点组合，
-    /// 缓存为寄存器数组（每元素 = 一个寄存器值），字节序由组合子的 EndianKind 描述寄存器顺序。
+    /// 缓存为寄存器数组（每元素 = 一个寄存器值），排布由 <c>endian</c>（每个寄存器内部两个字节）与
+    /// <c>interpret</c>（32/64 位里寄存器之间的顺序）描述。
     /// </summary>
     /// <param name="builder"></param>
     /// <param name="configure">配置TagCbntBuilder的回调</param>

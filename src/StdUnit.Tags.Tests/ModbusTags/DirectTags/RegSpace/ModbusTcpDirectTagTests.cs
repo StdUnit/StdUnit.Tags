@@ -113,7 +113,7 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
             EndianKind = EndianKinds.BigEndian,
         };
 
-        // 大端设备 0xB2D05E00：线序 [B2,D0,5E,00] → NModbus 读回 [0xB2D0, 0x5E00] → cache [D0,B2,00,5E]
+        // 大端设备 0xB2D05E00：设备端字节 [B2,D0,5E,00] → NModbus 读回 [0xB2D0, 0x5E00] → cache [D0,B2,00,5E]
         mock
             .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)21, (ushort)2))
             .ReturnsAsync(new ushort[] { 0xB2D0, 0x5E00 });
@@ -153,14 +153,14 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
         };
         await tag.WriteAsync(CancellationToken.None);
 
-        // 大端设备写回：cache [D0,B2,00,5E] → BytesToUShorts → [0xB2D0, 0x5E00] → 线序 [B2,D0,5E,00]
+        // 大端设备写回：cache [D0,B2,00,5E] → BytesToUShorts → [0xB2D0, 0x5E00] → 设备端字节 [B2,D0,5E,00]
         Assert.NotNull(written);
         Assert.Equal(new ushort[] { 0xB2D0, 0x5E00 }, written);
         Assert.False(tag.IsDirty);
     }
 
     [Fact]
-    public async Task UInt32DirectTag_ReadAsync_LittleEndian()
+    public async Task UInt32DirectTag_ReadAsync_FullyLittleEndian()
     {
         var mock = new Mock<IModbusMaster>(MockBehavior.Strict);
         var channel = new TestModbusTcpChannel(new ModbusTcpTagChannelDescriptor { Name = "mb1" }, mock);
@@ -174,7 +174,35 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
             EndianKind = EndianKinds.LittleEndian,
         };
 
-        // 小端设备 0x12345678：低16位 0x5678 在低寄存器R0 → 线序 [56,78,12,34] → NModbus 读回 [0x5678, 0x1234] → cache [78,56,34,12]
+        // 完全小端设备 0x12345678：设备端字节 [78,56,34,12] → NModbus 读回 [0x7856, 0x3412]
+        mock
+            .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)21, (ushort)2))
+            .ReturnsAsync(new ushort[] { 0x7856, 0x3412 });
+        await channel.EnsureConnectedAsync(false, CancellationToken.None);
+
+        var tag = new UInt32DirectTag(descriptor, channel, container);
+        await tag.ReadAsync(CancellationToken.None);
+
+        Assert.Equal(0x12345678u, tag.Value);
+    }
+
+    [Fact]
+    public async Task UInt32DirectTag_ReadAsync_TaggedCdab()
+    {
+        var mock = new Mock<IModbusMaster>(MockBehavior.Strict);
+        var channel = new TestModbusTcpChannel(new ModbusTcpTagChannelDescriptor { Name = "mb1" }, mock);
+        var grp = new TagGrp(new TagGrpDescriptor { Name = "grp", IsEntry = true }, channel);
+        var container = TagContainer.From(grp);
+        var descriptor = new TagDescriptor
+        {
+            TagName = "u32-v",
+            RawAddress = "1~40022",
+            TagKind = BuiltinTagKinds.UINT32,
+            EndianKind = EndianKinds.BigEndian,
+        };
+        descriptor.Extras["interpret"] = new System.Xml.Linq.XAttribute("interpret", "CDAB");
+
+        // 字交换设备 0x12345678：设备端字节 [56,78,12,34] → NModbus 读回 [0x5678, 0x1234]
         mock
             .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)21, (ushort)2))
             .ReturnsAsync(new ushort[] { 0x5678, 0x1234 });
@@ -201,7 +229,7 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
             EndianKind = EndianKinds.BigEndian,
         };
 
-        // 大端设备 42=0x0000002A：线序 [00,00,00,2A] → 读回 [0x0000, 0x002A]
+        // 大端设备 42=0x0000002A：设备端字节 [00,00,00,2A] → 读回 [0x0000, 0x002A]
         mock
             .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)49, (ushort)2))
             .ReturnsAsync(new ushort[] { 0x0000, 0x002A });
@@ -250,7 +278,7 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
     }
 
     [Fact]
-    public async Task Int64DirectTag_ReadWrite_LittleEndian()
+    public async Task Int64DirectTag_ReadWrite_FullyLittleEndian()
     {
         var mock = new Mock<IModbusMaster>(MockBehavior.Strict);
         var channel = new TestModbusTcpChannel(new ModbusTcpTagChannelDescriptor { Name = "mb1" }, mock);
@@ -264,11 +292,51 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
             EndianKind = EndianKinds.LittleEndian,
         };
 
-        // 小端设备 123456789012345：线序低字节在前
-        var readBytes = new byte[8];
-        BinaryPrimitives.WriteInt64LittleEndian(readBytes, 123456789012345L);
+        // 完全小端设备：设备端字节 = 大端字节序列整体倒过来（低字节在前）
+        var wireBytes = new byte[8];
+        BinaryPrimitives.WriteInt64BigEndian(wireBytes, 123456789012345L);
+        Array.Reverse(wireBytes);
         var regs = new ushort[4];
-        for (int i = 0; i < 4; i++) regs[i] = (ushort)(readBytes[i * 2] | (readBytes[i * 2 + 1] << 8));
+        for (var i = 0; i < 4; i++)
+        {
+            // 寄存器的数值 = 设备端那两个字节按协议大端解读
+            regs[i] = (ushort)((wireBytes[i * 2] << 8) | wireBytes[i * 2 + 1]);
+        }
+        mock
+            .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)59, (ushort)4))
+            .ReturnsAsync(regs);
+        await channel.EnsureConnectedAsync(false, CancellationToken.None);
+
+        var tag = new Int64DirectTag(descriptor, channel, container);
+        await tag.ReadAsync(CancellationToken.None);
+        Assert.Equal(123456789012345L, tag.Value);
+    }
+
+    [Fact]
+    public async Task Int64DirectTag_ReadWrite_TaggedGhefcdab()
+    {
+        var mock = new Mock<IModbusMaster>(MockBehavior.Strict);
+        var channel = new TestModbusTcpChannel(new ModbusTcpTagChannelDescriptor { Name = "mb1" }, mock);
+        var grp = new TagGrp(new TagGrpDescriptor { Name = "grp", IsEntry = true }, channel);
+        var container = TagContainer.From(grp);
+        var descriptor = new TagDescriptor
+        {
+            TagName = "i64-v",
+            RawAddress = "1~40060",
+            TagKind = BuiltinTagKinds.INT64,
+            EndianKind = EndianKinds.BigEndian,
+        };
+        descriptor.Extras["interpret"] = new System.Xml.Linq.XAttribute("interpret", "GHEFCDAB");
+
+        // 按 16 位单元整体倒着排：寄存器顺序反过来，单元内部仍是标准大端
+        var beBytes = new byte[8];
+        BinaryPrimitives.WriteInt64BigEndian(beBytes, 123456789012345L);
+        var regs = new ushort[4];
+        for (var i = 0; i < 4; i++)
+        {
+            var source = 3 - i;
+            regs[i] = (ushort)((beBytes[source * 2] << 8) | beBytes[source * 2 + 1]);
+        }
         mock
             .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)59, (ushort)4))
             .ReturnsAsync(regs);
@@ -294,7 +362,7 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
             EndianKind = EndianKinds.BigEndian,
         };
 
-        // 大端设备 0xFFFE：线序 [FF,FE] → 读回 0xFFFE → cache [FE,FF] → 小端读 = 0xFFFE
+        // 大端设备 0xFFFE：设备端字节 [FF,FE] → 读回 0xFFFE → cache [FE,FF] → 小端读 = 0xFFFE
         mock
             .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)69, (ushort)1))
             .ReturnsAsync(new ushort[] { 0xFFFE });
@@ -331,7 +399,7 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
             EndianKind = EndianKinds.LittleEndian,
         };
 
-        // 小端设备物理值 0xFFFE：寄存器内低字节在前 → 线序 [FE,FF] → NModbus 读回 0xFEFF → cache [FF,FE] → 大端读 = 0xFFFE
+        // 小端设备物理值 0xFFFE：寄存器内低字节在前 → 设备端字节 [FE,FF] → NModbus 读回 0xFEFF → cache [FF,FE] → 大端读 = 0xFFFE
         mock
             .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)69, (ushort)1))
             .ReturnsAsync(new ushort[] { 0xFEFF });
@@ -343,7 +411,7 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
     }
 
     [Fact]
-    public async Task UInt64DirectTag_ReadWrite_LittleEndian()
+    public async Task UInt64DirectTag_ReadWrite_FullyLittleEndian()
     {
         var mock = new Mock<IModbusMaster>(MockBehavior.Strict);
         var channel = new TestModbusTcpChannel(new ModbusTcpTagChannelDescriptor { Name = "mb1" }, mock);
@@ -357,11 +425,15 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
             EndianKind = EndianKinds.LittleEndian,
         };
 
-        // 小端设备 0x0102030405060708
-        var readBytes = new byte[8];
-        BinaryPrimitives.WriteUInt64LittleEndian(readBytes, 0x0102030405060708UL);
+        // 完全小端设备：设备端字节 = 大端字节序列整体倒过来（低字节在前）
+        var wireBytes = new byte[8];
+        BinaryPrimitives.WriteUInt64BigEndian(wireBytes, 0x0102030405060708UL);
+        Array.Reverse(wireBytes);
         var regs = new ushort[4];
-        for (int i = 0; i < 4; i++) regs[i] = (ushort)(readBytes[i * 2] | (readBytes[i * 2 + 1] << 8));
+        for (var i = 0; i < 4; i++)
+        {
+            regs[i] = (ushort)((wireBytes[i * 2] << 8) | wireBytes[i * 2 + 1]);
+        }
         mock
             .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)79, (ushort)4))
             .ReturnsAsync(regs);
@@ -387,7 +459,7 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
             EndianKind = EndianKinds.BigEndian,
         };
 
-        // 大端设备 1.5f = 0x3FC00000：线序 [3F,C0,00,00] → 读回 [0x3FC0, 0x0000]
+        // 大端设备 1.5f = 0x3FC00000：设备端字节 [3F,C0,00,00] → 读回 [0x3FC0, 0x0000]
         mock
             .Setup(x => x.ReadHoldingRegistersAsync(1, (ushort)39, (ushort)2))
             .ReturnsAsync(new ushort[] { 0x3FC0, 0x0000 });
@@ -427,7 +499,7 @@ var dir = TestPaths.Fixture("ModbusTags", "DirectTags");
         };
         await tag.WriteAsync(CancellationToken.None);
 
-        // 大端写回：线序 [3F,C0,00,00] → cache [C0,3F,00,00] → 写 [0x3FC0, 0x0000]
+        // 大端写回：设备端字节 [3F,C0,00,00] → cache [C0,3F,00,00] → 写 [0x3FC0, 0x0000]
         Assert.NotNull(written);
         Assert.Equal(new ushort[] { 0x3FC0, 0x0000 }, written);
         Assert.False(tag.IsDirty);

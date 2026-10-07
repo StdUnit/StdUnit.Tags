@@ -2,7 +2,8 @@ namespace StdUnit.Tags.ModbusTcp;
 
 /// <summary>
 /// Modbus 字空间（寄存器）的字节组合子：占用 1 个寄存器，取其中高字节或低字节。<br/>
-/// 设备大端（Modbus 惯例默认，寄存器高字节在前）→ 取高字节；设备小端 → 取低字节。
+/// <c>BigEndian</c>（标准设备：寄存器高字节在前）→ 取高字节；<c>LittleEndian</c>（描述符默认值）→ 取低字节。
+/// 语义与 <see cref="ByteDirectTag"/> 一致，详见项目根目录的 Notes.md。
 /// </summary>
 internal class ModbusRegisterByteCbntor : ModbusRegisterCbntorBase
 {

@@ -9,8 +9,12 @@ namespace StdUnit.Tags.ModbusTcp;
 /// <b>偏移语义</b>：<see cref="TagCbntor.TagOffset"/> = 字节偏移（与 <see cref="ITagCbntor"/> 契约一致，供布局计算）；
 /// <see cref="TagCbntor.CacheOffset"/> = 寄存器索引（= TagOffset / 2），是读取 <see cref="TagCbnt{T}"/>（T=ushort）缓存的下标。<br/>
 /// <br/>
-/// <b>字节序模型</b>：缓存元素即寄存器数值（NModbus 已按线序解析），16 位测点直接取值、无寄存器内部字节序问题；
-/// 32/64 位测点由 EndianKind 描述<b>寄存器顺序</b>（BigEndian = 高寄存器在前，Modbus 惯例默认）。<br/>
+/// <b>字节序模型</b>：缓存元素即寄存器数值（NModbus 已按协议解析成数值），因此 <c>endian</c> 描述<b>每个 16 位单元
+/// （寄存器）内部两个字节的顺序</b>（见 <see cref="ApplyEndian"/>）；32/64 位把多个寄存器拼成一个数值时，
+/// <b>寄存器之间</b>的顺序由可选的 <c>interpret</c> 描述（见 <see cref="ModbusInterpret"/>）。
+/// 这与直接测点（<see cref="MultipleBytesDirectTag{T}"/>）以及 S7 驱动的语义一致（Modbus 多出 <c>interpret</c>
+/// 这个自由度）——<b>同一份 XML 无论写成直接测点还是组合成员，都得到同一个物理值</b>。<b>主机端序不参与</b>：
+/// NModbus 已把链路上那几个寄存器的大端字节还原成数值，完整说明见项目根目录的 Notes.md。<br/>
 /// <br/>
 /// <b>可写性</b>：输入寄存器只读，通过 <see cref="IsReadOnly"/> 表达，写入抛 <see cref="NotSupportedException"/>。<br/>
 /// </summary>
@@ -57,6 +61,17 @@ internal abstract class ModbusRegisterCbntorBase : TagCbntor
     /// 本测点占用寄存器数（= TagSize 字节数 / 2）
     /// </summary>
     protected int RegCount => this.TagSize() / 2;
+
+    /// <summary>
+    /// 按 <c>endian</c> 解读/写入单个寄存器内的两个字节：<br/>
+    /// <c>BigEndian</c>（高位在前）原样返回；<c>LittleEndian</c>（默认，低位在前）交换两个字节。<br/>
+    /// <br/>
+    /// 供 16 位测点使用——它们只占一个寄存器，没有"寄存器之间"可言，<c>endian</c> 表达的就是寄存器内部字节序。
+    /// 这样组合成员与直接测点（<see cref="MultipleBytesDirectTag{T}"/>）、以及 S7 驱动的 16 位测点语义一致。
+    /// </summary>
+    protected ushort ApplyEndian(ushort reg) => this.TagEndian() == EndianKinds.BigEndian
+        ? reg
+        : (ushort)((reg >> 8) | (reg << 8));
 
     /// <summary>
     /// 校验可写性；只读时抛 <see cref="NotSupportedException"/>

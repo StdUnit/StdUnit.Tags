@@ -1,4 +1,4 @@
-﻿namespace StdUnit.Tags.ModbusTcp;
+namespace StdUnit.Tags.ModbusTcp;
 
 /// <summary>
 /// ModbusTcp Cbnt 构建器
@@ -53,6 +53,8 @@ public class ModbusBitTagCbntBuilder : TagCbntBuilderBase
     /// <inheritdoc/>
     public override TagCbntBuilderBase WithCbntDescriptor(TagCbntDescriptor descriptor)
     {
+        ModbusInterpret.RejectOnCbnt(descriptor.Extras, descriptor.Name);
+
         var hasSlave = ModbusCbntSlaveAddress.TryGetSlave(descriptor, out var slave);
         if (hasSlave)
         {

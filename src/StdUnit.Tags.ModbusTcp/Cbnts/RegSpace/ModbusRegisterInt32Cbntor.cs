@@ -2,9 +2,11 @@ namespace StdUnit.Tags.ModbusTcp;
 
 /// <summary>
 /// Modbus 字空间的 Int32 组合子：占用 2 个寄存器。<br/>
-/// EndianKind 描述寄存器顺序：BigEndian（Modbus 惯例默认）= 高寄存器在前；LittleEndian = 低寄存器在前。
+/// 字节排布由 <c>endian</c>（每个 16 位单元内部两个字节的顺序）与可选的 <c>interpret</c>（寄存器之间的顺序）决定，
+/// 缺省时 <c>BigEndian</c> = 完全大端、<c>LittleEndian</c> = 完全小端。换算统一走
+/// <see cref="ModbusValueInterpreter{T}"/>，与直接测点一致；详见项目根目录的 Notes.md。
 /// </summary>
-internal class ModbusRegisterInt32Cbntor : ModbusRegisterCbntorBase
+internal class ModbusRegisterInt32Cbntor : ModbusMultipleBytesCbntor<int>
 {
     /// <summary>
     /// c'tor
@@ -14,55 +16,15 @@ internal class ModbusRegisterInt32Cbntor : ModbusRegisterCbntorBase
     /// <param name="tagOffset">字节偏移（必须为偶数）</param>
     /// <param name="isReadOnly">是否只读（输入寄存器）</param>
     internal ModbusRegisterInt32Cbntor(TagDescriptor tagDescriptor, TagCbnt<ushort> tagCbnt, int tagOffset, bool isReadOnly)
-        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly)
+        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly, ModbusInt32Interpreter.For(tagDescriptor))
     {
-    }
-
-    /// <summary>
-    /// 测点值
-    /// </summary>
-    public override object? Value
-    {
-        get => (int)this.ReadBits();
-        set
-        {
-#pragma warning disable CS8605 // Unboxing a possibly null value.
-            this.WriteBits((uint)(int)value);
-#pragma warning restore CS8605 // Unboxing a possibly null value.
-        }
-    }
-
-    protected uint ReadBits()
-    {
-        var span = this.RegCache.Span.Slice(this.RegOffset, 2);
-        return this.TagEndian() == EndianKinds.BigEndian
-            ? (uint)((span[0] << 16) | span[1])
-            : (uint)((span[1] << 16) | span[0]);
-    }
-
-    protected void WriteBits(uint bits)
-    {
-        this.EnsureWritable();
-        var span = this.RegCache.Span.Slice(this.RegOffset, 2);
-        if (this.TagEndian() == EndianKinds.BigEndian)
-        {
-            span[0] = (ushort)(bits >> 16);
-            span[1] = (ushort)bits;
-        }
-        else
-        {
-            span[0] = (ushort)bits;
-            span[1] = (ushort)(bits >> 16);
-        }
-        this.Timestamp = DateTime.UtcNow;
-        this.MarkDirty();
     }
 }
 
 /// <summary>
 /// Modbus 字空间的 UInt32 组合子：占用 2 个寄存器。
 /// </summary>
-internal class ModbusRegisterUInt32Cbntor : ModbusRegisterInt32Cbntor
+internal class ModbusRegisterUInt32Cbntor : ModbusMultipleBytesCbntor<uint>
 {
     /// <summary>
     /// c'tor
@@ -72,29 +34,15 @@ internal class ModbusRegisterUInt32Cbntor : ModbusRegisterInt32Cbntor
     /// <param name="tagOffset">字节偏移（必须为偶数）</param>
     /// <param name="isReadOnly">是否只读（输入寄存器）</param>
     internal ModbusRegisterUInt32Cbntor(TagDescriptor tagDescriptor, TagCbnt<ushort> tagCbnt, int tagOffset, bool isReadOnly)
-        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly)
+        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly, ModbusUInt32Interpreter.For(tagDescriptor))
     {
-    }
-
-    /// <summary>
-    /// 测点值
-    /// </summary>
-    public override object? Value
-    {
-        get => this.ReadBits();
-        set
-        {
-#pragma warning disable CS8605 // Unboxing a possibly null value.
-            this.WriteBits((uint)value);
-#pragma warning restore CS8605 // Unboxing a possibly null value.
-        }
     }
 }
 
 /// <summary>
 /// Modbus 字空间的 Float 组合子：占用 2 个寄存器（IEEE754 单精度，bit 组合）。
 /// </summary>
-internal class ModbusRegisterFloatCbntor : ModbusRegisterInt32Cbntor
+internal class ModbusRegisterFloatCbntor : ModbusMultipleBytesCbntor<float>
 {
     /// <summary>
     /// c'tor
@@ -104,22 +52,7 @@ internal class ModbusRegisterFloatCbntor : ModbusRegisterInt32Cbntor
     /// <param name="tagOffset">字节偏移（必须为偶数）</param>
     /// <param name="isReadOnly">是否只读（输入寄存器）</param>
     internal ModbusRegisterFloatCbntor(TagDescriptor tagDescriptor, TagCbnt<ushort> tagCbnt, int tagOffset, bool isReadOnly)
-        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly)
+        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly, ModbusFloatInterpreter.For(tagDescriptor))
     {
-    }
-
-    /// <summary>
-    /// 测点值
-    /// </summary>
-    public override object? Value
-    {
-        get => Compat.FloatBitsCompat.ToSingle(this.ReadBits());
-        set
-        {
-#pragma warning disable CS8605 // Unboxing a possibly null value.
-            var f = (float)value;
-#pragma warning restore CS8605 // Unboxing a possibly null value.
-            this.WriteBits(Compat.FloatBitsCompat.ToBits(f));
-        }
     }
 }

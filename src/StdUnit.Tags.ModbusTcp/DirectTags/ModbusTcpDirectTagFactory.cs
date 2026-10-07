@@ -1,4 +1,4 @@
-﻿namespace StdUnit.Tags.ModbusTcp;
+namespace StdUnit.Tags.ModbusTcp;
 
 internal class ModbusTcpDirectTagFactory
 {
@@ -12,6 +12,10 @@ internal class ModbusTcpDirectTagFactory
     public ITag Create(TagDescriptor descriptor, ModbusTcpChannel? channel)
     {
         var addr = ModBusTcpAddressParser.Parse(descriptor.NormalizedAddress);
+
+        // BIT/BYTE/DI/DO 只有一对字节，写 interpret 没有意义（它描述的是多寄存器之间怎么摆）
+        ModbusInterpret.RejectForSingleUnit(descriptor, $"Tag({descriptor.TagName})");
+
         var tag = descriptor.TagKind switch
         {
             // 1000x

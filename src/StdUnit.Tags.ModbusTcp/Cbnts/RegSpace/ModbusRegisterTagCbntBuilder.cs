@@ -38,6 +38,8 @@ public class ModbusRegisterTagCbntBuilder : TagCbntBuilderBase
     /// <inheritdoc/>
     public override TagCbntBuilderBase WithCbntDescriptor(TagCbntDescriptor descriptor)
     {
+        ModbusInterpret.RejectOnCbnt(descriptor.Extras, descriptor.Name);
+
         var hasSlave = ModbusCbntSlaveAddress.TryGetSlave(descriptor, out var slave);
         if (hasSlave)
         {

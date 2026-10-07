@@ -5,15 +5,16 @@ namespace StdUnit.Tags.ModbusTcp;
 
 /// <summary>
 /// Modbus 字空间（保持寄存器/输入寄存器）通道接口：直接读写 ushort[] 寄存器数组。<br/>
-/// 寄存器数值由 NModbus 按线序解析（与 CPU 端无关），因此<b>不存在寄存器内部字节序问题</b>，
-/// 组合层只需处理多寄存器组合（word order）。相比走 <see cref="IContinuousBytesBasedTagChannel"/> 的
+/// 寄存器数值由 NModbus 按协议解析成数值（与 CPU 端无关），因此通道层不参与任何字节序调整，
+/// 组合层只需处理多寄存器数值的排布（<c>endian</c> + <c>interpret</c>，见 <see cref="ModbusValueInterpreter{T}"/>）。
+/// 相比走 <see cref="IContinuousBytesBasedTagChannel"/> 的
 /// byte 展平再解析，本接口消除两次无谓的字节转换与分配。
 /// </summary>
 public interface IModbusRegisterChannel : ITagChannel
 {
     /// <summary>
     /// 读取寄存器（保持寄存器 FC03 / 输入寄存器 FC04）。<br/>
-    /// 返回数组每元素 = 一个寄存器值（NModbus 已按线序解析）。
+    /// 返回数组每元素 = 一个寄存器值（NModbus 已按协议解析成数值）。
     /// </summary>
     /// <param name="address">寄存器地址（如 "40001" / "30001"）</param>
     /// <param name="registerCount">寄存器数量</param>

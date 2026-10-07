@@ -2,9 +2,11 @@ namespace StdUnit.Tags.ModbusTcp;
 
 /// <summary>
 /// Modbus 字空间的 Int64 组合子：占用 4 个寄存器。<br/>
-/// EndianKind 描述寄存器顺序：BigEndian（Modbus 惯例默认）= 高寄存器在前；LittleEndian = 低寄存器在前。
+/// 字节排布由 <c>endian</c>（每个 16 位单元内部两个字节的顺序）与可选的 <c>interpret</c>（寄存器之间的顺序）决定，
+/// 缺省时 <c>BigEndian</c> = 完全大端、<c>LittleEndian</c> = 完全小端。换算统一走
+/// <see cref="ModbusValueInterpreter{T}"/>，与直接测点一致；详见项目根目录的 Notes.md。
 /// </summary>
-internal class ModbusRegisterInt64Cbntor : ModbusRegisterCbntorBase
+internal class ModbusRegisterInt64Cbntor : ModbusMultipleBytesCbntor<long>
 {
     /// <summary>
     /// c'tor
@@ -14,59 +16,15 @@ internal class ModbusRegisterInt64Cbntor : ModbusRegisterCbntorBase
     /// <param name="tagOffset">字节偏移（必须为偶数）</param>
     /// <param name="isReadOnly">是否只读（输入寄存器）</param>
     internal ModbusRegisterInt64Cbntor(TagDescriptor tagDescriptor, TagCbnt<ushort> tagCbnt, int tagOffset, bool isReadOnly)
-        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly)
+        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly, ModbusInt64Interpreter.For(tagDescriptor))
     {
-    }
-
-    /// <summary>
-    /// 测点值
-    /// </summary>
-    public override object? Value
-    {
-        get => (long)this.ReadBits();
-        set
-        {
-#pragma warning disable CS8605 // Unboxing a possibly null value.
-            this.WriteBits((ulong)(long)value);
-#pragma warning restore CS8605 // Unboxing a possibly null value.
-        }
-    }
-
-    protected ulong ReadBits()
-    {
-        var span = this.RegCache.Span.Slice(this.RegOffset, 4);
-        return this.TagEndian() == EndianKinds.BigEndian
-            ? ((ulong)span[0] << 48) | ((ulong)span[1] << 32) | ((ulong)span[2] << 16) | span[3]
-            : ((ulong)span[3] << 48) | ((ulong)span[2] << 32) | ((ulong)span[1] << 16) | span[0];
-    }
-
-    protected void WriteBits(ulong bits)
-    {
-        this.EnsureWritable();
-        var span = this.RegCache.Span.Slice(this.RegOffset, 4);
-        if (this.TagEndian() == EndianKinds.BigEndian)
-        {
-            span[0] = (ushort)(bits >> 48);
-            span[1] = (ushort)(bits >> 32);
-            span[2] = (ushort)(bits >> 16);
-            span[3] = (ushort)bits;
-        }
-        else
-        {
-            span[0] = (ushort)bits;
-            span[1] = (ushort)(bits >> 16);
-            span[2] = (ushort)(bits >> 32);
-            span[3] = (ushort)(bits >> 48);
-        }
-        this.Timestamp = DateTime.UtcNow;
-        this.MarkDirty();
     }
 }
 
 /// <summary>
 /// Modbus 字空间的 UInt64 组合子：占用 4 个寄存器。
 /// </summary>
-internal class ModbusRegisterUInt64Cbntor : ModbusRegisterInt64Cbntor
+internal class ModbusRegisterUInt64Cbntor : ModbusMultipleBytesCbntor<ulong>
 {
     /// <summary>
     /// c'tor
@@ -76,21 +34,7 @@ internal class ModbusRegisterUInt64Cbntor : ModbusRegisterInt64Cbntor
     /// <param name="tagOffset">字节偏移（必须为偶数）</param>
     /// <param name="isReadOnly">是否只读（输入寄存器）</param>
     internal ModbusRegisterUInt64Cbntor(TagDescriptor tagDescriptor, TagCbnt<ushort> tagCbnt, int tagOffset, bool isReadOnly)
-        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly)
+        : base(tagDescriptor, tagCbnt, tagOffset, isReadOnly, ModbusUInt64Interpreter.For(tagDescriptor))
     {
-    }
-
-    /// <summary>
-    /// 测点值
-    /// </summary>
-    public override object? Value
-    {
-        get => this.ReadBits();
-        set
-        {
-#pragma warning disable CS8605 // Unboxing a possibly null value.
-            this.WriteBits((ulong)value);
-#pragma warning restore CS8605 // Unboxing a possibly null value.
-        }
     }
 }

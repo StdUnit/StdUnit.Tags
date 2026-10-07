@@ -50,6 +50,9 @@ internal class ModbusRegisterTagFactory : TagCbntorFactoryBase
             };
         }
 
+        // 只有一对字节的种类写 interpret 没有意义（interpret 描述的是多寄存器之间怎么摆）
+        ModbusInterpret.RejectForSingleUnit(descriptor, $"Tag({descriptor.TagName})");
+
         var tagAddr = ModBusTcpAddressParser.Parse(descriptor.RawAddress);
         if (tagAddr.Area != RegisterKinds.HoldingRegisters && tagAddr.Area != RegisterKinds.InputRegisters)
         {
