@@ -1,7 +1,7 @@
 using StdUnit.Tags.ModbusTcp.Compat;
 using Xunit;
 
-namespace StdUnit.Tags.Tests.ModbusTags;
+namespace StdUnit.Tags.Tests.ModbusTags.Compat;
 
 /// <summary>
 /// 钉住 <c>StdUnit.Tags.ModbusTcp.Compat.FloatBitsCompat</c> 的语义：float ↔ uint 的 <b>位重解释</b>
@@ -19,7 +19,7 @@ namespace StdUnit.Tags.Tests.ModbusTags;
 /// <br/>
 /// 这些用例在两个目标框架下都必须通过；若哪天有人把实现改成数值转换，这里会立刻报警。
 /// </summary>
-public class FloatBitsTests
+public class FloatBitsCompatTests
 {
     [Theory]
     [InlineData(1.0f)]

@@ -1,14 +1,13 @@
-﻿using StdUnit.Tags.ModbusTcp;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using StdUnit.Tags.ModbusTcp;
 using Xunit;
 
 namespace StdUnit.Tags.Tests.ModbusTags;
 
-public class ModbusBitTagFactoryTests
+/// <summary>
+/// 寄存器空间（3x/4x）测点工厂：钉住子测点相对组合起始地址的偏移换算。<br/>
+/// 寄存器空间的 TagOffset 按<b>字节</b>算（寄存器差 × 2），CacheOffset 才是寄存器索引。
+/// </summary>
+public class ModbusRegisterTagFactoryTests
 {
     [Theory]
     // 寄存器位：TagOffset = 字节偏移（寄存器差×2），CacheOffset = 寄存器索引，NthBit = 位号（0~15）
@@ -29,21 +28,6 @@ public class ModbusBitTagFactoryTests
         Assert.Equal(tagOffset, bittag.TagOffset);
         Assert.Equal(nthBit, bittag.NthBit);
         Assert.Equal(2, bittag.TagSize());
-    }
-
-    [Theory]
-    [InlineData("10011", "10021", 10, 10)]
-    [InlineData("1~10011", "10021", 10, 10)]
-    public void Test_Input_BitTagOffset(string baseAddr, string bitAddr, int tagOffset, int cacheOffset)
-    {
-        var cbntDesc = new TagCbntDescriptor { Name = "g1", StartAddress = baseAddr };
-        ModbusBitTagCbntBuilder builder = new();
-        builder.WithCbntDescriptor(cbntDesc).WithChannel(null!);
-        var factory = new ModbusBitTagFactory(builder, builder.TypedCbnt);
-        var tag = factory.CreateDITag(new TagDescriptor() { TagName = bitAddr, RawAddress = bitAddr, TagKind = BuiltinTagKinds.DI, TagSize = 1 });
-        Assert.Equal(cacheOffset, tag.CacheOffset);
-        Assert.Equal(tagOffset, tag.TagOffset);
-        Assert.Equal(1, tag.TagSize());
     }
 
     [Theory]

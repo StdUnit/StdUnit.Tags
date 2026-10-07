@@ -4,30 +4,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using StdUnit.Tags.ModbusTcp;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NModbus;
 using Xunit;
 
 namespace StdUnit.Tags.Tests.ModbusTags;
-
-/// <summary>
-/// 测试用 ModbusTcpChannel，重写 <see cref="ModbusTcpChannel.CreateConnectionAsync"/>
-/// 以返回 Moq 创建的 <see cref="IModbusMaster"/>。
-/// </summary>
-internal class TestModbusTcpChannel : ModbusTcpChannel
-{
-    public Mock<IModbusMaster> MasterMock { get; }
-
-    public TestModbusTcpChannel(ModbusTcpTagChannelDescriptor descriptor, Mock<IModbusMaster> masterMock)
-        : base(descriptor, NullLogger<ModbusTcpChannel>.Instance)
-    {
-        MasterMock = masterMock;
-    }
-
-    protected override Task<IModbusMaster> CreateConnectionAsync(int timeout, CancellationToken ct)
-        => Task.FromResult(MasterMock.Object);
-}
 
 public class ModbusTcpChannelTests
 {

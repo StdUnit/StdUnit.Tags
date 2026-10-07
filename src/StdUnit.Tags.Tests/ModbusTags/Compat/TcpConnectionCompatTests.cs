@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using StdUnit.Tags.ModbusTcp.Compat;
 using Xunit;
 
-namespace StdUnit.Tags.Tests.ModbusTcpTags.Compat;
+namespace StdUnit.Tags.Tests.ModbusTags.Compat;
 
 /// <summary>
 /// <see cref="TcpConnectionCompat"/> 的测试。<br/>

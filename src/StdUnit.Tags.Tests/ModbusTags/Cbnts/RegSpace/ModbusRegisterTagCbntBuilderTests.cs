@@ -1,4 +1,4 @@
-﻿using StdUnit.Tags.ModbusTcp;
+using StdUnit.Tags.ModbusTcp;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ using Xunit;
 
 namespace StdUnit.Tags.Tests.ModbusTags;
 
-public class ModbusTcpTagCombinationBuilderTests
+public class ModbusRegisterTagCbntBuilderTests
 {
     [Fact]
     public void Test_TagCombinationCacheSize()
