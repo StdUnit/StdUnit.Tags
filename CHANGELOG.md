@@ -30,6 +30,9 @@
 
 ### 修复和改进
 
+- **OpcUa：证书库路径不再依赖 `%CommonApplicationData%` 占位符**。该占位符由 OPC UA 栈以"纯字符串拼接"方式替换，在 Linux 上会得到 `/usr/share\OPC Foundation\...`（名字里带反斜杠的目录），底层随即报 `File does not exist`；现在四个证书库（`MachineDefault` / `UA Certificate Authorities` / `UA Applications` / `RejectedCertificates`）都用 `Path.Combine` 拼出正确层级，**Windows 上的取值与之前完全一致**。同时新增 `OpcUaSecurityOpt.CertificateStoreRoot`（XML：`<SecurityOpt><CertificateStoreRoot>`）供 Linux 等场景指定可写目录——默认位置 `/usr/share/...` 通常需要 root。
+- `TagsProjectCtrl.StopAsync()` 现在会**等待轮询真正退出**（有界超时）之后再释放项目、断开通道并触发"已停止"事件——该事件从此是确定性信号，可以放心紧跟"复用通道/换 XML/删目录"；驱动不响应取消时超时（默认 30s）记一条 Warning 并继续清理。
+- `ITag.Timestamp` 统一为 **UTC**：原实现本地时间（`DateTime.Now`）与 UTC 混用，现统一为 `DateTime.UtcNow`；展示或与本地时间比较时请自行转换。
 - OpcUa：`WriteAsync` 不再丢弃调用方的 `CancellationToken`；
 - SimpleFiles：解析文件内容失败时，异常消息补上测点名与文件路径（`ParseValue` 子类只拿得到文本，路径由基类补）。
 - 日志: 不再把异常拍平成 `ex.Message`，记录更多上下文。
