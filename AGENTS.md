@@ -22,6 +22,14 @@ dotnet build StdUnit.Tags.sln
 dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
 ```
 
+CI（`.github/workflows/dotnet.yml`）有**两个 job**：
+- **`build`（ubuntu-latest，权威）**：整解 `dotnet build StdUnit.Tags.sln -c Release`（含 net472 的**编译**校验——引用程序集由 SDK 隐式引入的 `Microsoft.NETFramework.ReferenceAssemblies` 提供）+ `dotnet test -f net8.0`（带覆盖率上报 codecov）。
+- **`net472-on-mono`（ubuntu-22.04）**：用镜像**预装的 Mono** 跑 `dotnet test -f net472`，让 net472 的**运行**测试也自动化、又不占 Windows runner 的排队时间。**mono ≠ .NET Framework**，它绿只说明"大概率没退化"，权威结果仍是 `release.yml`（发版时 windows-latest 全 TFM）+ 本机 Windows。当前是**硬性把关**（未设 `continue-on-error`）；万一出现 mono 专有的伪失败，可在 job 上加 `continue-on-error: true` 降级为补充信号。mono job 红时先看是不是"mono 与真框架的差异"，别急着改产品代码。
+- 为何钉 `ubuntu-22.04`：只有该镜像预装 Mono（`ubuntu-latest`/24.04 没有）；镜像退役后改成 `apt-get install -y mono-complete` 即可。
+- 参考实测（2026-10，WSL/Ubuntu 22.04 + mono 6.8）：net472 **1028 全绿**，与 Windows 真 .NET Framework 的 1028 逐一致。
+- 改了 `Compat/*` 或 `#if NETFRAMEWORK` 分支时，仍建议在本机 Windows 上跑一次 `-f net472`（或在 PR 里看 `net472-on-mono`）。
+`samples/WpfDemo`（net8.0-windows + WPF）**已从解决方案移除**，目录保留、需要时在本机 Windows 上单独 `dotnet build samples/WpfDemo/WpfDemo.csproj`（只要它还留在解决方案里，Linux 上的整解构建就会失败）。
+
 - SDK 固定为 **8.0.102**（`global.json`，`rollForward: minor`）。
 - 依赖用 **Paket** 管理。**不要 `dotnet add package`**：请改 `paket.dependencies` 后运行 `dotnet paket install`（会更新 `paket.lock`）。
 - 包源有两个：nuget.org 与私有测试源 `https://baget.stdunit.com/v3/index.json`。离线编译依赖 `nuget-package-caches/`。
@@ -83,7 +91,15 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 ## 约定
 
 - **时间戳一律 UTC**：`ITag.Timestamp` 用 `DateTime.UtcNow` 写入，**不要用 `DateTime.Now`**（本地时间跨时区/夏令时不可比）；展示或与本地时间比较时由调用方自行转换。
+- **启停语义**：`ITagsProjectCtrl.StopAsync()` 会先**等轮询循环退出**（有界超时，默认 30s）再释放项目、断开通道、触发"已停止"事件；`StartPollAsync` 的 `finally` 是项目的**唯一常规释放点**（只有等待超时那一刻才由 `StopAsync` 兜底释放，因此"只释放一次"是硬约束）。改启停或清理路径时必须保持这个顺序，详见 `docs/设计决策与边界/`。
 - 公共编译设置（`ImplicitUsings` + `Nullable` + `LangVersion latest` + XML 文档文件）与 NuGet 包元数据（作者/授权/仓库/项目主页/标签/README）统一在 `src/Directory.Build.props`；**新增会被发布的包时，务必在自己 csproj 里补一行 `<Description>`**（否则 nuget.org 上只会显示 SDK 占位文本 `Package Description`），并把项目名加进 `src/publish-packages.ps1` 的列表。
+- **测试代码必须跨平台**（CI 只跑 Linux），两类路径都要当心：
+  - **分隔符**：相对路径一律用 `/` 或 `Path.Combine` 分段，**不要写 `@"Samples\Web\index.xml"`**——反斜杠在 Linux 是合法文件名字符，`Path.Combine` 不会转换，结果是"Windows 上绿、Linux 上 `File.Exists` 失败"。夹具/示例用 `TestPaths.Fixture("Samples", "Web", "index.xml")` 定位。
+  - **Windows 专有绝对路径**：`C:\base` 在 Linux 上**不是** rooted 路径，`Path.Combine` 的行为会不同（Windows 丢弃前一段、Linux 拼接），于是同一个用例在两个平台上"测的不是同一件事"。需要"绝对路径"语义的数据请用 `TestPaths.TempPath("base")`（运行时由 `Path.GetTempPath()` 拼出，两个平台都真 rooted）。
+  - 两者都收在 `src/StdUnit.Tags.Tests/TestPaths.cs`。新增夹具/路径类用例后请在 WSL 上跑一遍 `-f net8.0`（或直接看 CI）。
+- **大小写也算"跨平台"**：Linux 文件系统区分大小写，Windows 不区分。写错大小写的路径（例如测试里的 `Schemas/drivers` 而 csproj 的 `Link` 是 `Schemas\Drivers`）在 Windows 上一直绿，一到 Linux CI 就 `DirectoryNotFoundException`。
+  - **警告：这个坑在 WSL 里测不出来**——`/mnt/d`（DrvFs）同样不区分大小写。要真验证，得把仓库复制到 WSL 的 ext4（`tar` 排除 `bin`/`obj`，删掉 `paket-files/paket.restore.cached` 后 `paket restore`），或直接依赖 CI。
+  - 需要按名字定位文件/目录时，**大小写必须与产出方（csproj 的 `Link`、`TestPaths.Fixture(...)`）逐字符一致**——不要为了"容错"写成不区分大小写，那恰好把这个坑掩盖掉（我们就是先写成 `SchemaPath("drivers")` 才红的）。写错了就让它在 CI 上红，并顺手核对 csproj。
 - 驱动包内的 DI 扩展类约定**同名** `TagsProject_Extensions`，各自位于自己的命名空间（如 `StdUnit.Tags.S7`）。
 - 驱动名常量集中在 `XxxNames.DriverName`（如 `S7Names.DriverName = "S7"`、`ComDriverNames.DriverName = "COM"`）；XML 中的 `driver="..."` 必须与之完全一致。
 - 每个驱动的支持注册收口为 `.AddXxxSupport()`，实现为细粒度注册（`AddXxxChannel` / `AddXxxTagCbntBuilder` / `AddXxxDirectTagBuilder`）的组合。新增驱动请沿用这个形状。可选的"策略/判定"类扩展点按这个形状走：**注册扩展方法的可选参数 → 注册时闭包构造工厂 → 通道 ctor 的可选参数（默认用内置实现）**，例：OpcUa 的 `checkIsFailed`（`AddOpcUaClientSupport(checkIsFailed:)` → `OpcUaClientTagChannelFactory` → `OpcUaClientTagChannel` ctor，默认 `OpcUaValueQuality.IsFailed`）；不要把它做成需要用户自己组装的服务类型。
