@@ -416,6 +416,58 @@ public class TagsProjectCtrlTests
     }
 
     /// <summary>
+    /// <see cref="TagsProjectCtrl.StopAsync"/> 必须在"轮询循环真正退出"之后才返回：
+    /// 否则"已停止"事件不是确定性信号——调用方拿到它就去复用通道 / 换 XML，会与仍在收尾的循环撞车。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WaitsUntilPollingLoopExited()
+    {
+        var (ctrl, sp) = CreateCtrl();
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, _) => Task.CompletedTask));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync();
+
+        Assert.True(startTask.IsCompleted, "StopAsync 返回时轮询任务应已结束（项目也已释放）");
+        Assert.Null(ctrl.Project);
+        Assert.Equal(1, _factory.LastCreatedProject!.DisposeCallCount);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 驱动不响应取消时，<see cref="TagsProjectCtrl.StopAsync"/> 不能永久挂住：等待轮询退出要有超时兜底，
+    /// 超时后记 Warning 并继续清理（此时项目由 StopAsync 释放，且只释放一次）。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenPollingIgnoresCancellation_TimesOutAndStillCleans()
+    {
+        var logs = new CapturingLoggerProvider();
+        var (ctrl, sp) = CreateCtrl(logs);
+        ctrl.PollExitWaitTimeout = TimeSpan.FromMilliseconds(200);
+        _factory.ProjectRunAsyncNeverCompletes = true;
+
+        using var started = WatchProjectStarted(ctrl);
+        _ = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, _) => Task.CompletedTask));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync().WaitAsync(TimeSpan.FromSeconds(10)); // 不应挂住
+
+        Assert.Null(ctrl.Project);
+        Assert.Equal(1, _factory.LastCreatedProject!.DisposeCallCount);
+        var warning = Assert.Single(logs.Entries, e => e.Message.Contains("等待轮询循环退出超时"));
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        sp.Dispose();
+    }
+
+    /// <summary>
     /// 清理路径有意吞掉 <see cref="ITagChannel.DisconnectAsync"/> 的异常：
     /// 不向外抛、不阻断其它通道的断开，但必须留下 Warning 日志（含通道名），否则连接没断干净也无人知晓。
     /// </summary>

@@ -59,6 +59,12 @@ public class OpcUaClientTagChannelDescriptor : TagChannelDescriptor
         securityEle.SetOrAddChild(nameof(OpcUaSecurityOpt.AutoAcceptUntrustedCertificates), this.OpcUaTagChannelOpt.SecurityOpt.AutoAcceptUntrustedCertificates);
         securityEle.SetOrAddChild(nameof(OpcUaSecurityOpt.RejectSHA1SignedCertificates), this.OpcUaTagChannelOpt.SecurityOpt.RejectSHA1SignedCertificates);
         securityEle.SetOrAddChild(nameof(OpcUaSecurityOpt.MinimumCertificateKeySize), this.OpcUaTagChannelOpt.SecurityOpt.MinimumCertificateKeySize);
+        // 同理：net472 上 string.IsNullOrWhiteSpace 的后置条件不可见（CS8604），用语言级判空
+        var storeRootToWrite = this.OpcUaTagChannelOpt.SecurityOpt.CertificateStoreRoot;
+        if (storeRootToWrite is not null && storeRootToWrite.Trim().Length > 0)
+        {
+            securityEle.SetOrAddChild(nameof(OpcUaSecurityOpt.CertificateStoreRoot), storeRootToWrite);
+        }
 
         ele.Add(securityEle);
         return ele;
@@ -167,6 +173,12 @@ public static class TagChannelDescriptor_OpcUaClientExtensions
             }
             securityOpt.MinimumCertificateKeySize = minKeySize;
         }
+
+        var storeRoot =
+            securityOptEle.Attribute(nameof(OpcUaSecurityOpt.CertificateStoreRoot))?.Value ??
+            securityOptEle.Element(nameof(OpcUaSecurityOpt.CertificateStoreRoot))?.Value;
+        // 空/空白视为未配置（走内置默认根），不算错误：XML 里常见的“占位但留空”不该让项目加载失败
+        securityOpt.CertificateStoreRoot = string.IsNullOrWhiteSpace(storeRoot) ? null : storeRoot;
 
         return securityOpt;
     }

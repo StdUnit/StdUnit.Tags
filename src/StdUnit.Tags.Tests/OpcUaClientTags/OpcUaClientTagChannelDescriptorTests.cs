@@ -120,6 +120,43 @@ public class OpcUaClientTagChannelDescriptorTests
         Assert.True(securityOpt.AutoAcceptUntrustedCertificates);
         Assert.False(securityOpt.RejectSHA1SignedCertificates);
         Assert.Equal((ushort)1024, securityOpt.MinimumCertificateKeySize);
+        // 未配置证书库根目录 ⇒ 走内置默认根（CommonApplicationData 下），而不是空串
+        Assert.Null(securityOpt.CertificateStoreRoot);
+    }
+
+    [Fact]
+    public void ToOpcUaClientTagChannelDescriptor_ReadsCertificateStoreRoot()
+    {
+        var baseDesc = new TagChannelDescriptor
+        {
+            Name = "opcua-store-root",
+            Driver = OpcUaClientNames.DriverName,
+        };
+        baseDesc.Extras["SecurityOpt"] = new XElement("SecurityOpt",
+            new XElement("CertificateStoreRoot", "/home/you/.local/share/OPC Foundation/CertificateStores"));
+
+        var result = baseDesc.ToOpcUaClientTagChannelDescriptor();
+
+        Assert.Equal(
+            "/home/you/.local/share/OPC Foundation/CertificateStores",
+            result.OpcUaTagChannelOpt.SecurityOpt.CertificateStoreRoot);
+    }
+
+    [Fact]
+    public void ToOpcUaClientTagChannelDescriptor_WhenCertificateStoreRootIsBlank_TreatedAsUnset()
+    {
+        var baseDesc = new TagChannelDescriptor
+        {
+            Name = "opcua-store-root-blank",
+            Driver = OpcUaClientNames.DriverName,
+        };
+        // XML 里“占位但留空”很常见，不该让项目加载失败
+        baseDesc.Extras["SecurityOpt"] = new XElement("SecurityOpt",
+            new XElement("CertificateStoreRoot", "   "));
+
+        var result = baseDesc.ToOpcUaClientTagChannelDescriptor();
+
+        Assert.Null(result.OpcUaTagChannelOpt.SecurityOpt.CertificateStoreRoot);
     }
 
     [Fact]
@@ -190,6 +227,7 @@ public class OpcUaClientTagChannelDescriptorTests
                     AutoAcceptUntrustedCertificates = false,
                     RejectSHA1SignedCertificates = true,
                     MinimumCertificateKeySize = 2048,
+                    CertificateStoreRoot = "/home/you/.local/share/OPC Foundation/CertificateStores",
                 },
             },
         };
@@ -211,6 +249,7 @@ public class OpcUaClientTagChannelDescriptorTests
         Assert.False(result.OpcUaTagChannelOpt.SecurityOpt.AutoAcceptUntrustedCertificates);
         Assert.True(result.OpcUaTagChannelOpt.SecurityOpt.RejectSHA1SignedCertificates);
         Assert.Equal((ushort)2048, result.OpcUaTagChannelOpt.SecurityOpt.MinimumCertificateKeySize);
+        Assert.Equal("/home/you/.local/share/OPC Foundation/CertificateStores", result.OpcUaTagChannelOpt.SecurityOpt.CertificateStoreRoot);
     }
 
     [Fact]

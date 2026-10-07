@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   OpcUaClient 驱动：Channel 专属子元素 schema
   命名空间：tags:opcuaclient
@@ -6,6 +6,7 @@
   默认值（见 ToOpcUaClientTagChannelDescriptor / ParseSreverOpt / ParseSecurityOpt）：
     ClientName=StdUnitTagsOpcUaClient，DiscoveryUrl=localhost，UsePassword=false，
     UserName=空，Password=空。
+    CertificateStoreRoot=未配置 => %ProgramData%/OPC Foundation/CertificateStores（Linux 为 /usr/share/...，通常需要 root）
   用法：
     <root xmlns:ua="tags:opcuaclient">
       <Channel name="ua-1" driver="OpcUaClient">
@@ -20,6 +21,9 @@
           <ua:AutoAcceptUntrustedCertificates>false</ua:AutoAcceptUntrustedCertificates>
           <ua:RejectSHA1SignedCertificates>true</ua:RejectSHA1SignedCertificates>
           <ua:MinimumCertificateKeySize>2048</ua:MinimumCertificateKeySize>
+          可选：证书库根目录。省略时用 %ProgramData%/OPC Foundation/CertificateStores（Linux 为 /usr/share/...）；
+          Linux 上该默认位置通常需要 root，普通用户请显式指定一个可写目录。
+          <ua:CertificateStoreRoot>/home/you/.local/share/OPC Foundation/CertificateStores</ua:CertificateStoreRoot>
         </ua:SecurityOpt>
       </Channel>
     </root>
@@ -50,6 +54,10 @@
           </xs:restriction>
         </xs:simpleType>
       </xs:element>
+      <!-- 证书库根目录（MachineDefault / UA Certificate Authorities / UA Applications / RejectedCertificates 的父目录）。
+           省略即用 %ProgramData%/OPC Foundation/CertificateStores；Linux 上默认位置通常需要 root 才能写入。
+           取值按原样使用，不做占位符替换（%...% 与反斜杠在 Linux 上都只是普通字符）。 -->
+      <xs:element name="CertificateStoreRoot" type="xs:string" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 

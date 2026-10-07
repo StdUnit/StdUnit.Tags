@@ -12,18 +12,21 @@ public class TagChannelDescriptorTests
     [Fact]
     public void Descriptor_ToXElement_WithBaseDir_IncludesElement()
     {
+        // BaseDir 只是数据（本用例不做任何文件 I/O），但用运行时临时目录而不是字面量 C:\ ：
+        // 后者在 Linux 上不是 rooted 路径，一旦哪天 MakePath 开始判定 rooted，用例就会被平台悄悄改义。
+        var baseDir = TestPaths.TempPath("data", "tags");
         var descriptor = new SimpleFilesTagChannelDescriptor
         {
             Name = "my-channel",
             Driver = SimpleFilesNames.DriverName,
-            BaseDir = @"C:\data\tags",
+            BaseDir = baseDir,
         };
 
         var element = descriptor.ToXElement();
 
         Assert.Equal("my-channel", element.Attribute("name")?.Value);
         Assert.Equal(SimpleFilesNames.DriverName, element.Attribute("driver")?.Value);
-        Assert.Equal(@"C:\data\tags", element.Element("BaseDir")?.Value);
+        Assert.Equal(baseDir, element.Element("BaseDir")?.Value);
     }
 
     [Fact]
@@ -44,11 +47,12 @@ public class TagChannelDescriptorTests
     [Fact]
     public void Descriptor_RoundtripXml_PreservesAllProperties()
     {
+        var baseDir = TestPaths.TempPath("tags");
         var descriptor = new SimpleFilesTagChannelDescriptor
         {
             Name = "roundtrip-ch",
             Driver = SimpleFilesNames.DriverName,
-            BaseDir = @"C:\tags",
+            BaseDir = baseDir,
         };
 
         var xml = descriptor.ToXElement().ToString();
@@ -57,7 +61,7 @@ public class TagChannelDescriptorTests
 
         Assert.Equal("roundtrip-ch", converted.Name);
         Assert.Equal(SimpleFilesNames.DriverName, converted.Driver);
-        Assert.Equal(@"C:\tags", converted.BaseDir);
+        Assert.Equal(baseDir, converted.BaseDir);
     }
 
     [Fact]
@@ -88,11 +92,12 @@ public class TagChannelDescriptorTests
             Name = "from-extras",
             Driver = SimpleFilesNames.DriverName,
         };
-        genericDescriptor.Extras["BaseDir"] = new XElement("BaseDir", @"C:\from-extras");
+        var baseDirFromExtras = TestPaths.TempPath("from-extras");
+        genericDescriptor.Extras["BaseDir"] = new XElement("BaseDir", baseDirFromExtras);
 
         var converted = genericDescriptor.ToSimpleFilesTagChannelDescriptor();
 
-        Assert.Equal(@"C:\from-extras", converted.BaseDir);
+        Assert.Equal(baseDirFromExtras, converted.BaseDir);
     }
 
     [Fact]
@@ -102,7 +107,7 @@ public class TagChannelDescriptorTests
         {
             Name = "already-typed",
             Driver = SimpleFilesNames.DriverName,
-            BaseDir = @"C:\data",
+            BaseDir = TestPaths.TempPath("data"),
         };
 
         var result = descriptor.ToSimpleFilesTagChannelDescriptor();

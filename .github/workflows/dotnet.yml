@@ -12,7 +12,17 @@ on:
 jobs:
   build:
 
-    runs-on: windows-latest
+    # 只在 Linux 上跑：省成本、反馈快（Windows runner 贵且常排队）。
+    #
+    # 能力边界（有意为之）：
+    # * 构建 net472 —— 能。引用程序集来自 SDK 隐式引入的 Microsoft.NETFramework.ReferenceAssemblies 包
+    #   （只要本机找不到 targeting pack 就会引入，与操作系统无关，见 Microsoft.NET.Sdk.FrameworkReferenceResolution.targets），
+    #   所以"整解构建"顺带把 net472 的**编译**也校验了。
+    # * 运行 net472 的测试 —— 不能（需要 .NET Framework 运行时），因此测试限定 -f net8.0。
+    #   net472 的**运行**测试只在 release.yml（windows-latest，发版时全 TFM 跑一遍）与本机 Windows 上进行——
+    #   这是刻意的取舍：PR 阶段不再执行 net472，用它换构建时长与成本。
+    # * samples/WpfDemo（net8.0-windows + WPF）已从解决方案移除，目录保留，需要时在本机 Windows 上单独构建。
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -23,31 +33,60 @@ jobs:
         dotnet-version: 8.0.102
 
     - name: Restore Tool dependencies
-      working-directory: .
       run: dotnet tool restore
 
     - name: Restore dependencies
-      working-directory: .
       run: dotnet paket restore
 
-    - name: build 
-      working-directory: .
-      run: dotnet build StdUnit.Tags.sln
+    # 整解构建：net8.0 + net472 编译 + 三个 net8.0 示例，一次覆盖
+    - name: Build (whole solution)
+      run: dotnet build StdUnit.Tags.sln -c Release --nologo
 
-    - name: Test with Coverage
-      working-directory: .
-      run: dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+    # 只跑 net8.0：net472 的测试需要 .NET Framework 运行时（其编译校验已由上一步覆盖）。
+    # 覆盖率只统计 net8.0 —— 同一份源码，net472 专属分支在 net8.0 构建里根本不参与编译，不会被误记为未覆盖。
+    - name: Test with Coverage (net8.0)
+      run: dotnet test src/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj -f net8.0 -c Release --no-build --nologo --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
     - name: Upload Coverage to Codecov
       uses: codecov/codecov-action@v4
       env:
         PYTHONUTF8: 1
       with:
-        # `files` is a comma-separated list of explicit files, not a glob.
-        # Now that Tests multi-targets net8.0;net472 there are several
-        # coverage.cobertura.xml reports, so point the uploader at the folder
-        # (the CLI searches it recursively) instead of expanding a glob.
+        # `directory` 指向报告所在文件夹（CLI 会递归查找），不要用 glob 展开成 `files` 列表
         directory: ./TestResults
         token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: true
         verbose: true
+
+  net472-on-mono:
+
+    # 目的：让 net472 的**运行**测试也自动化，且不占 Windows runner 的排队时间。
+    # 为什么钉 ubuntu-22.04：该镜像**预装 Mono 6.12**（当前的 ubuntu-latest/24.04 没有，得自行 apt 安装数百 MB）。
+    # 代价是钉在旧镜像上——22.04 退役后改用 apt-get install -y mono-complete 即可，其余不变。
+    # 定位：**补充信号**。mono ≠ .NET Framework（那才是发布物真正跑的运行时），mono 绿只能说明"大概率没退化"；
+    # 权威结果仍是 release.yml（windows-latest 全 TFM）与开发机 Windows 上的运行。
+    runs-on: ubuntu-22.04
+    # 所以设了 continue-on-error：mono 的伪失败不应挡住 PR。想让它硬性把关，删掉下面这一行。
+    # 实测依据（本仓库，2026-10）：WSL/Ubuntu 22.04 + mono 6.8 → 1028 全绿，与 Windows 真 .NET Framework 的 1028 逐一致。
+    continue-on-error: false
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.102
+
+    - name: Restore Tool dependencies
+      run: dotnet tool restore
+
+    - name: Restore dependencies
+      run: dotnet paket restore
+
+    # 显式确认镜像里的 mono 还在（将来镜像换代时，这一步的失败比 VSTest 的 "Could not find 'mono' host" 好读得多）
+    - name: Check mono
+      run: mono --version
+
+    - name: Test (net472 on mono)
+      run: dotnet test src/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj --nologo

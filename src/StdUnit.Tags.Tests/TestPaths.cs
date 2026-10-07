@@ -33,4 +33,22 @@ internal static class TestPaths
     /// </summary>
     internal static string Fixture(params string[] segments)
         => Path.Combine(OutputDirectory, Path.Combine(segments));
+
+    /// <summary>
+    /// 临时目录下的某个路径（**只拼字符串，不创建任何东西**）。<br/>
+    /// <br/>
+    /// 用途：需要"绝对 / rooted 路径"语义的测试数据（如 SimpleFiles 的 <c>BaseDir</c>、绝对地址）。
+    /// 为什么写字面量 <c>@"C:\base"</c> 不行：反斜杠在 Linux 上只是普通字符，<c>C:\base</c> 也<b>不是</b> rooted 路径，
+    /// 于是 <see cref="Path.Combine(string,string)"/> 在两端行为不同（Windows 会丢弃前一段、Linux 会拼接），
+    /// 同一个用例在两个平台上"测的不是同一件事"——它可能在 Linux 上照样通过，却换了分支。
+    /// 这里用运行时确定的临时目录，两个平台都是真 rooted。
+    /// </summary>
+    /// <param name="segments">相对于临时目录的路径片段</param>
+    internal static string TempPath(params string[] segments)
+    {
+        var all = new string[segments.Length + 1];
+        all[0] = Path.GetTempPath();
+        Array.Copy(segments, 0, all, 1, segments.Length);
+        return Path.Combine(all);
+    }
 }

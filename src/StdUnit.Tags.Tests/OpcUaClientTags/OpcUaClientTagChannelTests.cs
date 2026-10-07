@@ -394,6 +394,52 @@ public class OpcUaClientTagChannelTests
         Assert.Empty(logs.Entries);
     }
 
+    /// <summary>
+    /// 证书库路径必须是<b>用 Path.Combine 拼出来的真实目录层级</b>，不能是 OPC UA 的 <c>%...%</c> 占位符字面量：
+    /// 后者在 Linux 上会拼成 <c>/usr/share\OPC Foundation\...</c>（名字里带反斜杠的目录），实测底层随即抛 "File does not exist"。
+    /// 本用例断言"根 + 子目录"在任一平台上都等于同法拼出的期望值（Linux 上即不含反斜杠）。
+    /// </summary>
+    [Fact]
+    public void SecurityOpt_DefaultCertificateStorePaths_AreBuiltWithPathCombine()
+    {
+        var channel = new TestOpcUaChannel("ch-store", CreateSessionMock(), NullLogger<OpcUaClientTagChannel>.Instance);
+
+        var config = channel.ExposeAppConfig();
+        var expectedRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "OPC Foundation",
+            "CertificateStores");
+
+        Assert.Equal(Path.Combine(expectedRoot, "MachineDefault"), config.SecurityConfiguration.ApplicationCertificate.StorePath);
+        Assert.Equal(Path.Combine(expectedRoot, "UA Certificate Authorities"), config.SecurityConfiguration.TrustedIssuerCertificates.StorePath);
+        Assert.Equal(Path.Combine(expectedRoot, "UA Applications"), config.SecurityConfiguration.TrustedPeerCertificates.StorePath);
+        Assert.Equal(Path.Combine(expectedRoot, "RejectedCertificates"), config.SecurityConfiguration.RejectedCertificateStore.StorePath);
+        Assert.DoesNotContain("%CommonApplicationData%", config.SecurityConfiguration.ApplicationCertificate.StorePath);
+    }
+
+    /// <summary>配置了 <see cref="OpcUaSecurityOpt.CertificateStoreRoot"/> 时，四个库都挂到该目录下。</summary>
+    [Fact]
+    public void SecurityOpt_CustomCertificateStoreRoot_IsUsedForAllStores()
+    {
+        var storeRoot = TestPaths.TempPath("OPC Foundation", "CertificateStores");
+        var descriptor = new OpcUaClientTagChannelDescriptor
+        {
+            Name = "ch-store-custom",
+            OpcUaTagChannelOpt = new OpcUaClientTagChannelOpt
+            {
+                SecurityOpt = new OpcUaSecurityOpt { CertificateStoreRoot = storeRoot },
+            },
+        };
+        var channel = new TestOpcUaChannel(descriptor, CreateSessionMock(), NullLogger<OpcUaClientTagChannel>.Instance);
+
+        var config = channel.ExposeAppConfig();
+
+        Assert.Equal(Path.Combine(storeRoot, "MachineDefault"), config.SecurityConfiguration.ApplicationCertificate.StorePath);
+        Assert.Equal(Path.Combine(storeRoot, "UA Certificate Authorities"), config.SecurityConfiguration.TrustedIssuerCertificates.StorePath);
+        Assert.Equal(Path.Combine(storeRoot, "UA Applications"), config.SecurityConfiguration.TrustedPeerCertificates.StorePath);
+        Assert.Equal(Path.Combine(storeRoot, "RejectedCertificates"), config.SecurityConfiguration.RejectedCertificateStore.StorePath);
+    }
+
     [Fact]
     public async Task ReadAsync_WhenAnyNodeIsBad_ThrowsWithChannelNodeAndStatus()
     {

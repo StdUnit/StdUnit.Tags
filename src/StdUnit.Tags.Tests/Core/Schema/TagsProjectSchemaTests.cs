@@ -28,7 +28,10 @@ public class TagsProjectSchemaTests
         Path.Combine(AppContext.BaseDirectory, SchemaRoot, relative);
 
     /// <summary>
-    /// 编译 core + 驱动 schema。
+    /// 编译 core + 驱动 schema。<br/>
+    /// 注意：驱动目录名必须与 csproj 的 <c>Link="Schemas\Drivers\..."</c> <b>大小写完全一致</b>——
+    /// Linux 文件系统区分大小写，写错大小写会直接 <see cref="DirectoryNotFoundException"/>；
+    /// 而 Windows 与 WSL 的 <c>/mnt/d</c>（DrvFs）都不区分大小写，只有 Linux CI 会暴露它。
     /// </summary>
     private static (XmlSchemaSet Set, List<string> Errors) CompileSchemas()
     {
@@ -43,7 +46,7 @@ public class TagsProjectSchemaTests
         };
 
         AddSchemaFile(set, SchemaPath("tagsproject.xsd"));
-        foreach (var file in Directory.GetFiles(SchemaPath("drivers"), "*.xsd").OrderBy(f => f, StringComparer.Ordinal))
+        foreach (var file in Directory.GetFiles(SchemaPath("Drivers"), "*.xsd").OrderBy(f => f, StringComparer.Ordinal))
         {
             AddSchemaFile(set, file);
         }
@@ -111,19 +114,18 @@ public class TagsProjectSchemaTests
 
         var samples = new[]
         {
-            @"Samples\Web\index.xml",
-            @"Samples\Web\index2.xml",
-            @"Samples\Web\index-plugin.xml",
-            @"Samples\WpfDemo\index.xml",
-            @"Samples\WpfDemo\index-2.xml",
-            @"Samples\NixMonitor\index.xml",
+            TestPaths.Fixture("Samples", "Web", "index.xml"),
+            TestPaths.Fixture("Samples", "Web", "index2.xml"),
+            TestPaths.Fixture("Samples", "Web", "index-plugin.xml"),
+            TestPaths.Fixture("Samples", "WpfDemo", "index.xml"),
+            TestPaths.Fixture("Samples", "WpfDemo", "index-2.xml"),
+            TestPaths.Fixture("Samples", "NixMonitor", "index.xml"),
         };
-        foreach (var rel in samples)
+        foreach (var path in samples)
         {
-            var path = Path.Combine(AppContext.BaseDirectory, rel);
             Assert.True(File.Exists(path), $"示例文件未复制到输出目录: {path}");
             var errors = Validate(set, XDocument.Load(path));
-            Assert.True(errors.Count == 0, $"{rel} 校验失败: {string.Join(" | ", errors)}");
+            Assert.True(errors.Count == 0, $"{path} 校验失败: {string.Join(" | ", errors)}");
         }
     }
 
