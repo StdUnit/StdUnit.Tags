@@ -61,6 +61,7 @@ internal class ModbusTcpDirectTagFactory
             descriptor.TagSize = 2;
         }
 
+        // 解释为 RegSpace 下的 IR/HR
         if (addr.Area == RegisterKinds.InputRegisters)
         {
             return new InputRegisterBitDirectTag(descriptor, thisChannel, this._container);
@@ -69,6 +70,8 @@ internal class ModbusTcpDirectTagFactory
         {
             return new HoldingRegisterBitDirectTag(descriptor, thisChannel, this._container);
         }
+
+        // 兜底：解释为 BitSpace 下的 DI/DO
         else if (addr.Area == RegisterKinds.InputContacts)
         {
             return new InputContactDirectTag(descriptor, thisChannel, this._container);
