@@ -25,7 +25,7 @@ public class HjzkTagChannelDescriptor : ModbusTcpTagChannelDescriptor
 /// <summary>
 /// conversions between <see cref="TagChannelDescriptor"/> and <see cref="HjzkTagChannelDescriptor"/>
 /// </summary>
-public static class TagChannelDescriptor_S7Extensions
+public static class TagChannelDescriptor_HjzkExtensions
 {
     /// <summary>
     /// 转成 <see cref="HjzkTagChannelDescriptor"/>

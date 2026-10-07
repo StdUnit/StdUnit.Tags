@@ -28,7 +28,7 @@ public class ZLanTcpTagChannelDescriptor : ModbusTcpTagChannelDescriptor
 /// <summary>
 /// <see cref="TagChannelDescriptor"/> → <see cref="ZLanTcpTagChannelDescriptor"/> 的转换。
 /// </summary>
-public static class TagChannelDescriptor_S7Extensions
+public static class TagChannelDescriptor_ZLanTcpExtensions
 {
     /// <exception cref="TagsProjectConfigurationException">当前描述符的驱动不是 <see cref="ZLanTcpNames.DriverName"/></exception>
     /// <exception cref="TagsProjectXmlException">Port / MaxWriteRegisters 不合法</exception>
