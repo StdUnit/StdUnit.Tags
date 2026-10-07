@@ -107,8 +107,10 @@ public struct ModbusTcpAddress
         // 离散输出：一定不会使用Bit位
         if (Area == RegisterKinds.OutputCoils)
         {
+            // 线圈的参考号是 0xxxx（00001 即 1 号线圈），基址 1 相加后仍需按 5 位补零，
+            // 否则 00020 会被解析成 1 号区域的 20 号点
             var addr = OUTPUT_COILS_BASE + StartPoint;
-            return $"{SlaveAddress}~{addr}";
+            return $"{SlaveAddress}~{addr:d5}";
         }
 
         // 离散输入：一定不会使用Bit位

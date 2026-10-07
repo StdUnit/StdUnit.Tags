@@ -28,12 +28,14 @@ public class ModbusBitTagCbntBuilder : TagCbntBuilderBase
 
 
     /// <summary>
-    /// 从站站号
+    /// 从站站号。<br/>
+    /// 写了 <c>TagCbnt</c> 的 <c>slave</c> 属性时，本构建器会把它合成进组合的起始地址（如 <c>address="10001" slave="2"</c> 等同于 <c>address="2~10001"</c>）。
     /// </summary>
     public virtual byte Slave { get; protected set; } = 1;
 
     /// <summary>
-    /// 区域
+    /// 区域。<br/>
+    /// 本构建器不消费该属性（Modbus 的区域由起始地址决定），它供子类使用——例如 Hjzk / ZLan 用它选择 DI / DO 构建器。
     /// </summary>
     public virtual string? Area { get; protected set; }
 
@@ -51,14 +53,9 @@ public class ModbusBitTagCbntBuilder : TagCbntBuilderBase
     /// <inheritdoc/>
     public override TagCbntBuilderBase WithCbntDescriptor(TagCbntDescriptor descriptor)
     {
-        if (descriptor.Extras.TryGetValue("slave", out var slaveAttr))
+        var hasSlave = ModbusCbntSlaveAddress.TryGetSlave(descriptor, out var slave);
+        if (hasSlave)
         {
-            if (!byte.TryParse(slaveAttr.Value, out var slave))
-            {
-                throw new TagsProjectXmlException(
-                    $"无效的Modbus从站地址：{slaveAttr.Value}（必须是 0~255 的整数）",
-                    $"TagCbnt({descriptor.Name})");
-            }
             this.Slave = slave;
         }
         if (descriptor.Extras.TryGetValue("area", out var areaAttr))
@@ -66,6 +63,10 @@ public class ModbusBitTagCbntBuilder : TagCbntBuilderBase
             this.Area = areaAttr.Value;
         }
         base.WithCbntDescriptor(descriptor);
+        if (hasSlave)
+        {
+            this.TagCbnt.StartAddress = ModbusCbntSlaveAddress.WithSlave(this.TagCbnt.StartAddress, slave);
+        }
         return this;
     }
 

@@ -29,6 +29,29 @@ public class ModbusRegisterTagCbntBuilder : TagCbntBuilderBase
     internal ModbusRegisterTagCbnt TypedCbnt => this._cbnt;
 
     /// <summary>
+    /// 从站站号。<br/>
+    /// 写了 <c>TagCbnt</c> 的 <c>slave</c> 属性时，本构建器会把它合成进组合的起始地址（如 <c>address="40001" slave="2"</c> 等同于 <c>address="2~40001"</c>）。
+    /// </summary>
+    public virtual byte Slave { get; protected set; } = 1;
+
+
+    /// <inheritdoc/>
+    public override TagCbntBuilderBase WithCbntDescriptor(TagCbntDescriptor descriptor)
+    {
+        var hasSlave = ModbusCbntSlaveAddress.TryGetSlave(descriptor, out var slave);
+        if (hasSlave)
+        {
+            this.Slave = slave;
+        }
+        base.WithCbntDescriptor(descriptor);
+        if (hasSlave)
+        {
+            this.TagCbnt.StartAddress = ModbusCbntSlaveAddress.WithSlave(this.TagCbnt.StartAddress, slave);
+        }
+        return this;
+    }
+
+    /// <summary>
     /// 当前组合是否寄存器空间（3x/4x）——由起始地址解析。<br/>
     /// 本构建器只服务寄存器空间，位空间（0x/1x）请使用 <see cref="ModbusBitTagCbntBuilder"/>。
     /// </summary>
