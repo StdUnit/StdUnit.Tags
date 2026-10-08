@@ -1,11 +1,26 @@
 # Changelog
 
-本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`：
-`v1.0` 之前，每个 `minor` 跳变都可能引入新特性与破坏性更新；`v1.0` 之后，只在 `major` 跳变时才引入破坏性更新。
+本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
-## 未发布
+## 1.1.0
+
+> 首发日期：`2026-10-08`。
+> [docs/设计决策与边界/1. CI.md](docs/设计决策与边界/1.%20CI.md)。
+
+本次更新集中在`StdUnit.Tags.ModbusTcp`这个类库。
 
 ### 行为变更（破坏性）
+
+> **本批变更只涉及 `StdUnit.Tags.ModbusTcp`**——它在 README「文件夹结构与驱动支持」里标记为**实验**，
+> 而实验包的 `minor` 跳变可能包含破坏性更新（"支持"包只在 `major` 跳变时才会）。
+> 影响面核对（对照 `1.0.0`）：改动全部落在 `StdUnit.Tags.ModbusTcp`；**编译层面无破坏**——没有被改名/删除的公开类型
+> （被重构的 `Modbus*DirectTag`、`Modbus*Cbntor`、`interpret` 相关类型都是 `internal`，`IModbusRegisterChannel` 只改了注释），
+> 公开面只有新增成员（如 `ModbusBitTagCbntBuilder.Slave`）。
+> **行为层面的破坏全部落在点表（XML）语义上**：`endian` 的含义、多出来的 `interpret`、`TagCbnt.slave` 生效、参考号 0 报错——
+> 修的都是"同一份 XML 换一种写法（`<TagGrp>` / `<TagCbnt>`）就得到另一个值且不报错"这类静默错误。
+> Modbus 驱动目前除 DI/DO 外没有现场在用，因此按 minor 发布。
+> 直接引用`StdUnit.Tags.ModbusTcp`中类型的驱动开发者才需要注意（像 ZLan / Hjzk 那样继承 `ModbusBitTagCbntBuilder` / `ModbusRegisterTagCbntBuilder` 的驱动）：
+> `WithCbntDescriptor` 现在会消费 `slave` 并改写 `TagCbnt.StartAddress`，override 时请调用 `base`。
 
 - **ModbusTcp：`endian` 回归"每个 16 位单元内部两个字节的顺序"，32/64 位的寄存器顺序改由新属性 `interpret` 表达**。
   此前 `endian` 在 16 位与 32/64 位是两套含义（16 位 = 寄存器内两字节顺序，32/64 位 = 寄存器顺序），而且 16 位的
