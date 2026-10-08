@@ -22,7 +22,7 @@ namespace StdUnit.Tags.ModbusTcp;
 /// <br/>
 /// <b>合法的排布是有限的</b>：16 位单元内部只有《大端/小端》两种，单元之间可以任意排列，于是 32 位有
 /// 2 × 2! = 4 种、64 位有 2 × 4! = 48 种。每个合法排布都用上面那串字母写出唯一记法（<see cref="DescribeNotation"/> 可见
-/// 记法与置换表的对应关系），
+/// 记法与落位表的对应关系），
 /// 解读器就是按这个编号复用的（见各具体解读器的 <c>For</c> 入口）。<br/>
 /// <br/>
 /// 记法只描述"字节怎么摆"，具体类型的换算见 <see cref="ModbusValueInterpreter{T}"/>。32 位物理值
@@ -44,7 +44,7 @@ internal static class ModbusInterpret
     internal const string AttributeName = "interpret";
 
     /// <summary>
-    /// 全部合法排布（下标 0 = 恒等排布 <c>ABCD…</c>）的置换表，静态生成一次
+    /// 全部合法排布（下标 0 = 恒等排布 <c>ABCD…</c>）的落位表，静态生成一次
     /// </summary>
     private static readonly ReadOnlyMemory<byte>[] Packings32 = Utils.MakePackings(2);
 
@@ -70,7 +70,7 @@ internal static class ModbusInterpret
     }
 
     /// <summary>
-    /// 解析并校验记法，返回"值里的第 i 个字节在设备端字节里的下标"这张置换表（<c>map[i]</c>）；
+    /// 解析并校验记法，返回"值里的第 i 个字节在设备端字节里的下标"这张落位表（<c>map[i]</c>）；
     /// <b>恒等排布（<c>ABCD…</c>）返回空表</b>（无需搬运）。<br/>
     /// 表用 <see cref="ReadOnlyMemory{T}"/> 表达（C# 没有"只读数组"，数组永远可以写元素），
     /// 取项就是 <c>map.Span[i]</c>：没有位移/掩码数学，也不限于 8 字节（将来支持更宽的格式不用改编码）。
@@ -168,7 +168,7 @@ internal static class ModbusInterpret
 
     /// <summary>
     /// 该描述符的排布在"全部合法排布"里的编号（下标 0 = 恒等排布 <c>ABCD…</c>）；记法不合法则先抛。<br/>
-    /// 编号与 <see cref="EnumeratePackings"/> 同序，供解读器按编号复用实例。查找直接比对置换表，
+    /// 编号与 <see cref="EnumeratePackings"/> 同序，供解读器按编号复用实例。查找直接比对落位表，
     /// 不经过字符串（<see cref="Parse"/> 的结果必然与枚举里的某一项逐个字节相同）。
     /// </summary>
     /// <param name="descriptor">测点描述符</param>
@@ -194,7 +194,7 @@ internal static class ModbusInterpret
     }
 
     /// <summary>
-    /// 两张置换表是否等价（都是"恒等用空表表示"的形态）
+    /// 两张落位表是否等价（都是"恒等用空表表示"的形态）
     /// </summary>
     private static bool AreSame(ReadOnlyMemory<byte> left, ReadOnlyMemory<byte> right)
     {
@@ -206,7 +206,7 @@ internal static class ModbusInterpret
     }
 
     /// <summary>
-    /// 全部合法排布的置换表（下标 0 = 恒等排布，用空表表示），静态生成一次、之后直接复用。<br/>
+    /// 全部合法排布的落位表（下标 0 = 恒等排布，用空表表示），静态生成一次、之后直接复用。<br/>
     /// 生成规则与 <see cref="Parse"/> 的校验规则一致：<c>endian</c> 两种 × 16 位单元全排列
     /// （32 位 4 种、64 位 48 种），所以"合法的记法"与"枚举里的某一项"一一对应。
     /// </summary>
@@ -219,9 +219,9 @@ internal static class ModbusInterpret
 
 
     /// <summary>
-    /// 置换表 → 可选记法（设备端第 p 个位置上是值里的第几个字节，就写第几个字母）。<br/>
+    /// 落位表 → 可选记法（设备端第 p 个位置上是值里的第几个字节，就写第几个字母）。<br/>
     /// 只用于测试与文档对照：它展示的是"这组字节摆布写成 XML 该怎么写"。生产路径不做这个转换——
-    /// <see cref="VariantIndex"/> 直接比对置换表，<see cref="Parse"/> 也不靠字符串查找。
+    /// <see cref="VariantIndex"/> 直接比对落位表，<see cref="Parse"/> 也不靠字符串查找。
     /// 这里<b>不做合法性校验</b>，恒等排布要显式传空表。
     /// </summary>
     internal static string DescribeNotation(ReadOnlyMemory<byte> deviceIndexOfValueByte, int byteCount)

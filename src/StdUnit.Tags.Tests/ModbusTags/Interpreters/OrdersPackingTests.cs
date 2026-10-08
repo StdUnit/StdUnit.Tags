@@ -136,19 +136,12 @@ public class OrdersPackingTests
             {
                 Assert.Equal(8, item.Length);
             }
-            Debug.Write($"new byte[] {{ ");
             var target = targets[i];
             for (var j = 0; j < item.Length; j++)
             {
                 var left = item.Span[j];
-                Debug.Write($"{left}, ");
                 var right = target[j];
                 Assert.Equal(left, right);
-            }
-            Debug.WriteLine($"}}, ");
-            if(i % 4 == 3)
-            {
-                Debug.WriteLine("");
             }
         }
     }

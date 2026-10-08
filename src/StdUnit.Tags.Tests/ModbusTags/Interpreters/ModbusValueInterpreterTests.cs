@@ -346,7 +346,7 @@ public class ModbusValueInterpreterTests
         Assert.NotSame(cdab, identity);
         Assert.NotSame(identity, dcba);
 
-        // 恒等排布不带置换表（走直通分支）
+        // 恒等排布不带落位表（走直通分支）
         Assert.True(ModbusInterpret.Parse(Descriptor(EndianKinds.BigEndian), 4, "Tag(v)").IsEmpty);
     }
 

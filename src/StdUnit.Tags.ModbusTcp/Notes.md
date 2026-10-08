@@ -114,7 +114,7 @@ public static ushort[] NetworkBytesToHostUInt16(byte[] networkBytes)
 
 不写 `interpret` 时就是上表第一行与第四行：`BigEndian` = `ABCD`、`LittleEndian` = `DCBA`。
 **显式写 `ABCD…` / `DCBA` 与不写完全等价**——解析后归一成同一个排布，连复用的解读器实例都是同一个
-（恒等排布走直通分支，连置换表都不带）。
+（恒等排布走直通分支，连落位表都不带）。
 64 位把字母表延长到 `H`（`A` = 最高字节），于是 32 位的 `CDAB`/`BADC`/`DCBA` 分别对应
 `GHEFCDAB`（按 16 位单元整体倒着排）、`BADCFEHG`（每个单元内部换字节）、`HGFEDCBA`（完全小端）；
 `interpret="ABCDEFGH"` 与 `endian="BigEndian"` 等价。
@@ -128,13 +128,13 @@ public static ushort[] NetworkBytesToHostUInt16(byte[] networkBytes)
 - `ModbusValueInterpreter<T>`（`int` / `uint` / `float` / `long` / `ulong` 各一个具体实现）—— 把寄存器数组与目标类型
   直接互转（`Read` / `Write`），调用点不再经过 `ulong` 中转与强制转换。
 
-**解读器实例是复用的**：它不可变，状态只有"字节数 + 一张置换表"（值里的第 i 个字节 → 设备端第几个位置），
+**解读器实例是复用的**：它不可变，状态只有"字节数 + 一张落位表"（值里的第 i 个字节 → 设备端第几个位置），
 而合法排布有限——32 位 **4 种**、64 位 **48 种**（2 种 `endian` × 16 位单元全排列；见 `ModbusInterpret` 的枚举）。
 所以每个具体类型在首次使用时一次性造好静态实例池，按排布编号取（`ModbusUInt32Interpreter.For(descriptor)`
-这类入口），**同一型号 + 同记法的测点共用同一个对象**；不带 `interpret` 的恒等排布走直通分支，连置换表都没有
+这类入口），**同一型号 + 同记法的测点共用同一个对象**；不带 `interpret` 的恒等排布走直通分支，连落位表都没有
 （记法里显式写 `ABCD…` 也归一到这里）。没有锁、没有延迟初始化技巧，整个过程发生在加载期。
 
-置换表用 `ReadOnlyMemory<byte>` 表达（C# **没有**"只读数组"这种东西——`readonly byte[]` 只锁引用、元素照样能改：
+落位表用 `ReadOnlyMemory<byte>` 表达（C# **没有**"只读数组"这种东西——`readonly byte[]` 只锁引用、元素照样能改：
 `ReadOnlyMemory<T>` 是类型级只读，`ReadOnlySpan<T>` 是 `ref struct` 做不了字段、`ImmutableArray<T>` 要新引依赖），
 每个字节一项、由所有实例共享：48 张 8 字节表合计约 0.5 KB，取项就是 `map.Span[i]`——没有位移/掩码，
 也不受"byteCount ≤ 8"限制（将来要支持更宽的格式不用改编码）。实测三种表达在这个路径上没有可测差异。

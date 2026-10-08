@@ -19,7 +19,7 @@ namespace StdUnit.Tags.ModbusTcp;
 /// <b>为什么是"基类 + 具体实现"</b>：32/64 位 × 有无符号的"字节 → 值"转换各不相同，做成一个个具体类型，
 /// 调用点就能直接拿到目标类型（<see cref="Read"/> / <see cref="Write"/>），不必先算出 <c>ulong</c> 再强转。<br/>
 /// <br/>
-/// <b>实例是复用的</b>：本类型<b>不可变</b>，全部状态只有"字节数 + 一个置换表"，与具体测点无关；而置换表只能取
+/// <b>实例是复用的</b>：本类型<b>不可变</b>，全部状态只有"字节数 + 一个落位表"，与具体测点无关；而落位表只能取
 /// 有限几种（32 位 4 种、64 位 48 种）。所以每个具体类型在首次使用时把它们一次性造成静态实例池，之后按
 /// 排布编号取（见 <see cref="BuildInstances"/> 与各具体类型的 <c>For</c>）——同一型号、同记法的测点共用同一个
 /// 对象，"每个测点一份"的开销降成常量级，也没有任何锁或延迟初始化技巧。
@@ -96,9 +96,9 @@ internal abstract class ModbusValueInterpreter<T>
     /// 一次造好全部合法排布的实例（下标与 <see cref="ModbusInterpret.VariantIndex"/> 同序）
     /// </summary>
     /// <param name="byteCount">该数值占用的字节数（4/8）</param>
-    /// <param name="create">具体类型的工厂（只需把置换表交给它自己的 ctor）</param>
+    /// <param name="create">具体类型的工厂（只需把落位表交给它自己的 ctor）</param>
     /// <remarks>
-    /// 每张置换表都由 <see cref="ModbusInterpret.EnumeratePackings"/> 里的同一个数组实例给出，
+    /// 每张落位表都由 <see cref="ModbusInterpret.EnumeratePackings"/> 里的同一个数组实例给出，
     /// 相邻实例共享同一张表（不复制）；恒等排布是 <c>null</c>，读路径直接整段拷贝。
     /// </remarks>
     private protected static ModbusValueInterpreter<T>[] BuildInstances(

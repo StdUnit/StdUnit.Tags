@@ -396,7 +396,7 @@ public class ModbusInterpretTests : IDisposable
     /// <summary>
     /// 显式写出"该 <c>endian</c> 的默认排布"＝不写 <c>interpret</c>：同一张表、同一个编号、同一个实例。<br/>
     /// 注意"空表"只表示<b>恒等映射</b>（A 在第 0 位、B 在第 1 位……），所以只有 <c>BigEndian</c> + <c>ABCD…</c>
-    /// 会归一成空表；<c>LittleEndian</c> 的默认是"完全小端"，那是一张真实存在的置换表。
+    /// 会归一成空表；<c>LittleEndian</c> 的默认是"完全小端"，那是一张真实存在的落位表。
     /// </summary>
     [Theory]
     [InlineData("BigEndian", "ABCD", 4)]
