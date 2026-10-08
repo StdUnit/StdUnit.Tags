@@ -1,7 +1,62 @@
 # Changelog
 
-本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`：
-`v1.0` 之前，每个 `minor` 跳变都可能引入新特性与破坏性更新；`v1.0` 之后，只在 `major` 跳变时才引入破坏性更新。
+本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
+
+## 1.1.0
+
+> 首发日期：`2026-10-08`。
+> [docs/设计决策与边界/1. CI.md](docs/设计决策与边界/1.%20CI.md)。
+
+本次更新集中在`StdUnit.Tags.ModbusTcp`这个类库。
+
+### 行为变更（破坏性）
+
+> **本批变更只涉及 `StdUnit.Tags.ModbusTcp`**——它在 README「文件夹结构与驱动支持」里标记为**实验**，
+> 而实验包的 `minor` 跳变可能包含破坏性更新（"支持"包只在 `major` 跳变时才会）。
+> 影响面核对（对照 `1.0.0`）：改动全部落在 `StdUnit.Tags.ModbusTcp`；**编译层面无破坏**——没有被改名/删除的公开类型
+> （被重构的 `Modbus*DirectTag`、`Modbus*Cbntor`、`interpret` 相关类型都是 `internal`，`IModbusRegisterChannel` 只改了注释），
+> 公开面只有新增成员（如 `ModbusBitTagCbntBuilder.Slave`）。
+> **行为层面的破坏全部落在点表（XML）语义上**：`endian` 的含义、多出来的 `interpret`、`TagCbnt.slave` 生效、参考号 0 报错——
+> 修的都是"同一份 XML 换一种写法（`<TagGrp>` / `<TagCbnt>`）就得到另一个值且不报错"这类静默错误。
+> Modbus 驱动目前除 DI/DO 外没有现场在用，因此按 minor 发布。
+> 直接引用`StdUnit.Tags.ModbusTcp`中类型的驱动开发者才需要注意（像 ZLan / Hjzk 那样继承 `ModbusBitTagCbntBuilder` / `ModbusRegisterTagCbntBuilder` 的驱动）：
+> `WithCbntDescriptor` 现在会消费 `slave` 并改写 `TagCbnt.StartAddress`，override 时请调用 `base`。
+
+- **ModbusTcp：`endian` 回归"每个 16 位单元内部两个字节的顺序"，32/64 位的寄存器顺序改由新属性 `interpret` 表达**。
+  此前 `endian` 在 16 位与 32/64 位是两套含义（16 位 = 寄存器内两字节顺序，32/64 位 = 寄存器顺序），而且 16 位的
+  **组合成员**完全忽略 `endian`、**直接测点**却会交换两个字节——同一份 XML 放在 `<TagGrp>` 下与放在 `<TagCbnt>` 下
+  缺省解读恰好相反且不报错。现在：
+
+  | 关注点 | 表达方式 |
+  |---|---|
+  | 每个 16 位单元内部两个字节的顺序 | `endian`（`BigEndian` 直取、`LittleEndian` 交换；与 S7 同名同义） |
+  | 32/64 位里各单元之间的顺序 | 新属性 `interpret="ABCD"` / `"CDAB"` / `"BADC"` / `"DCBA"`（64 位用 8 个字母，如 `"GHEFCDAB"`） |
+
+  由此，同一份 XML 的两条承载路径（组合成员与直接测点）语义完全一致：32 位 `0x12345678` 的四种排布分别是
+  `endian="BigEndian"`（线上 `12 34 56 78`）、`endian="BigEndian" interpret="CDAB"`（`56 78 12 34`）、
+  `endian="LittleEndian" interpret="BADC"`（`34 12 78 56`）、`endian="LittleEndian"`（`78 56 34 12`，**完全小端**）。
+
+  **升级提示**：这次变更有两处会影响既有配置。
+  1. 16 位**组合成员**此前忽略 `endian`。若依赖过这一点，升级后请显式写 `endian="BigEndian"` 保持原解读
+     （不写即按默认 `LittleEndian`，会交换字节）。
+  2. 32/64 位原先的 `LittleEndian` 等于"只交换寄存器顺序"，现在是"完全小端"，结果不同（`0x56781234` → `0x78563412`）。
+     想保持原来的解读，请改写为 `endian="BigEndian" interpret="CDAB"`（64 位为 `interpret="GHEFCDAB"`）。
+
+  `interpret` 是驱动私有属性（走 `Extras`，Core 不感知），只说 32/64 位：字符数必须等于字节数，每两个连续字符
+  必须是同一个 16 位单元的两个字节且先后与 `endian` 一致，写错（长度/字符/与 `endian` 冲突/重复）在**加载期报错**；
+  16 位、`BYTE`、`BIT`、位空间以及 `TagCbnt` 本身写 `interpret` 也会在加载期报错。位空间（`DI`/`DO`）、`BIT`、
+  `BYTE` 及 16 位的行为不变。
+  新增回归测试 `ModbusEndianWireTests`（两条承载路径各自断言同一个物理值，覆盖全部寄存器/位类型）与
+  `ModbusInterpretTests`（64 位四种排布、与 `endian` 的相容性、各类加载期报错）。
+
+### 修复和改进
+
+- **ModbusTcp：`TagCbnt` 的 `slave` 属性真正生效**。此前**位**空间构建器会解析并校验它、**寄存器**空间构建器连解析都没有，但两者都没有把从站号并入寻址地址，于是 `slave="2"` 静默等同于 `slave="1"`（点位一直落在 1 号站）。现在两个空间都会在加载期把它合成到组合的起始地址：`address="10001" slave="2"` 等同于 `address="2~10001"`；地址里已经写了 `~` 前缀时以 `slave` 为准，`~` 之后的原文（如 `00020` 的前导零）保持不变。组合内的子测点地址仍是相对偏移，从站号一律由组合决定。
+  **升级提示**：如果你此前在 `TagCbnt` 上写过 `slave="2"` 而点位其实一直落在 1 号站，升级后它会按字面生效——请核对这类配置是笔误还是有意为之。
+- **ModbusTcp：`ModbusTcpAddress.ToString()` 修复线圈地址的回程错误**。线圈（`Area=OutputCoils`）的参考号是 `0xxxx`（`00001` 即 1 号线圈），此前的实现只做基址相加、不补前导零，`StartPoint=19` 会被格式化成 `1~20`——这个串再解析回来是 **1 号区域**（离散输入）的 20 号点，而不是 0 号区域的线圈。现在按 5 位补零输出 `00020`，四个区域的 `ToString()` 与 `ModBusTcpAddressParser.Parse` 可正常互转。
+- **ModbusTcp：参考号 0（`00000` / `10000` / `30000` / `40000`）在加载期报错**（此前静默指向协议地址 65535）。Modbus 参考号从 1 开始，`x0000` 没有对应的点；旧实现里 `start -= 1` 会下溢成 `65535`，于是 `<Tag address="40000" ...>` 会被解释成一个既不报错、也访问不到的点。
+  **升级提示**：如果配置里用的是 0 起算的写法（想表达"区域里的第 1 个点"），请改成参考号 `x0001`（如 `40001`）。
+- **ModbusTcp：地址解析的报错更准确**。形状对、内容非法时（位号越界、从站号越界、参考号越界）报真正的原因，而不是另一套写法的"未能匹配模式"；位号/从站号的提示改为写明取值范围（`0~15` / `0~255`）。
 
 ## 1.0.0
 

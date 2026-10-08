@@ -1,4 +1,4 @@
-﻿namespace StdUnit.Tags.ModbusTcp;
+namespace StdUnit.Tags.ModbusTcp;
 
 internal class ModbusTcpDirectTagFactory
 {
@@ -12,6 +12,10 @@ internal class ModbusTcpDirectTagFactory
     public ITag Create(TagDescriptor descriptor, ModbusTcpChannel? channel)
     {
         var addr = ModBusTcpAddressParser.Parse(descriptor.NormalizedAddress);
+
+        // BIT/BYTE/DI/DO 只有一对字节，写 interpret 没有意义（它描述的是多寄存器之间怎么摆）
+        ModbusInterpret.RejectForSingleUnit(descriptor, $"Tag({descriptor.TagName})");
+
         var tag = descriptor.TagKind switch
         {
             // 1000x
@@ -61,6 +65,7 @@ internal class ModbusTcpDirectTagFactory
             descriptor.TagSize = 2;
         }
 
+        // 解释为 RegSpace 下的 IR/HR
         if (addr.Area == RegisterKinds.InputRegisters)
         {
             return new InputRegisterBitDirectTag(descriptor, thisChannel, this._container);
@@ -69,6 +74,8 @@ internal class ModbusTcpDirectTagFactory
         {
             return new HoldingRegisterBitDirectTag(descriptor, thisChannel, this._container);
         }
+
+        // 兜底：解释为 BitSpace 下的 DI/DO
         else if (addr.Area == RegisterKinds.InputContacts)
         {
             return new InputContactDirectTag(descriptor, thisChannel, this._container);

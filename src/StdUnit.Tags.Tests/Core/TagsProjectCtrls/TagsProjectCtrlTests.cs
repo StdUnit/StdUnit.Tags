@@ -433,7 +433,10 @@ public class TagsProjectCtrlTests
         await started.WaitAsync();
         await ctrl.StopAsync();
 
-        Assert.True(startTask.IsCompleted, "StopAsync 返回时轮询任务应已结束（项目也已释放）");
+        // StopAsync 只保证"轮询循环已退出"（StartPollAsync 的 finally 已把信号置位、项目已释放、锁已释放），
+        // 不保证外层 Task.Run 的包装任务此刻已转为 Completed——那需要一次额外的调度跳变。
+        // 之前这里直接断言 startTask.IsCompleted，在 net472 上会稳定失败（net8.0 恰好赢得调度）。
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Null(ctrl.Project);
         Assert.Equal(1, _factory.LastCreatedProject!.DisposeCallCount);
         sp.Dispose();

@@ -37,6 +37,34 @@ public class TestModbusAddressParsing
 
 
     [Theory]
+    [InlineData(1, RegisterKinds.OutputCoils, 0, false, 0, "1~00001")]
+    [InlineData(1, RegisterKinds.OutputCoils, 16, false, 0, "1~00017")]
+    [InlineData(2, RegisterKinds.OutputCoils, 9998, false, 0, "2~09999")]
+    [InlineData(1, RegisterKinds.InputContacts, 0, false, 0, "1~10001")]
+    [InlineData(3, RegisterKinds.InputRegisters, 10, false, 0, "3~30011")]
+    [InlineData(4, RegisterKinds.HoldingRegisters, 10, true, 3, "4~40011.3")]
+    public void TestToString_RoundTrip(byte slave, RegisterKinds area, ushort startpoint, bool useBit, byte nthBit, string expected)
+    {
+        var addr = new ModbusTcpAddress
+        {
+            SlaveAddress = slave,
+            Area = area,
+            StartPoint = startpoint,
+            UseBit = useBit,
+            NthBit = nthBit,
+        };
+
+        Assert.Equal(expected, addr.ToString());
+
+        var parsed = ModBusTcpAddressParser.Parse(addr.ToString());
+        Assert.Equal(addr.SlaveAddress, parsed.SlaveAddress);
+        Assert.Equal(addr.Area, parsed.Area);
+        Assert.Equal(addr.StartPoint, parsed.StartPoint);
+        Assert.Equal(addr.UseBit, parsed.UseBit);
+        Assert.Equal(addr.NthBit, parsed.NthBit);
+    }
+
+    [Theory]
     [InlineData("50001.0")]
     [InlineData("20001.0")]
     [InlineData("60001.0")]

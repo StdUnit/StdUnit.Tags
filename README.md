@@ -32,17 +32,7 @@
 2. 处理逻辑
 3. 刷写底层
 
-> **正式版本（`1.0.0` 及以后）发布到 nuget.org；预览版本只发布在我的测试源上**。
-> 如果你使用`nuget`管理并需要预览版，请参照[示例](https://github.com/newbienewbie/StdUnit.Tags.WPFDemo/blob/867a5063bc65ec16f77692d4c56ce9da5a38dc3c/nuget.config#L3-L8)，额外指定包源为 https://baget.stdunit.com/v3/index.json ；
-> 如果你使用`paket`管理，参照本项目[paket.dependencies](https://github.com/newbienewbie/StdUnit.Tags/blob/b4ef40f2952fa75d7154db03782c2b5f98be914c/paket.dependencies#L1-L2) 指定包源。
-> 我个人建议你使用`paket`管理依赖，这样哪怕我和nuget.org都破产跑路了，你的本地代码也能完全断网的情况下离线编译。
-
-警告：假设版本号是`<major>.<minor>.<patch>`:
-- 在`v1.0`版本之前，每个`minor`版本的跳变，可能会引入新特性和破坏性更新。
-- 在`v1.0`版本之后，每个`major`版本的跳变，可能会引入新特性和破坏性更新。
-
-各版本的用户可见变化见 [CHANGELOG.md](./CHANGELOG.md)。
-
+> **正式版本（`1.0.0` 及以后）发布到 [nuget.org](https://www.nuget.org/packages/StdUnit.Tags)。** 主要变化参见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## Quick Start
 
@@ -72,7 +62,7 @@ dotnet new tags.web # 这会创建一个 ASP.NET Core 项目
 2. 本仓库自带的[Samples](https://github.com/StdUnit/StdUnit.Tags/tree/dev/samples): 主要用于开发验证+喂狗。（其中 `samples/WpfDemo` 是 WPF 示例，只期望 Windows SDK，因此**不在解决方案内**；需要时在本机用 `dotnet build samples/WpfDemo/WpfDemo.csproj` 单独构建。）
 3. 供新手熟悉功能[WPFDemo](https://github.com/StdUnit/StdUnit.Tags.WPFDemo): 按分支演示功能。
 
-## 文件夹结构
+## 文件夹结构与驱动支持
 
 - `.config`
     - `dotnet-tools.json`: 本项目用到的 dotnet tools 配置
@@ -96,6 +86,27 @@ dotnet new tags.web # 这会创建一个 ASP.NET Core 项目
 - `samples/`: 示例代码
 - `paket.dependencies`: 用 [`paket`](https://github.com/fsprojects/Paket)管理的依赖声明
 - `paket.lock`: 依赖锁定文件
+
+其中一些驱动和扩展包的支持程度如下：
+
+| 驱动及扩展 | 包名 | 状态 |
+|---|---|---|
+| 简单文件 | `StdUnit.Tags.SimpleFiles` | ✅ 支持 |
+| 西门子S7 | `StdUnit.Tags.S7` | ✅ 支持 |
+| OpcUA | `StdUnit.Tags.OpcUaClient` | ✅ 支持 |
+| 华杰智控IO盒子 | `StdUnit.Tags.Hjzk` | ✅ 支持 |
+| ModbusTcp | `StdUnit.Tags.ModbusTcp` | 🧪 实验 |
+| 串口 | `StdUnit.Tags.ComScanner` | 🧪 实验 |
+| 卓兰IO盒子 | `StdUnit.Tags.ZLan` | 🧪 实验 |
+| Rx扩展 | `StdUnit.Tags.RxExtensions` | ✅ 支持 |
+| R3扩展 | `StdUnit.Tags.R3Extensions` | ✅ 支持 |
+| McpServer扩展 | `StdUnit.Tags.McpServer` | ✅ 支持 |
+| BlazorLibCore扩展 | `StdUnit.Tags.BlazorLib.Core` | ✅ 支持 |
+
+上表列出的包中，标记为“实验”的，`<Major>.<Minor>.<Patch>` 里的 `<Minor>` 跳变可能包含破坏性更新；标记为“支持”的，只有 `<Major>` 跳变才可能包含破坏性更新。核心包（`StdUnit.Tags`、`StdUnit.Tags.Core`）不属于驱动/扩展、因此不在此表内，按语义化版本处理——同样只有 `<Major>` 跳变才可能包含破坏性更新。
+
+> 警告：有一些未在本仓库中列出的驱动及扩展，却由我发布到公开的`nuget.org`上以及私有的测试源上(比如[`StdUnit.Tags.LinuxFs.ProcInfo`](https://www.nuget.org/packages/StdUnit.Tags.LinuxFs.ProcInfo)、[`StdUnit.Tags.WinUsbKeyboardCodeScanners`](https://www.nuget.org/packages/StdUnit.Tags.WinUsbKeyboardCodeScanners/))，只供内部使用——那部分包不对外提供任何质量保证，请谨慎使用。
+
 
 ## 目标框架
 

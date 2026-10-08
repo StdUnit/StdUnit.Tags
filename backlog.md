@@ -6,7 +6,7 @@
 
 ## v1.0 之后的 todo
 
-- [ ] 公开面基线工具**（`Microsoft.CodeAnalysis.PublicApiAnalyzers` + `PublicAPI.Shipped.txt`）：留到后续v1.1之后
+- [ ] 公开面基线工具（`Microsoft.CodeAnalysis.PublicApiAnalyzers` + `PublicAPI.Shipped.txt`）：留到 v1.1 之后。
 - [ ] 日志、报错提示、注释文档的多语言支持。
 - [ ] 代码评审后续项（背景与理由见 `docs/设计决策与边界/`）：
   - [ ] **通道的资源释放完整性**：`ModbusTcpChannel.Dispose()` 只 `Close()` 掉 `TcpClient`，没有释放 `_connSignal`（`SemaphoreSlim`）；且 `DisconnectAsync()` 不参与 `_connSignal` 的互斥，`EnsureConnectedAsync` 与它并发时可能"断开后被重连"。`OpcUaClientTagChannel.Dispose()` 只 `Close()` 会话。（根因"StopAsync 与循环并发"已修，这里只剩"Dispose 不完整"的洁癖级问题。）
@@ -14,7 +14,6 @@
   - [ ] **重复代码收敛**（各驱动 `AddXxxSupport()` 的注册样板、`ToXxxTagChannelDescriptor` 的骨架、`FileAsyncCompat`、`FloatBitsCompat`、DI/DO 的 `Area` 谓词）：建议收敛到 `StdUnit.Tags.Core` 或各驱动的公共位置。注意 `FileAsyncCompat`/`FloatBitsCompat` 是跨框架垫片，收敛时要保持"调用点无 `#if`"的既有约定。
   - [ ] **运行期观测**：用 `System.Diagnostics.Metrics` 暴露每轮耗时、失败次数、重连次数、意图被拒次数（日志对"长期趋势"无能为力）。
   - [ ] **热重载 API**（`ReloadAsync(root)`）与"写后读回校验"选项。
-  - [ ] **公开面基线工具**（`Microsoft.CodeAnalysis.PublicApiAnalyzers` + `PublicAPI.Shipped.txt`）：1.0 是设基线的最好时机，但**按用户意见推迟**。
 - [ ] 工程化：
   - [ ] 覆盖率门槛：`coverlet.collector` 已引入，但尚未设门槛；
   - [ ] 启用 NetAnalyzers / `TreatWarningsAsErrors`。
