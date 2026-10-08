@@ -1,20 +1,20 @@
 
-[![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/branch/dev/graph/badge.svg?token=Q0UW94C5SS)](https://codecov.io/github/newbienewbie/StdUnit.Tags)
+[![codecov](https://codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?token=X872NXTCJI)](https://codecov.io/gh/StdUnit/StdUnit.Tags)
 
 | 子项目| 说明 | 覆盖率 |
 |------|------|------|
-| StdUnit.Tags.Core | 硬件无关的核心抽象，无外部依赖 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_core )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_core ) | 
-| StdUnit.Tags | 依赖于 StdUnit.Tags.Core，补充项目、日志、插件等功能 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags ) | 
-| StdUnit.Tags.SimpleFiles | 简单文件支持，把测点树映射为文件树 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_simplefiles )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_simplefiles ) | 
-| StdUnit.Tags.S7 | 西门子S7通信支持 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_s7 )](https://codecov.io/github/newbienewbie/stdunit.Tags/components?components%5B0%5D=stdunit_tags_s7 ) | 
-| StdUnit.Tags.ModbusTcp | ModbusTcp通信支持 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_modbstcp )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_modbstcp ) | 
-| StdUnit.Tags.OpcUaClient  | OpcUa通信支持 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_opcuaclient )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_opcuaclient ) | 
-| StdUnit.Tags.Hjzk  | Hjzk 远程IO 通信支持 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_hjzk )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_hjzk ) | 
-| StdUnit.Tags.ZLan | ZLan 远程IO 通信支持 | [![codecov](https://codecov.io/github/newbienewbie/stdunit.Tags/graph/badge.svg?component=stdunit_tags_zLan )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_zLan ) | 
-| StdUnit.Tags.ComScanner | 串口通信支持 | [![codecov](https://codecov.io/github/newbienewbie/stdunit.Tags/graph/badge.svg?component=stdunit_tags_comscanner )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_comscanner ) | 
-| StdUnit.Tags.RxExtensions  | Rx.NET 扩展 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_rx )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_rx ) | 
-| StdUnit.Tags.R3Extensions  | R3 扩展 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_r3 )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_r3 ) | 
-| StdUnit.Tags.McpServer | McpServer 扩展 | [![codecov](https://codecov.io/github/newbienewbie/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_mcpserver )](https://codecov.io/github/newbienewbie/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_mcpserver ) | 
+| StdUnit.Tags.Core | 硬件无关的核心抽象，无外部依赖 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_core )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_core ) | 
+| StdUnit.Tags | 依赖于 StdUnit.Tags.Core，补充项目、日志、插件等功能 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags ) | 
+| StdUnit.Tags.SimpleFiles | 简单文件支持，把测点树映射为文件树 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_simplefiles )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_simplefiles ) | 
+| StdUnit.Tags.S7 | 西门子S7通信支持 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_s7 )](https://app.codecov.io/gh/StdUnit/stdunit.Tags/components?components%5B0%5D=stdunit_tags_s7 ) | 
+| StdUnit.Tags.ModbusTcp | ModbusTcp通信支持 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_modbstcp )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_modbstcp ) | 
+| StdUnit.Tags.OpcUaClient  | OpcUa通信支持 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_opcuaclient )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_opcuaclient ) | 
+| StdUnit.Tags.Hjzk  | Hjzk 远程IO 通信支持 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_hjzk )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_hjzk ) | 
+| StdUnit.Tags.ZLan | ZLan 远程IO 通信支持 | [![codecov](https://app.codecov.io/gh/StdUnit/stdunit.Tags/graph/badge.svg?component=stdunit_tags_zLan )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_zLan ) | 
+| StdUnit.Tags.ComScanner | 串口通信支持 | [![codecov](https://app.codecov.io/gh/StdUnit/stdunit.Tags/graph/badge.svg?component=stdunit_tags_comscanner )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_comscanner ) | 
+| StdUnit.Tags.RxExtensions  | Rx.NET 扩展 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_rx )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_rx ) | 
+| StdUnit.Tags.R3Extensions  | R3 扩展 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_r3 )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_r3 ) | 
+| StdUnit.Tags.McpServer | McpServer 扩展 | [![codecov](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_mcpserver )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_mcpserver ) | 
 
 
 
