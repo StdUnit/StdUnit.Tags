@@ -14,24 +14,6 @@ internal class InputContactDirectTag : Tag<bool, ModbusTcpChannel>
     public override ITagChannel? Channel { get; set; }
 
 
-    #region 地址
-    private ModbusTcpAddress? _addr;
-
-
-    protected ModbusTcpAddress GetAddress()
-    {
-        if (_addr.HasValue)
-        {
-            return _addr.Value;
-        }
-
-        var addressStr = this.NormalizedAddress();
-        var addr = ModBusTcpAddressParser.Parse(addressStr);
-        this._addr = addr;
-        return addr;
-    }
-    #endregion
-
     public override async Task ReadAsync(CancellationToken ct)
     {
         var bits = await this._bubbleChannel.ReadBitsAsync(this.NormalizedAddress(), 1, ct);

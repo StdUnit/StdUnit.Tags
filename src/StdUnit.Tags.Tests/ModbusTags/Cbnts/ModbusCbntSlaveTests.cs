@@ -153,4 +153,24 @@ public class ModbusCbntSlaveTests : IDisposable
 
         Assert.Equal("3~40001", fake.LastRegisterAddress);
     }
+
+    /// <summary>起始地址为空时不该凭空合成出一个地址（写 <c>slave</c> 而没有 <c>address</c>）</summary>
+    [Fact]
+    public void WithSlave_EmptyStartAddress_StaysEmpty()
+    {
+        Assert.Equal(string.Empty, ModbusCbntSlaveAddress.WithSlave(string.Empty, 3));
+        Assert.Equal(string.Empty, ModbusCbntSlaveAddress.WithSlave("   ", 3));
+    }
+
+    /// <summary>组合没写 <c>address</c> 时报地址非法（而不是把整个组合的起始地址当成 "3~"）</summary>
+    [Fact]
+    public void SlaveAttributeWithoutAddress_ShouldThrow()
+    {
+        var ex = Assert.Throws<TagsProjectAddressException>(() => this.CreateProject(@"
+        <TagCbnt name='输出' slave='3' access='RW'>
+            <Tag name='绿灯' address='00020' type='DO'></Tag>
+        </TagCbnt>"));
+
+        Assert.Contains("Modbus地址", ex.Message);
+    }
 }

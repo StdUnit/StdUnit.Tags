@@ -82,8 +82,8 @@ public static ushort[] NetworkBytesToHostUInt16(byte[] networkBytes)
 
 | 实证（测试） | 钉住什么 |
 |---|---|
-| `ModbusEndianConsistencyTests` | 两条路径解读一致（假通道喂缓存，覆盖 9 种类型 × 两种 endian） |
-| `ModbusEndianWireTests` | 真 socket 上的端序矩阵：不同线上字节的设备 ⇒ 同一个物理值；配错时得到可预测的错值且不报错 |
+| `ModbusEndianWireTests` | 真 socket（假服务端）上的端序矩阵：每种类型由直接测点与组合成员**各自**断言同一个物理值，覆盖 10 种类型 × 两种 `endian`；配错时得到可预测的错值且不报错 |
+| `ModbusEndianWireTests.CrossPath_*` | 把"两条承载路径必须一致"本身写成断言（读 + 写各一条，组合成员写的是整个缓存故只比较子测点所在段） |
 | `ModbusEndianWireTests.Int32_Cdab_SwapsRegistersWhileDcba_ReversesEverything` | `CDAB` 与 `DCBA` 是两个不同的结果，不能混为一谈 |
 | `ModbusRegisterCbntorTests` | 组合子各类型的端序解读（每种排布独立成例） |
 
@@ -180,3 +180,12 @@ public static ushort[] NetworkBytesToHostUInt16(byte[] networkBytes)
 （`MultipleBytesDirectTag<T>.GetValueFromRegisters` / `FillRegisters`、`ModbusMultipleBytesCbntor<T>`、
 `ModbusValueInterpreter<T>`）。
 新增类型或改解读逻辑时，请守住这个边界：通道层不引入字节序概念，否则"同一份 XML 两条路径一致"这条契约会被破坏。
+
+### 术语：参考号（reference number）与 StartPoint
+
+XML 里 `address` 写的是**参考号**——1 起算的 5 位写法（`40001` = 保持寄存器的第 1 个点，`00001` = 1 号线圈）。
+它是 Modicon 沿用下来的行业惯例（协议规范本身只说 `starting address`/`address`），
+**不是**帧里传的那个值：解析时统一 `参考号 - 1` 得到 0 起算的协议地址，即
+`ModbusTcpAddress.StartPoint`（= NModbus 的 `startAddress` 参数）。
+仓库内只用这两个词，避免"点号 / 首地址"这类无法分辨 0 起算还是 1 起算的说法；
+`ModBusTcpAddressParser` 里的正则分组名 `start` 指的是**参考号**（分组名不动）。

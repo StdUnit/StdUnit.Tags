@@ -10,22 +10,22 @@ namespace StdUnit.Tags.ModbusTcp;
 public enum RegisterKinds
 {
     /// <summary>
-    /// 离散输出，00001~09999，对应S7-200Smart的Q点
+    /// 离散输出，参考号 00001~09999，对应S7-200Smart的Q点
     /// </summary>
     OutputCoils = 0,
 
     /// <summary>
-    /// 离散输入，10001~19999，对应S7-200Smart的I点
+    /// 离散输入，参考号 10001~19999，对应S7-200Smart的I点
     /// </summary>
     InputContacts = 1,
 
     /// <summary>
-    /// 模拟输入，30001~39999，对应S7-200Smart的AIW点
+    /// 模拟输入，参考号 30001~39999，对应S7-200Smart的AIW点
     /// </summary>
     InputRegisters = 3,
 
     /// <summary>
-    /// 保持寄存器，40001~49999，对应S7-200Smart的V点
+    /// 保持寄存器，参考号 40001~49999，对应S7-200Smart的V点
     /// </summary>
     HoldingRegisters = 4,
 }
@@ -77,7 +77,10 @@ public struct ModbusTcpAddress
     public RegisterKinds Area = RegisterKinds.HoldingRegisters;
 
     /// <summary>
-    /// Modbus中的首地址（点号）
+    /// 参考号（reference number）对应的 <b>0 起算</b>协议地址，也就是 NModbus 各读写方法里的 <c>startAddress</c>。<br/>
+    /// XML 里写的是 <b>参考号</b>——1 起算的 5 位写法（<c>40001</c> = 保持寄存器的第 1 个点），解析时统一减 1 得到本字段；
+    /// 即 <c>StartPoint = 参考号 - 1</c>。全库只用这两个词：<b>参考号</b>（用户写的那个数）与
+    /// <b>StartPoint</b>（协议地址），不再使用"点号 / 首地址"这类含糊说法。
     /// </summary>
     public ushort StartPoint = 0;
 
@@ -151,11 +154,20 @@ public static class ModBusTcpAddressParser
     /// <exception cref="TagsProjectAddressException">地址字符串不是合法的 Modbus 地址</exception>
     public static ModbusTcpAddress Parse(string address)
     {
-        var q = ParseWithNthBit(address).OrElse(_ => ParseWithoutNthBit(address));
+        if (address is null)
+        {
+            throw new TagsProjectAddressException("非法的Modbus地址：地址不能为 null");
+        }
+
+        // 两种写法互斥（带位号的一定有 '.'），所以按形状直接选解析器：
+        // 若先试不匹配的那个形状，拿到的只会是"未能匹配模式"，把真正的原因（从站号/参考号/位号越界）盖掉。
+        var q = address.Contains('.')
+            ? ParseWithNthBit(address)
+            : ParseWithoutNthBit(address);
         if (q.IsError)
         {
             throw new TagsProjectAddressException(
-                $"非法的Modbus地址 '{address}'：{q.ErrorValue}（期望 [<slave>~]<area><start>[.<nth>]，area 取 0/1/3/4，如 '1~40001.0'）");
+                $"非法的Modbus地址 '{address}'：{q.ErrorValue}（期望 [<slave>~]<area><start>[.<nth>]，area 取 0/1/3/4、start（参考号）从 1 开始，如 '1~40001.0'）");
         }
         return q.ResultValue;
     }
@@ -177,7 +189,7 @@ public static class ModBusTcpAddressParser
         var slavestr = match.Groups["slave"];
         if (!string.IsNullOrEmpty(slavestr.Value) && !byte.TryParse(slavestr.Value, out slave))
         {
-            return $"Slave非整数(={slavestr.Value})".ToErrResult<ModbusTcpAddress, string>();
+            return $"从站号(Slave)必须是 0~255 的整数(={slavestr.Value})".ToErrResult<ModbusTcpAddress, string>();
         }
 
         var areastr = match.Groups["area"];
@@ -195,18 +207,24 @@ public static class ModBusTcpAddressParser
         var startstr = match.Groups["start"];
         if (!ushort.TryParse(startstr.Value, out var start))
         {
-            return $"StartPoint非整数(={startstr.Value})".ToErrResult<ModbusTcpAddress, string>();
+            return $"参考号必须是 1~65535 的整数(={startstr.Value})".ToErrResult<ModbusTcpAddress, string>();
+        }
+        if (start == 0)
+        {
+            // 参考号从 1 开始，x0000 没有对应的点；若继续 -1 会回绕成 65535，静默指向一个不存在的点
+            return $"参考号必须 >= 1(={startstr.Value})：Modbus 参考号从 1 开始，x0000 没有对应的点"
+                .ToErrResult<ModbusTcpAddress, string>();
         }
         start -= 1;
 
         var nthstr = match.Groups["nth"];
         if (!byte.TryParse(nthstr.Value, out var nth))
         {
-            return $"NthBit非整数(={nthstr.Value})".ToErrResult<ModbusTcpAddress, string>();
+            return $"NthBit(位号)必须是 0~15 的整数(={nthstr.Value})".ToErrResult<ModbusTcpAddress, string>();
         }
-        if (nth < 0 || nth > 15)
+        if (nth > 15)
         {
-            return $"NthBit范围非法(={nth})".ToErrResult<ModbusTcpAddress, string>();
+            return $"NthBit(位号)必须是 0~15 的整数(={nth})".ToErrResult<ModbusTcpAddress, string>();
         }
 
         var ok = new ModbusTcpAddress
@@ -237,7 +255,7 @@ public static class ModBusTcpAddressParser
         var slavestr = match.Groups["slave"];
         if (!string.IsNullOrEmpty(slavestr.Value) && !byte.TryParse(slavestr.Value, out slave))
         {
-            return $"Slave非整数(={slavestr.Value})".ToErrResult<ModbusTcpAddress, string>();
+            return $"从站号(Slave)必须是 0~255 的整数(={slavestr.Value})".ToErrResult<ModbusTcpAddress, string>();
         }
 
         var areastr = match.Groups["area"];
@@ -255,7 +273,13 @@ public static class ModBusTcpAddressParser
         var startstr = match.Groups["start"];
         if (!ushort.TryParse(startstr.Value, out var start))
         {
-            return $"StartPoint非整数(={startstr.Value})".ToErrResult<ModbusTcpAddress, string>();
+            return $"参考号必须是 1~65535 的整数(={startstr.Value})".ToErrResult<ModbusTcpAddress, string>();
+        }
+        if (start == 0)
+        {
+            // 参考号从 1 开始，x0000 没有对应的点；若继续 -1 会回绕成 65535，静默指向一个不存在的点
+            return $"参考号必须 >= 1(={startstr.Value})：Modbus 参考号从 1 开始，x0000 没有对应的点"
+                .ToErrResult<ModbusTcpAddress, string>();
         }
         start -= 1;
 

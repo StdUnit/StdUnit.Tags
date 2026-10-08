@@ -357,4 +357,20 @@ public class ModbusTcpTagChannelDescriptorTests
     }
 
     #endregion
+
+    /// <summary>已经是 ModbusTcp 专属描述符时直接返回自身（不复制、不改写 Extras）</summary>
+    [Fact]
+    public void ToModbusTcpTagChannelDescriptor_WhenAlreadyTyped_ReturnsSameInstance()
+    {
+        var descriptor = new ModbusTcpTagChannelDescriptor
+        {
+            Name = "mb1",
+            IpAddr = "10.0.0.9",
+            Port = 1502,
+        };
+
+        var result = ((TagChannelDescriptor)descriptor).ToModbusTcpTagChannelDescriptor();
+
+        Assert.Same(descriptor, result);
+    }
 }

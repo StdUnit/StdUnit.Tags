@@ -18,28 +18,6 @@ internal class OutputCoilDirectTag : Tag<bool, ModbusTcpChannel>
     /// <inheritdoc/>
     public override ITagChannel? Channel { get; set; }
 
-    #region 地址
-    private ModbusTcpAddress? _addr;
-
-    /// <summary>
-    /// 获取地址
-    /// </summary>
-    /// <returns></returns>
-    protected ModbusTcpAddress GetAddress()
-    {
-        if (_addr.HasValue)
-        {
-            return _addr.Value;
-        }
-
-        var addressStr = this.NormalizedAddress();
-        var addr = ModBusTcpAddressParser.Parse(addressStr);
-        this._addr = addr;
-        return addr;
-    }
-    #endregion
-
-
     /// <inheritdoc/>
     public override async Task ReadAsync(CancellationToken ct)
     {

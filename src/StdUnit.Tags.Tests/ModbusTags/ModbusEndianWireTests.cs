@@ -233,9 +233,33 @@ public class ModbusEndianWireTests : IDisposable
         Assert.Equal(expectedRegister, written[0]);
     }
 
+    [Theory]
+    [InlineData("BigEndian", (ushort)0x1234)]
+    [InlineData("LittleEndian", (ushort)0x3412)]
+    public async Task UInt16_Write_DirectTag_UsesConfiguredEndian(string endian, ushort expectedRegister)
+    {
+        using var server = new FakeModbusTcpServer();
+
+        var written = await WriteViaDirectAsync(server, Direct("UINT16", endian), (ushort)0x1234);
+
+        Assert.Equal(expectedRegister, written[0]);
+    }
+
+    [Theory]
+    [InlineData("BigEndian", (ushort)0x1234)]
+    [InlineData("LittleEndian", (ushort)0x3412)]
+    public async Task UInt16_Write_CbntMember_UsesConfiguredEndian(string endian, ushort expectedRegister)
+    {
+        using var server = new FakeModbusTcpServer();
+
+        var written = await WriteViaCbntAsync(server, Cbnt("UINT16", endian), (ushort)0x1234);
+
+        Assert.Equal(expectedRegister, written[0]);
+    }
+
     #endregion
 
-    #region 32 位：endian 管"寄存器内部的字节"，interpret 管"寄存器之间的顺序"
+    #region 32/64 位：endian 管"寄存器内部的字节"，interpret 管"寄存器之间的顺序"
 
     /// <summary>
     /// 设备里存的物理值都是 0x12345678（<c>A</c>=0x12、<c>B</c>=0x34、<c>C</c>=0x56、<c>D</c>=0x78），
@@ -277,6 +301,42 @@ public class ModbusEndianWireTests : IDisposable
         var value = await ReadViaCbntAsync(server, Cbnt("INT32", endian, interpret: interpret));
 
         Assert.Equal(0x12345678, (int)value!);
+    }
+
+    /// <summary>
+    /// 32 位的缺省排布：<c>BigEndian</c> = 完全大端（ABCD），<c>LittleEndian</c> = 完全小端（DCBA）。<br/>
+    /// 排布矩阵由上面的 <c>INT32</c> 用例穷举，这里只额外钉住无符号类型的解读不失真。
+    /// </summary>
+    [Theory]
+    [InlineData("BigEndian", (ushort)0x1234, (ushort)0x5678)]     // ABCD
+    [InlineData("LittleEndian", (ushort)0x7856, (ushort)0x3412)]  // DCBA
+    public async Task UInt32_Read_DirectTag_RecoversDeviceValue(
+        string endian,
+        ushort first,
+        ushort second)
+    {
+        using var server = new FakeModbusTcpServer();
+        server.SetRegisters(ChildOffset, first, second);
+
+        var value = await ReadViaDirectAsync(server, Direct("UINT32", endian));
+
+        Assert.Equal(0x12345678u, (uint)value!);
+    }
+
+    [Theory]
+    [InlineData("BigEndian", (ushort)0x1234, (ushort)0x5678)]
+    [InlineData("LittleEndian", (ushort)0x7856, (ushort)0x3412)]
+    public async Task UInt32_Read_CbntMember_RecoversDeviceValue(
+        string endian,
+        ushort first,
+        ushort second)
+    {
+        using var server = new FakeModbusTcpServer();
+        server.SetRegisters(ChildOffset, first, second);
+
+        var value = await ReadViaCbntAsync(server, Cbnt("UINT32", endian));
+
+        Assert.Equal(0x12345678u, (uint)value!);
     }
 
     /// <summary>
@@ -357,6 +417,82 @@ public class ModbusEndianWireTests : IDisposable
         await WriteViaDirectAsync(server, Direct("INT32", endian, interpret: interpret), 0x12345678);
 
         Assert.Equal(new ushort[] { expectedFirst, expectedSecond }, server.GetRegisters(ChildOffset, 2));
+    }
+
+    /// <summary>
+    /// 设备里的浮点物理值都是 1.5f = <c>3F C0 00 00</c>，只有线上字节顺序不同，两种配置都该还原成 1.5f。
+    /// </summary>
+    [Theory]
+    [InlineData("BigEndian", (ushort)0x3FC0, (ushort)0x0000)]     // ABCD
+    [InlineData("LittleEndian", (ushort)0x0000, (ushort)0xC03F)]  // DCBA（完全小端）
+    public async Task Float_Read_DirectTag_RecoversDeviceValue(
+        string endian,
+        ushort first,
+        ushort second)
+    {
+        using var server = new FakeModbusTcpServer();
+        server.SetRegisters(ChildOffset, first, second);
+
+        var value = await ReadViaDirectAsync(server, Direct("FLOAT", endian));
+
+        Assert.Equal(1.5f, (float)value!);
+    }
+
+    [Theory]
+    [InlineData("BigEndian", (ushort)0x3FC0, (ushort)0x0000)]
+    [InlineData("LittleEndian", (ushort)0x0000, (ushort)0xC03F)]
+    public async Task Float_Read_CbntMember_RecoversDeviceValue(
+        string endian,
+        ushort first,
+        ushort second)
+    {
+        using var server = new FakeModbusTcpServer();
+        server.SetRegisters(ChildOffset, first, second);
+
+        var value = await ReadViaCbntAsync(server, Cbnt("FLOAT", endian));
+
+        Assert.Equal(1.5f, (float)value!);
+    }
+
+    /// <summary>
+    /// 设备里的物理值都是 0x123456789ABCDEF0（<c>A</c>=0x12 … <c>H</c>=0xF0），
+    /// 两种缺省排布（完全大端 / 完全小端）都该还原成同一个值。<c>interpret</c> 的各种排列见
+    /// <see cref="ModbusInterpretTests"/>。
+    /// </summary>
+    [Theory]
+    [InlineData("BigEndian", (ushort)0x1234, (ushort)0x5678, (ushort)0x9ABC, (ushort)0xDEF0)]     // ABCDEFGH
+    [InlineData("LittleEndian", (ushort)0xF0DE, (ushort)0xBC9A, (ushort)0x7856, (ushort)0x3412)]  // HGFEDCBA
+    public async Task Int64_Read_DirectTag_RecoversDeviceValue(
+        string endian,
+        ushort r0,
+        ushort r1,
+        ushort r2,
+        ushort r3)
+    {
+        using var server = new FakeModbusTcpServer();
+        server.SetRegisters(ChildOffset, r0, r1, r2, r3);
+
+        var value = await ReadViaDirectAsync(server, Direct("INT64", endian));
+
+        Assert.Equal(0x123456789ABCDEF0L, (long)value!);
+    }
+
+    [Theory]
+    [InlineData("BigEndian", (ushort)0x1234, (ushort)0x5678, (ushort)0x9ABC, (ushort)0xDEF0)]
+    [InlineData("LittleEndian", (ushort)0xF0DE, (ushort)0xBC9A, (ushort)0x7856, (ushort)0x3412)]
+    public async Task Int64_Read_CbntMember_RecoversDeviceValue(
+        string endian,
+        ushort r0,
+        ushort r1,
+        ushort r2,
+        ushort r3)
+    {
+        using var server = new FakeModbusTcpServer();
+        server.SetRegisters(ChildOffset, r0, r1, r2, r3);
+
+        var value = await ReadViaCbntAsync(server, Cbnt("INT64", endian));
+
+        Assert.Equal(0x123456789ABCDEF0L, (long)value!);
     }
 
     #endregion
@@ -464,6 +600,64 @@ public class ModbusEndianWireTests : IDisposable
         await tag.ReadAsync(CancellationToken.None);
 
         Assert.True((bool)tag.Value!);
+    }
+
+    #endregion
+
+    #region 硬约束：两种承载方式（直接测点 / 组合成员）必须一致
+
+    /// <summary>
+    /// 同一份寄存器数据，放在 <c>TagGrp</c> 下的直接测点与放在 <c>TagCbnt</c> 下的组合成员必须解读出同一个物理值
+    /// （<c>ModbusTcp/Notes.md</c> §2 的硬约束；曾被破坏过：16 位组合成员曾完全忽略 <c>endian</c>）。<br/>
+    /// <br/>
+    /// 各类型的"期望值是多少"由上面成对用例分别钉住，这里只把"两条路径相等"本身写成断言——
+    /// 免得这条契约只能靠"两处硬编码常量恰好相同"来间接保证。
+    /// </summary>
+    [Theory]
+    [InlineData("INT16", "LittleEndian", new ushort[] { 0x3412 })]
+    [InlineData("UINT16", "BigEndian", new ushort[] { 0xCDEF })]
+    [InlineData("INT32", "BigEndian", new ushort[] { 0x1234, 0x5678 })]
+    [InlineData("UINT32", "LittleEndian", new ushort[] { 0x7856, 0x3412 })]
+    [InlineData("INT64", "BigEndian", new ushort[] { 0x1234, 0x5678, 0x9ABC, 0xDEF0 })]
+    [InlineData("FLOAT", "LittleEndian", new ushort[] { 0x0000, 0xC03F })]
+    [InlineData("BYTE", "BigEndian", new ushort[] { 0x1234 })]
+    public async Task CrossPath_Read_DirectTagAndCbntMember_Agree(string type, string endian, ushort[] registers)
+    {
+        using var server = ServerWithRegisters(registers);
+
+        var direct = await ReadViaDirectAsync(server, Direct(type, endian));
+        var viaCbnt = await ReadViaCbntAsync(server, Cbnt(type, endian));
+
+        Assert.Equal(direct, viaCbnt);
+    }
+
+    /// <summary>
+    /// 写入侧同理：同一个物理值，两条路径发出的寄存器内容必须相同。<br/>
+    /// （组合成员写的是整个组合缓存，所以只比较子测点所在的那一段。）
+    /// </summary>
+    [Theory]
+    [InlineData("INT16", "LittleEndian", (short)0x1234, 1)]
+    [InlineData("UINT16", "BigEndian", (ushort)0xCDEF, 1)]
+    [InlineData("INT32", "BigEndian", 0x12345678, 2)]
+    [InlineData("UINT32", "LittleEndian", 0x12345678u, 2)]
+    [InlineData("INT64", "BigEndian", 0x123456789ABCDEF0L, 4)]
+    [InlineData("FLOAT", "LittleEndian", 1.5f, 2)]
+    [InlineData("BYTE", "BigEndian", (byte)0x12, 1)]
+    public async Task CrossPath_Write_DirectTagAndCbntMember_SendSameRegisters(
+        string type,
+        string endian,
+        object value,
+        int registerCount)
+    {
+        using var directServer = new FakeModbusTcpServer();
+        using var cbntServer = new FakeModbusTcpServer();
+
+        await WriteViaDirectAsync(directServer, Direct(type, endian), value);
+        await WriteViaCbntAsync(cbntServer, Cbnt(type, endian), value);
+
+        Assert.Equal(
+            directServer.GetRegisters(ChildOffset, registerCount),
+            cbntServer.GetRegisters(ChildOffset, registerCount));
     }
 
     #endregion
