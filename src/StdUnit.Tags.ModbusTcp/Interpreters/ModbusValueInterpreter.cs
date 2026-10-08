@@ -29,13 +29,19 @@ internal abstract class ModbusValueInterpreter<T>
     where T : unmanaged
 {
     private readonly int _byteCount;
+
+    /// <summary>
+    /// 落位表。<br/>
+    /// 第i个元素值，表示字节数组里的第 i 个字节应该处在设备端字节里的位置；
+    /// 空表 = 恒等排布<br/>
+    /// </summary>
     private readonly ReadOnlyMemory<byte> _deviceIndexOfValueByte;
 
     /// <summary>
     /// c'tor
     /// </summary>
     /// <param name="byteCount">该数值占用的字节数（4/8）</param>
-    /// <param name="deviceIndexOfValueByte">置换表：值里的第 i 个字节在设备端字节里的下标；空表 = 恒等排布（无需搬运）</param>
+    /// <param name="deviceIndexOfValueByte">落位表：第i个元素值，表示值字节数组里的第 i 个字节在设备端字节里的下标；空表 = 恒等排布（无需搬运）</param>
     private protected ModbusValueInterpreter(int byteCount, ReadOnlyMemory<byte> deviceIndexOfValueByte)
     {
         this._byteCount = byteCount;
@@ -118,7 +124,7 @@ internal abstract class ModbusValueInterpreter<T>
         ModbusInterpret.VariantIndex(descriptor, byteCount, $"Tag({descriptor.TagName})");
 
     /// <summary>
-    /// 寄存器数值 → 设备端字节（协议规定每个寄存器内部大端）
+    /// 把寄存器数值 变成设备端字节数组（协议规定每个寄存器内部大端）
     /// </summary>
     private static void RegistersToDeviceBytes(ReadOnlySpan<ushort> registers, Span<byte> deviceBytes)
     {
@@ -140,6 +146,11 @@ internal abstract class ModbusValueInterpreter<T>
         }
     }
 
+    /// <summary>
+    /// 使用落位表，把设备端字节数组 解读成 值的字节数组
+    /// </summary>
+    /// <param name="deviceBytes"></param>
+    /// <param name="valueBytes"></param>
     private void DeviceBytesToValueBytes(ReadOnlySpan<byte> deviceBytes, Span<byte> valueBytes)
     {
         if (this._deviceIndexOfValueByte.IsEmpty)
@@ -155,6 +166,11 @@ internal abstract class ModbusValueInterpreter<T>
         }
     }
 
+    /// <summary>
+    /// 使用落位表，把值的字节数组 排布成 设备端字节数组
+    /// </summary>
+    /// <param name="valueBytes"></param>
+    /// <param name="deviceBytes"></param>
     private void ValueBytesToDeviceBytes(ReadOnlySpan<byte> valueBytes, Span<byte> deviceBytes)
     {
         if (this._deviceIndexOfValueByte.IsEmpty)
@@ -168,132 +184,4 @@ internal abstract class ModbusValueInterpreter<T>
             deviceBytes[this._deviceIndexOfValueByte.Span[i]] = valueBytes[i];
         }
     }
-}
-
-/// <summary>
-/// 32 位无符号（<c>UINT32</c>）解读器
-/// </summary>
-internal sealed class ModbusUInt32Interpreter : ModbusValueInterpreter<uint>
-{
-    private static readonly ModbusValueInterpreter<uint>[] Instances =
-        BuildInstances(4, static packed => new ModbusUInt32Interpreter(packed));
-
-    private ModbusUInt32Interpreter(ReadOnlyMemory<byte> deviceIndexOfValueByte) : base(4, deviceIndexOfValueByte)
-    {
-    }
-
-    /// <summary>
-    /// 取该测点该用的解读器（<b>会做加载期校验</b>）
-    /// </summary>
-    /// <exception cref="TagsProjectXmlException">记法本身不合法</exception>
-    internal static ModbusValueInterpreter<uint> For(TagDescriptor descriptor) => Instances[VariantIndexOf(descriptor, 4)];
-
-    /// <inheritdoc/>
-    protected override uint FromValueBytes(ReadOnlySpan<byte> valueBytes) => BinaryPrimitives.ReadUInt32BigEndian(valueBytes);
-
-    /// <inheritdoc/>
-    protected override void ToValueBytes(uint value, Span<byte> valueBytes) => BinaryPrimitives.WriteUInt32BigEndian(valueBytes, value);
-}
-
-/// <summary>
-/// 32 位有符号（<c>INT32</c>）解读器
-/// </summary>
-internal sealed class ModbusInt32Interpreter : ModbusValueInterpreter<int>
-{
-    private static readonly ModbusValueInterpreter<int>[] Instances =
-        BuildInstances(4, static packed => new ModbusInt32Interpreter(packed));
-
-    private ModbusInt32Interpreter(ReadOnlyMemory<byte> deviceIndexOfValueByte) : base(4, deviceIndexOfValueByte)
-    {
-    }
-
-    /// <summary>
-    /// 取该测点该用的解读器（<b>会做加载期校验</b>）
-    /// </summary>
-    /// <exception cref="TagsProjectXmlException">记法本身不合法</exception>
-    internal static ModbusValueInterpreter<int> For(TagDescriptor descriptor) => Instances[VariantIndexOf(descriptor, 4)];
-
-    /// <inheritdoc/>
-    protected override int FromValueBytes(ReadOnlySpan<byte> valueBytes) => BinaryPrimitives.ReadInt32BigEndian(valueBytes);
-
-    /// <inheritdoc/>
-    protected override void ToValueBytes(int value, Span<byte> valueBytes) => BinaryPrimitives.WriteInt32BigEndian(valueBytes, value);
-}
-
-/// <summary>
-/// 32 位浮点（<c>FLOAT</c>）解读器：位模式与 <c>UINT32</c> 相同，只是最后按 IEEE754 重解释
-/// （<c>BinaryPrimitives</c> 只有 .NET 5+ 才有 <c>ReadSingleBigEndian</c>，这里统一走位模式）。
-/// </summary>
-internal sealed class ModbusFloatInterpreter : ModbusValueInterpreter<float>
-{
-    private static readonly ModbusValueInterpreter<float>[] Instances =
-        BuildInstances(4, static packed => new ModbusFloatInterpreter(packed));
-
-    private ModbusFloatInterpreter(ReadOnlyMemory<byte> deviceIndexOfValueByte) : base(4, deviceIndexOfValueByte)
-    {
-    }
-
-    /// <summary>
-    /// 取该测点该用的解读器（<b>会做加载期校验</b>）
-    /// </summary>
-    /// <exception cref="TagsProjectXmlException">记法本身不合法</exception>
-    internal static ModbusValueInterpreter<float> For(TagDescriptor descriptor) => Instances[VariantIndexOf(descriptor, 4)];
-
-    /// <inheritdoc/>
-    protected override float FromValueBytes(ReadOnlySpan<byte> valueBytes) =>
-        Compat.FloatBitsCompat.ToSingle(BinaryPrimitives.ReadUInt32BigEndian(valueBytes));
-
-    /// <inheritdoc/>
-    protected override void ToValueBytes(float value, Span<byte> valueBytes) =>
-        BinaryPrimitives.WriteUInt32BigEndian(valueBytes, Compat.FloatBitsCompat.ToBits(value));
-}
-
-/// <summary>
-/// 64 位无符号（<c>UINT64</c>）解读器
-/// </summary>
-internal sealed class ModbusUInt64Interpreter : ModbusValueInterpreter<ulong>
-{
-    private static readonly ModbusValueInterpreter<ulong>[] Instances =
-        BuildInstances(8, static packed => new ModbusUInt64Interpreter(packed));
-
-    private ModbusUInt64Interpreter(ReadOnlyMemory<byte> deviceIndexOfValueByte) : base(8, deviceIndexOfValueByte)
-    {
-    }
-
-    /// <summary>
-    /// 取该测点该用的解读器（<b>会做加载期校验</b>）
-    /// </summary>
-    /// <exception cref="TagsProjectXmlException">记法本身不合法</exception>
-    internal static ModbusValueInterpreter<ulong> For(TagDescriptor descriptor) => Instances[VariantIndexOf(descriptor, 8)];
-
-    /// <inheritdoc/>
-    protected override ulong FromValueBytes(ReadOnlySpan<byte> valueBytes) => BinaryPrimitives.ReadUInt64BigEndian(valueBytes);
-
-    /// <inheritdoc/>
-    protected override void ToValueBytes(ulong value, Span<byte> valueBytes) => BinaryPrimitives.WriteUInt64BigEndian(valueBytes, value);
-}
-
-/// <summary>
-/// 64 位有符号（<c>INT64</c>）解读器
-/// </summary>
-internal sealed class ModbusInt64Interpreter : ModbusValueInterpreter<long>
-{
-    private static readonly ModbusValueInterpreter<long>[] Instances =
-        BuildInstances(8, static packed => new ModbusInt64Interpreter(packed));
-
-    private ModbusInt64Interpreter(ReadOnlyMemory<byte> deviceIndexOfValueByte) : base(8, deviceIndexOfValueByte)
-    {
-    }
-
-    /// <summary>
-    /// 取该测点该用的解读器（<b>会做加载期校验</b>）
-    /// </summary>
-    /// <exception cref="TagsProjectXmlException">记法本身不合法</exception>
-    internal static ModbusValueInterpreter<long> For(TagDescriptor descriptor) => Instances[VariantIndexOf(descriptor, 8)];
-
-    /// <inheritdoc/>
-    protected override long FromValueBytes(ReadOnlySpan<byte> valueBytes) => BinaryPrimitives.ReadInt64BigEndian(valueBytes);
-
-    /// <inheritdoc/>
-    protected override void ToValueBytes(long value, Span<byte> valueBytes) => BinaryPrimitives.WriteInt64BigEndian(valueBytes, value);
 }

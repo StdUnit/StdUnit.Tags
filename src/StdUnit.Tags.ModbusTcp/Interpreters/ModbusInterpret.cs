@@ -1,3 +1,4 @@
+using StdUnit.Tags.ModbusTcp.Interpreters;
 using System.Text;
 using System.Xml.Linq;
 
@@ -45,10 +46,10 @@ internal static class ModbusInterpret
     /// <summary>
     /// 全部合法排布（下标 0 = 恒等排布 <c>ABCD…</c>）的置换表，静态生成一次
     /// </summary>
-    private static readonly ReadOnlyMemory<byte>[] Packings32 = BuildPackings(4);
+    private static readonly ReadOnlyMemory<byte>[] Packings32 = Utils.MakePackings(2);
 
     /// <inheritdoc cref="Packings32"/>
-    private static readonly ReadOnlyMemory<byte>[] Packings64 = BuildPackings(8);
+    private static readonly ReadOnlyMemory<byte>[] Packings64 = Utils.MakePackings(4);
 
     /// <summary>
     /// 读取可选的 <c>interpret</c> 属性（来自 <see cref="TagDescriptor.Extras"/>）；未写或空白时返回 null。
@@ -216,68 +217,6 @@ internal static class ModbusInterpret
         _ => throw new TagsProjectConfigurationException($"Modbus 多寄存器数值只支持 4/8 字节，当前为 {byteCount}"),
     };
 
-    /// <summary>
-    /// 生成全部合法排布的置换表：先 <c>BigEndian</c> 的各单元排列、再 <c>LittleEndian</c> 的各单元排列，
-    /// 且每种 <c>endian</c> 都以"自然顺序"打头，所以下标 0 一定是恒等排布（<c>ABCD…</c>，统一用空表表示）。<br/>
-    /// 表在类型初始化时造一次，之后由各解读器实例直接引用（相邻实例共享同一张表，不会复制）。
-    /// </summary>
-    private static ReadOnlyMemory<byte>[] BuildPackings(int byteCount)
-    {
-        var unitCount = byteCount / 2;
-        var unitOrders = UnitOrders(unitCount);
-        var packings = new List<ReadOnlyMemory<byte>>();
-        foreach (var endian in new[] { EndianKinds.BigEndian, EndianKinds.LittleEndian })
-        {
-            foreach (var unitOrder in unitOrders)
-            {
-                // 表要进实例池长期存活，所以每轮新建一张（别用共享的暂存数组——
-                // ReadOnlyMemory 只包引用、不复制内容，共享就等着被下一轮覆盖）
-                var deviceIndexOfValueByte = new byte[byteCount];
-                for (var p = 0; p < byteCount; p++)
-                {
-                    var unit = unitOrder[p / 2];
-                    var inUnit = p % 2;
-                    var valueByteIndex = endian == EndianKinds.BigEndian
-                        ? (2 * unit) + inUnit
-                        : (2 * unit) + 1 - inUnit;
-                    deviceIndexOfValueByte[valueByteIndex] = (byte)p;
-                }
-
-                packings.Add(deviceIndexOfValueByte.AsMemory());
-            }
-        }
-
-        // 下标 0（BigEndian + 自然顺序）就是恒等排布，统一用空表表示
-        packings[0] = default;
-        return packings.ToArray();
-    }
-
-    /// <summary>
-    /// 16 位单元的全排列，用插入法逐个扩出来；<b>自然顺序（<c>0,1,2…</c>）固定在最前</b>，
-    /// 这样下面 <see cref="BuildPackings"/> 的 <c>BigEndian</c> 第一项就是恒等排布，稳定落在下标 0。
-    /// </summary>
-    private static List<byte[]> UnitOrders(int unitCount)
-    {
-        var orders = new List<byte[]> { Array.Empty<byte>() };
-        for (var unit = 0; unit < unitCount; unit++)
-        {
-            var extended = new List<byte[]>();
-            foreach (var order in orders)
-            {
-                // 从末尾往前插：新单元先出现在末尾，于是"保持原顺序"的那一支排在最前
-                for (var position = order.Length; position >= 0; position--)
-                {
-                    var next = new byte[order.Length + 1];
-                    Array.Copy(order, 0, next, 0, position);
-                    next[position] = (byte)unit;
-                    Array.Copy(order, position, next, position + 1, order.Length - position);
-                    extended.Add(next);
-                }
-            }
-            orders = extended;
-        }
-        return orders;
-    }
 
     /// <summary>
     /// 置换表 → 可选记法（设备端第 p 个位置上是值里的第几个字节，就写第几个字母）。<br/>
