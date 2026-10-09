@@ -45,9 +45,15 @@ dotnet new install StdUnit.Tags.Templates
 
 然后即可以创建相关模板项目：
 ```bash
-dotnet new tags.wpf # 这会创建一个 WPF 模板项目
-dotnet new tags.web # 这会创建一个 ASP.NET Core 项目
+dotnet new tags.wpf -n your-project.name # 这会创建一个 WPF 模板项目
+dotnet new tags.web -n your-project.name # 这会创建一个 ASP.NET Core 项目
 ```
+
+想要创建你新的硬件驱动库？
+```bash
+dotnet new tags.driver -n your-project.name -D YourDriver 
+```
+备注：这里`-D`是给你的驱动起的名字
 
 优势：
 - 硬件无关抽象：理论上，你可以在家里用[S7模拟器](https://github.com/newbienewbie/S7SvrSim)编写自动化测试，验证你的逻辑，最后到现场前再切换到`OpcUa`设备上(或者反过来)。或者你不想用任何模拟器的话，可以直接使用“测点即文件”的功能，用文件系统来测试你的`S7`、`OpcUa`逻辑。
