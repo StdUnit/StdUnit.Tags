@@ -18,21 +18,22 @@
 
 
 
-这是一个面向工业交互场景的类库家族：
+这是一个面向**串行轮询读写**场景的 .NET 类库家族：把一组只能周期性读写的资源表达成一棵**测点树**，再为其提供一套严格串行的交互机制。
 
-* 免费开源: 整个类库家族都是MIT授权，而且相关依赖链也都是(或近乎是)MIT授权。
-* 高度模块化: 每种硬件实现，以`nuget`包为单元，各自独立。
-* 易于扩展：照抄这里内置的设备实现，实现你自己的通讯封装，然后编写一个`.AddYourOwnSupport()`扩展方法挂接上去。比如，在我的树莓派上，我基于它造了一个监控GPIO、和 Linux ProcInfo、MemInfo等系统信息的网页程序。
-* 跨平台：依托于`dotnet`跨平台的能力，让你的代码跑到各种设备上。
+目前的主打用例都是工业现场通信——我们内置了`S7`/`OpcUa`/`ModbusTcp` 等驱动。但有意思的是，这里的抽象本身，其实与硬件无关。它面向的是没有**事件 API**、只能粗暴**轮询**的场景。例如，需要周期性监控服务器的资源消耗情况(Linux 甚至为此提供了 `procfs`/`sysfs`)、或者想要周期性监控某些网站上公开信息的变化。对于这些需求，我们只要为它们单独定制一套驱动，就可以共享同一套抽象机制。
 
-这不是`framework`，而是一个`library`家族。我们希望它能被灵活地组合到各种场景，而不是仅仅被当做一个项目模板。它的核心是一组统一的、可扩展的通信类库的抽象，以及在此基础之上提供的开箱即用的交互方式。目前，我们只提供一种交互方式：严格的串行轮询(有意地模仿了 PLC 的扫描机制)。
+这既不是一个开箱即用的产品，也不是一个`framework`，而是一个`library`家族。它的核心是一组统一的、可扩展的通信抽象，以及在此基础之上提供的开箱即用的交互方式。目前，我们只提供一种交互方式：严格的串行轮询(有意地模仿了 PLC 的扫描机制)。
 
 0. 执行外部意图
 1. 读入数据 
 2. 处理逻辑
 3. 刷写底层
 
-> **正式版本（`1.0.0` 及以后）发布到 [nuget.org](https://www.nuget.org/packages/StdUnit.Tags)。** 主要变化参见 [CHANGELOG.md](./CHANGELOG.md)。
+我们把它定位成`library`的一个初衷是，希望它能被灵活地组合到各种场景中，而不是仅仅被当做一个项目模板
+拷来拷去。`1.0.0` 及以后的相关包都已经发布到 [nuget.org](https://www.nuget.org/packages/StdUnit.Tags)。主要变化参见 [CHANGELOG.md](./CHANGELOG.md)。
+
+> 当然，如果你需要自动创建模板，我们也提供了[StdUnit.Tags.Templates](https://www.nuget.org/packages/StdUnit.Tags.Templates)，参见下面的 [Quick Start](#quick-start)。
+
 
 ## Quick Start
 
@@ -129,26 +130,6 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 
 两个框架的能力差异（目前只有一处，即插件化的隔离与卸载）：见 [netfx 的插件化限制](#netfx-的插件化限制)。
 
-> 实现约定：跨框架差异一律收在**调用点**（`#if NETFRAMEWORK`）或项目内 `Compat/` 目录的单点垫片里，
-> 且**有标准库时优先使用标准库**（例如 `ReferenceEqualityComparer` 只在 net472 下用仓库内的等价实现）。
-> 不要把差异扩散到公共 API（如 `#if` 修饰公开成员），否则会给库使用者制造两套签名。
-
-### net472 下的测试
-
-`StdUnit.Tags.Tests` 同时面向 `net472`，因此 CI 在两个框架下都会跑测试。
-MCP 测试已在 `McpServer` 支持 net472 后合并回主测试项目（走 `ModelContextProtocol` 核心包的 `netstandard2.0` 资产）。
-仅 `net8.0` 的测试（如 Blazor / ASP.NET Core 方向）另放 `StdUnit.Tags.Tests.NetCoreOnly`。
-
-两个只在 net472 出现、且需要知道的坑（已在代码注释中标注）：
-
-- **测试宿主会做影子拷贝**：.NET Framework 的测试宿主默认对程序集做 shadow copy，
-  使 `Assembly.Location` 指向 `%TEMP%` 下的临时目录，**而且每个程序集落在不同的子目录**，
-  依赖「程序集所在目录」定位 XML 夹具的用例会失败。
-  已统一改用 `AppContext.BaseDirectory`（夹具定位走 `TestPaths`，与库自身的默认项目根目录约定一致），
-  **无需**关闭 AppDomain 或改任何宿主设置。
-- **引用程序集没有可空标注**：net472 的 BCL 没有 `[NotNullWhen(false)]` 之类的标注，
-  于是 `if (string.IsNullOrEmpty(x)) return ...; return x;` 在 net472 下会报 CS8603/CS8601/CS8604（net8.0 不报）。
-  这是假阳性，改用语言级判空（`x is null || x.Length == 0`）即可，**不要用 `NoWarn` 压掉**。
 
 ## LICENSING
 
