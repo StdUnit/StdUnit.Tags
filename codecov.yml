@@ -12,6 +12,7 @@ component_management:
       - type: project
         target: auto
         threshold: 5%
+  # let's ignore the typo about modbstcp、zLan and keep the original component_id
   individual_components:
     - component_id: stdunit_tags_core 
       name: "Core" 
@@ -65,5 +66,6 @@ component_management:
 ignore:
   - "**/*.md"
   - "**/*.yml"
-  - "Tests/*"
+  # 测试工程不参与统计（coverlet 默认不插桩测试程序集，这里是防止将来换收集器时把测试代码算进来）
+  - "src/StdUnit.Tags.Tests/**"
   - "**/*.g.cs"
