@@ -66,6 +66,5 @@ component_management:
 ignore:
   - "**/*.md"
   - "**/*.yml"
-  # 测试工程不参与统计（coverlet 默认不插桩测试程序集，这里是防止将来换收集器时把测试代码算进来）
   - "src/StdUnit.Tags.Tests/**"
   - "**/*.g.cs"
