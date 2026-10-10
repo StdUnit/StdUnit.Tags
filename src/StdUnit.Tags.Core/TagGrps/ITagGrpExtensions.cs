@@ -131,6 +131,27 @@ public static class ITagGrpExtensions
     #endregion
 
 
+    #region 读写（不检查使能的简便写法）
+    /// <summary>
+    /// 从底层读取数据到缓存。<br/>
+    /// 等价于 <c>tagGrp.ReadAsync(TraversalMode.IgnoreEnabled, ct)</c>
+    /// </summary>
+    /// <param name="tagGrp"></param>
+    /// <param name="ct"></param>
+    public static Task ReadAsync(this ITagGrp tagGrp, CancellationToken ct) =>
+        tagGrp.ReadAsync(TraversalMode.IgnoreEnabled, ct);
+
+    /// <summary>
+    /// 刷写缓存数据到底层。
+    /// 等价于 <c>tagGrp.WriteAsync(TraversalMode.IgnoreEnabled, ct)</c>
+    /// </summary>
+    /// <param name="tagGrp"></param>
+    /// <param name="ct"></param>
+    public static Task WriteAsync(this ITagGrp tagGrp, CancellationToken ct) => 
+        tagGrp.WriteAsync(TraversalMode.IgnoreEnabled, ct);
+    #endregion
+
+
     #region 收集子树通道集
     /// <summary>
     /// <b>向下递归</b>收集该入口子树中真正会被读写的通道集（按首次出现顺序去重）。<br/>

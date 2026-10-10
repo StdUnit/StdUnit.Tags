@@ -90,14 +90,14 @@ internal class TagGrpRunner : ITagGrpRunner
                     await this.DrainWriteIntentsAsync(entry, ct);
                     if (entry.IsDirty())
                     {
-                        await entry.WriteAsync(ct);
+                        await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
                     }
-                    await entry.ReadAsync(ct);
+                    await entry.ReadAsync(TraversalMode.RespectEnabled, ct);
                     if (TurnProcess is not null)
                     {
                         await TurnProcess(entry, channel);
                     }
-                    await entry.WriteAsync(ct);
+                    await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
 
                     sw.Stop();
                     var span = TimeSpan.FromMilliseconds(entry.SearchScanInterval() ?? 0);

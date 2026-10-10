@@ -210,8 +210,8 @@ public class ProjectAddLogicetTests
         public bool IsEnabled { get; set; } = true;
         public TagGrpDescriptor Descriptor { get; set; }
         public ITagChannel? Channel { get; set; }
-        public Task ReadAsync(CancellationToken ct) => Task.CompletedTask;
-        public Task WriteAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task ReadAsync(TraversalMode mode, CancellationToken ct) => Task.CompletedTask;
+        public Task WriteAsync(TraversalMode mode, CancellationToken ct) => Task.CompletedTask;
         public bool IsDirty() => false;
     }
 }

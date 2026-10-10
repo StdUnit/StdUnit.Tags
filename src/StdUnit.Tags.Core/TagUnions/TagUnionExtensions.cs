@@ -7,12 +7,24 @@ public static class TagUnionExtensions
 {
     #region R/W
     /// <summary>
-    /// TagUnion 从底层读取
+    /// TagUnion 从底层读取。<br/>
+    /// 不检查使能（等价于 <see cref="TraversalMode.IgnoreEnabled"/>），因此被禁用的分组/组合也会被读取。
     /// </summary>
     /// <param name="tagunion"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    public static async Task ReadAsync(this TagUnion tagunion, CancellationToken ct)
+    public static Task ReadAsync(this TagUnion tagunion, CancellationToken ct) => 
+        tagunion.ReadAsync(TraversalMode.IgnoreEnabled, ct);
+
+    /// <summary>
+    /// TagUnion 从底层读取，并可指定遍历模式（是否应用使能门控）。<br/>
+    /// 本重载是唯一的实现，公开重载只是以 <see cref="TraversalMode.IgnoreEnabled"/> 调用它。
+    /// </summary>
+    /// <param name="tagunion"></param>
+    /// <param name="mode">遍历模式</param>
+    /// <param name="ct"></param>
+    /// <returns></returns>
+    public static async Task ReadAsync(this TagUnion tagunion, TraversalMode mode, CancellationToken ct)
     {
         await tagunion.Map(
             async tag =>
@@ -30,6 +42,11 @@ public static class TagUnionExtensions
             },
             async cbnt =>
             {
+                // 是否短路？
+                if (mode == TraversalMode.RespectEnabled && !cbnt.IsEnabled)
+                {
+                    return;
+                }
                 if (cbnt.SearchAccessMode() == TagAccessMode.R1W && cbnt.IsScanned)
                 {
                     return;
@@ -43,18 +60,29 @@ public static class TagUnionExtensions
             },
             async grp =>
             {
-                await grp.ReadAsync(ct);
+                await grp.ReadAsync(mode, ct);
             }
          );
     }
 
     /// <summary>
-    /// TagUnion 写入底层
+    /// TagUnion 写入底层。<br/>
+    /// 不检查使能（等价于 <see cref="TraversalMode.IgnoreEnabled"/>），因此被禁用的分组/组合也会被写入。
     /// </summary>
     /// <param name="tagunion"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    public static async Task WriteAsync(this TagUnion tagunion, CancellationToken ct)
+    public static Task WriteAsync(this TagUnion tagunion, CancellationToken ct) => tagunion.WriteAsync(TraversalMode.IgnoreEnabled, ct);
+
+    /// <summary>
+    /// TagUnion 写入底层，并可指定遍历模式（是否应用使能门控）。<br/>
+    /// 本重载是唯一的实现，公开重载只是以 <see cref="TraversalMode.IgnoreEnabled"/> 调用它。
+    /// </summary>
+    /// <param name="tagunion"></param>
+    /// <param name="mode">遍历模式</param>
+    /// <param name="ct"></param>
+    /// <returns></returns>
+    public static async Task WriteAsync(this TagUnion tagunion, TraversalMode mode, CancellationToken ct)
     {
         await tagunion.Map(
             async tag =>
@@ -70,6 +98,11 @@ public static class TagUnionExtensions
             },
             async cbnt =>
             {
+                // 使能门控：未使能的组合整块跳过（含其下的所有测点），其脏标记会被保留到重新使能后再刷写
+                if (mode == TraversalMode.RespectEnabled && !cbnt.IsEnabled)
+                {
+                    return;
+                }
                 if (cbnt.IsReadOnly())
                 {
                     return;
@@ -82,7 +115,7 @@ public static class TagUnionExtensions
             },
             async grp =>
             {
-                await grp.WriteAsync(ct);
+                await grp.WriteAsync(mode, ct);
             }
          );
     }

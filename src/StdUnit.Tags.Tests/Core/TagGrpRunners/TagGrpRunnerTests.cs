@@ -722,7 +722,82 @@ public class TagGrpRunnerTests
         Assert.Equal(3, mockStrategy.ReceivedCounts[5]);
     }
 
+    [Fact]
+    public async Task StartAsync_WithRealTagGrp_RespectsIsEnabledOfChildren()
+    {
+        // 自动轮询按 IsEnabled 自顶向下短路：被禁用的组合既不采集也不刷写（脏标记保留），
+        // 同层里使能的兄弟节点照常读写。
+        // Arrange
+        var channel = new FakedChannel(new TagChannelDescriptor { Name = "fake-channel" });
+        var entry = new TagGrp(new TagGrpDescriptor { Name = "entry", IsEntry = true, ScanInterval = 10 }, channel);
+        var disabled = new CountingCbnt("disabled", isEnabled: false) { IsDirty = true };
+        var enabled = new CountingCbnt("enabled", isEnabled: true) { IsDirty = true };
+        entry.AddTag(disabled);
+        entry.AddTag(enabled);
+
+        var project = new MockProject();
+        var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance);
+        using var cts = new CancellationTokenSource();
+
+        runner.TurnProcess += (_, _) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        };
+
+        // Act（WaitAsync 只作兜底）
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
+
+        // Assert
+        Assert.Equal(0, disabled.ReadCount);
+        Assert.Equal(0, disabled.WriteCount);
+        Assert.True(disabled.IsDirty, "被跳过的组合应保留脏标记，重新使能后再刷写");
+        Assert.Equal(1, enabled.ReadCount);
+        Assert.Equal(1, enabled.WriteCount);
+    }
+
     #region Mocks
+
+    /// <summary>
+    /// 计数用的 <see cref="ITagCbnt"/>：不做任何 IO，只记录读/写次数，用于验证使能门控。
+    /// </summary>
+    private sealed class CountingCbnt : ITagCbnt
+    {
+        public CountingCbnt(string name, bool isEnabled)
+        {
+            Descriptor = new TagCbntDescriptor { Name = name, IsEnabled = isEnabled };
+            IsEnabled = isEnabled;
+        }
+
+        public TagCbntDescriptor Descriptor { get; set; }
+        public ITagGrp? Parent { get; set; }
+        public bool IsEnabled { get; set; }
+        public bool IsScanned { get; set; }
+        public ITagChannel? Channel { get; set; }
+        public string StartAddress { get; set; } = string.Empty;
+        public bool IsDirty { get; set; }
+
+        private readonly Dictionary<string, ITagCbntor> _children = new();
+        public IDictionary<string, ITagCbntor> Children => _children;
+        public ITagCbntor this[string tagName] => _children[tagName];
+
+        public int ReadCount { get; private set; }
+        public int WriteCount { get; private set; }
+
+        public Task ReadAsync(CancellationToken ct)
+        {
+            ReadCount++;
+            IsScanned = true;
+            return Task.CompletedTask;
+        }
+
+        public Task WriteAsync(CancellationToken ct)
+        {
+            WriteCount++;
+            IsDirty = false;
+            return Task.CompletedTask;
+        }
+    }
 
     private class MockTagGrp : ITagGrp
     {
@@ -776,7 +851,9 @@ public class TagGrpRunnerTests
         public Action? OnRead { get; set; }
         public Action? OnWrite { get; set; }
 
-        public Task ReadAsync(CancellationToken ct)
+        // 本 mock 不模拟子树，也不做门控（入口使能由 TagGrpRunner 外层循环把关），
+        // 因此忽略 mode，只记录调用次数。
+        public Task ReadAsync(TraversalMode mode, CancellationToken ct)
         {
             ReadAsyncCallCount++;
             OnRead?.Invoke();
@@ -785,7 +862,7 @@ public class TagGrpRunnerTests
             return Task.CompletedTask;
         }
 
-        public Task WriteAsync(CancellationToken ct)
+        public Task WriteAsync(TraversalMode mode, CancellationToken ct)
         {
             WriteAsyncCallCount++;
             OnWrite?.Invoke();

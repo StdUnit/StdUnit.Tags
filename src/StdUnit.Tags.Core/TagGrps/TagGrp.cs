@@ -124,23 +124,33 @@ public class TagGrp : ITagGrp
     public bool IsEnabled { get; set; }
 
     /// <inheritdoc/>
-    public async Task ReadAsync(CancellationToken ct)
+    public async Task ReadAsync(TraversalMode mode, CancellationToken ct)
     {
+        if (mode == TraversalMode.RespectEnabled && !this.IsEnabled)
+        {
+            return;
+        }
+
         foreach (var kvp in Children)
         {
             var tagunion = kvp.Value;
-            await tagunion.ReadAsync(ct);
+            await tagunion.ReadAsync(mode, ct);
         }
     }
 
 
     /// <inheritdoc/>
-    public async Task WriteAsync(CancellationToken ct)
+    public async Task WriteAsync(TraversalMode mode, CancellationToken ct)
     {
+        if (mode == TraversalMode.RespectEnabled && !this.IsEnabled)
+        {
+            return;
+        }
+
         foreach (var kvp in Children)
         {
             var tagunion = kvp.Value;
-            await tagunion.WriteAsync(ct);
+            await tagunion.WriteAsync(mode, ct);
         }
     }
 

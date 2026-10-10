@@ -64,7 +64,8 @@ public interface ITagGrp
 
 
     /// <summary>
-    /// 是否使能？
+    /// 在自动轮询模式下，是否使能？<br/>
+    /// 本属性是短路语义，即自身未使能时，其整棵子树都不再被考虑。
     /// </summary>
     public bool IsEnabled { get; set; }
 
@@ -77,16 +78,23 @@ public interface ITagGrp
     public ITagChannel? Channel { get; set; }
 
     /// <summary>
-    /// 从底层读取数据到缓存
+    /// 以指定的遍历模式读取子树。<br/>
+    /// <see cref="TraversalMode.RespectEnabled"/> 时应用使能门控，且是<b>自顶向下短路</b>的：
+    /// 自身未使能则整棵子树都不再被考虑，既不读取也不刷写（脏标记保留，重新使能后再刷写）；
+    /// 父节点被判为跳过时，子节点根本不会被访问。<br/>
+    /// <see cref="TraversalMode.IgnoreEnabled"/> 时不检查使能，即历史行为（少传参数可用扩展方法 <c>ReadAsync(ct)</c>）。<br/>
+    /// 实现方必须把 <paramref name="mode"/> 透传给子节点，否则门控会在该层断掉。
     /// </summary>
-    /// <returns></returns>
-    public abstract Task ReadAsync(CancellationToken ct);
+    /// <param name="mode">遍历模式</param>
+    /// <param name="ct"></param>
+    public abstract Task ReadAsync(TraversalMode mode, CancellationToken ct);
 
     /// <summary>
-    /// 刷写缓存数据到底层
+    /// 以指定的遍历模式刷写子树。语义见 <see cref="ReadAsync(TraversalMode, CancellationToken)"/>。
     /// </summary>
-    /// <returns></returns>
-    public abstract Task WriteAsync(CancellationToken ct);
+    /// <param name="mode">遍历模式</param>
+    /// <param name="ct"></param>
+    public abstract Task WriteAsync(TraversalMode mode, CancellationToken ct);
 
 
     /// <summary>
