@@ -30,7 +30,8 @@ public interface ITagCbnt
     public ITagCbntor this[string tagName] { get; }
 
     /// <summary>
-    /// 是否使能？
+    /// 在自动轮询模式下，是否使能？<br/>
+    /// 本属性是短路语义，即自身未使能时，其整棵子树都不再被考虑。
     /// </summary>
     bool IsEnabled { get; set; }
 

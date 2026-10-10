@@ -87,6 +87,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 6. **校验器默认值**：4 个代码校验器（跨引用、驱动工厂、入口通道独占、嵌套入口）在 `UseDefaults = true` 下**默认开启**；XSD 校验（`EnableXmlSchemaValidation()`）**默认关闭**（opt-in）。
 7. **解析大小写敏感度**：`EndianKinds` / `TagAccessMode`（`LittleEndian`、`R1W` …）**大小写敏感**；`isEntry` / `isEnabled` **不敏感**。测试常覆盖这些边界。
 8. **`IntentCapacity` 必须 > 0**，且只能在 `RunAsync` 之前设置。
+9. **`isEnabled` 只作用于自动轮询**：`TagGrpRunner` 以 `TraversalMode.RespectEnabled` 遍历（自顶向下短路——父节点未使能，其整棵子树既不读也不写，脏标记保留）；手动/外部意图里的显式 `ReadAsync`/`WriteAsync` 走 `TraversalMode.IgnoreEnabled`，**不检查使能**（"平时禁用 + 需要时手动点动"是刻意支持的用法）。不要把公开的读写路径也改成检查使能，也不要让驱动自行判 `IsEnabled`。`ITagGrp` 的契约里只有 `ReadAsync(TraversalMode, ct)` / `WriteAsync(TraversalMode, ct)` 这一对「真身」，1 参版本（`ReadAsync(ct)`）是 `ITagGrpExtensions` 上的扩展方法、等价于传 `IgnoreEnabled`（`TagUnion` 上同理，两个重载都在 `TagUnionExtensions`）。**实现 `ITagGrp` 时必须把 mode 透传给子节点**，否则门控会在该层断掉。
 
 ## 约定
 
