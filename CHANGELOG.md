@@ -2,6 +2,35 @@
 
 本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
+## 2.0.0
+
+> `2026-10-10`发布`2.0.0-alpha`。本节的改动自 `2.0.0-alpha` 起可用。
+
+本次更新的主题只有一个：把**使能**（`isEnabled`）的语义定死为"**只作用于自动轮询，且自顶向下短路整棵子树**"，
+并为此引入遍历模式 `TraversalMode`（新增公开枚举，取值 `IgnoreEnabled` / `RespectEnabled`）。下面的条目基本都是它的连带影响。
+
+### 破坏性变更
+
+- **`ITagGrp` 的读写方法带上了遍历模式**：`ReadAsync(CancellationToken)` / `WriteAsync(CancellationToken)` 变为
+  `ReadAsync(TraversalMode, CancellationToken)` / `WriteAsync(TraversalMode, CancellationToken)`。
+  - **调用方不用改代码**：少传参数的重载仍然可用，只是从接口方法降级为扩展方法（`ITagGrpExtensions.ReadAsync(ct)`；`TagUnion` 上同理，见 `TagUnionExtensions`），语义等价于传 `TraversalMode.IgnoreEnabled`，与历史行为一致。
+  - **实现方要改签名，而且必须透传 `mode`**：通常开发者不必实现自己的`TagGrp`，但是如果自己实现了`ITagGrp`的，需要补上参数，并且要把 `mode` 透传给子节点——不透传的话门控会在那一层断掉（父节点未使能，子节点却照样读写）。驱动层实现的是 `ITag` / `ITagCbnt`，这两个接口本次**没有变**（`ITagCbnt` 只改了注释），所以各驱动包的作者基本不受影响；只调库、不实现这些接口的终端 App 则完全不受影响。
+- **`IsEnabled` 的生效范围从"只有入口"扩到"整棵树"**（这条才会真的改变现场行为）：2.0 之前，`IsEnabled` 在库内**只有一处**被读取——`TagGrpRunner` 见到**入口**未使能就整轮跳过；中间层的分组/组合写 `isEnabled="false"` 是**空操作**，读写照旧发生（手动读写则从来不检查它）。现在`IsEnabled`下沉到遍历过程本身、**自顶向下短路**：某一层未使能，它整棵子树既不读也不写（脏标记保留，重新使能后照常刷写）。 
+
+### 修复和改进
+
+`IsEnabled`语义写进了公开契约和文档：
+
+- **"`isEnabled` 不影响手动读写"这件事被写进了契约**：此前它只是"没人去检查"，现在由 `TraversalMode.IgnoreEnabled` 明确表达，
+  并成为单参扩展方法（`ITagGrpExtensions.ReadAsync(ct)`、`TagUnionExtensions`）的固定语义——行为不变，含义变清楚。
+  于是"平时禁用、需要时手动读一次/点动一下"是受支持的用法（就像 PLC 里下了使能，人工仍可操作）。
+- **自动轮询统一按 `TraversalMode.RespectEnabled` 遍历**（`TagGrpRunner`）：入口级跳过与 2.0 之前一致，新增的是中间层也会短路；
+  被跳过的子树**保留脏标记**，重新使能后该刷的照常刷。
+- **`ITagCbnt` / `ITag` 的读写方法**不带** `mode`。原因是`ITagCbnt`是整体读写，不需要递归；而`ITag`既可能是`DirectTag`，也可能是`ITagCbntor`，语义上不自洽, 上干脆没有 `IsEnabled`。
+  想单独停采某个直连测点，套一层 `isEnabled="false"` 的 `TagGrp` 即可。
+- 文档：`ITagGrp.IsEnabled` / `ITagCbnt.IsEnabled` 的注释写明"自动轮询 + 短路语义"；`ReadAsync` / `WriteAsync` 的注释写明
+  `mode` 的两种取值与"实现方必须透传"。
+
 ## 1.1.0
 
 > 首发日期：`2026-10-08`。
