@@ -3,7 +3,7 @@
     [string]$packageVersion,
     [string]$nugetSource = $Env:NugetSource,
     [string]$nugetKey = $Env:NugetApiKey,
-    # 只打包、不推送：首次发版前用它验证产物（14 个包能不能 pack 出来），或排障时不污染包源
+    # 只打包、不推送：首次发版前用它验证产物（13 个包能不能 pack 出来），或排障时不污染包源
     [switch]$SkipPush
 )
 
@@ -42,8 +42,7 @@ $projects = @(
     "StdUnit.Tags.RxExtensions",
     "StdUnit.Tags.R3Extensions",
 
-    "StdUnit.Tags.BlazorLib.Core", 
-    "StdUnit.Tags.BlazorLib"
+    "StdUnit.Tags.BlazorLib.Core"
     )
 
 $baseDir=Split-Path $script:MyInvocation.MyCommand.Path
