@@ -112,6 +112,24 @@ public class JsonTagTypeInfoTests : IDisposable
         Assert.Contains(nameof(UnregisteredPoint), ex.Message, StringComparison.Ordinal);
         Assert.Contains("Tag(json-v)", ex.Location, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void WithJsonTagFactory_WhenRegisteredContextHasType_UsesThatMetadata()
+    {
+        var builder = new SimpleFilesDirectTagBuilder();
+        builder
+            .WithTagDescriptor(new TagDescriptor { TagName = "json-v", RawAddress = "point5.json", TagKind = "JSON" })
+            .WithParent(this._grp)
+            .WithChannel(this._channel);
+        builder.UseJsonSerializerContexts(new[] { AotJsonPointContext.Default });
+
+        // 与上一条用例的唯一差别：这次上下文里**有**目标类型的元数据，于是不应抛异常
+        builder.WithJsonTagFactory<AotJsonPoint>();
+        var tag = builder.Build(this._channel);
+
+        Assert.IsType<JsonDirectTag<AotJsonPoint>>(tag);
+        Assert.Equal(Path.Combine(this._tempDir, "point5.json"), tag.NormalizedAddress());
+    }
 }
 
 /// <summary>JSON 测点的值类型（示例 POCO）。</summary>

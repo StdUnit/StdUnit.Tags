@@ -62,6 +62,9 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
     public 会与 BCL 同全名类型冲突（消费方 `CS0433`），internal 则没有分析器会读，纯属命名空间污染。
   - 抑制告警**必须用 `[UnconditionalSuppressMessage]`、不能用 `#pragma warning disable`**——`#pragma` 只作用于编译期分析器，
     `dotnet publish` 的 ILLink 会在元数据上重新分析并照旧报出 `IL2026`/`IL2067`（实测）。
+  - **"宿主能力"的读取要收口到 `Compat/` 一处，并作为参数传进判定函数**（`StdUnit.Tags/Compat/DynamicLoadingCompat.IsSupported`、
+    `StdUnit.Tags.SimpleFiles/Compat/JsonReflectionCompat.IsSupported`）：真实的"能力不足"取值只有 AOT / 裁剪宿主才有，
+    若在分支里直接读全局开关，那条分支在 JIT 测试里永远走不到，覆盖率必然漏（且同一判定会被复制多份）。
   - ⚠ 位置敏感的坑：`PublishAot=true` 会被 SDK 写进 `runtimeconfig.json`，使 `RuntimeFeature.IsDynamicCodeSupported` 在
     **IL+JIT** 下也是 `false`；宿主据此判定"不支持动态加载"，因此 `<Logicet>` 在 AOT（以及 `PublishAot=true` 的 IL 构建）下
     **必须快速失败**（`TagsProjectNotSupportedException`），**不要**让它被 `LogicetLoader` 的通用 `catch` 吞掉——配了却静默不跑业务逻辑是硬红线。

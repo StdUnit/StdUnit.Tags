@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using StdUnit.Tags.SimpleFiles.Compat;
 
 namespace StdUnit.Tags.SimpleFiles;
 
@@ -20,12 +21,6 @@ namespace StdUnit.Tags.SimpleFiles;
 /// <typeparam name="T">测点值类型。JSON 测点通常是一个 POCO，也可以是基元类型。</typeparam>
 public class JsonDirectTag<T> : SimpleFilesDirectTagBase<T>
 {
-    /// <summary>
-    /// 缺少元数据时的提示文本。
-    /// </summary>
-    internal const string MetadataHint =
-        "JSON 测点需要类型元数据：请在注册时用 AddJsonSerializerContext(...) 把生成该类型的 "
-        + "JsonSerializerContext 登记进来（NativeAOT / 裁剪下必须如此），或改用非 AOT（JIT）宿主。";
     private readonly JsonTypeInfo? _jsonTypeInfo;
 
     /// <summary>
@@ -50,9 +45,11 @@ public class JsonDirectTag<T> : SimpleFilesDirectTagBase<T>
                 nameof(jsonTypeInfo));
         }
 
-        if (jsonTypeInfo is null && !JsonSerializer.IsReflectionEnabledByDefault)
+        if (jsonTypeInfo is null)
         {
-            throw new TagsProjectNotSupportedException(MetadataHint, $"Tag({this.TagName()})");
+            // 没有元数据就只能走反射：宿主禁用反射（NativeAOT / 裁剪）时在此快速失败
+            JsonReflectionCompat.EnsureReflectionSupported(
+                typeof(T), $"Tag({this.TagName()})", JsonReflectionCompat.IsSupported);
         }
 
         this._jsonTypeInfo = jsonTypeInfo;
@@ -64,12 +61,13 @@ public class JsonDirectTag<T> : SimpleFilesDirectTagBase<T>
     /// <param name="text"></param>
     /// <returns></returns>
     /// <remarks>
-    /// 反射分支的告警在此处定点抑制：反射的**可用性**已由 ctor 按<c>JsonSerializer.IsReflectionEnabledByDefault</c> 拦截过，
+    /// 反射分支的告警在此处定点抑制：反射的**可用性**已由 ctor 经
+    /// <see cref="JsonReflectionCompat.EnsureReflectionSupported"/> 校验过，
     /// 这里只是把库内部的传导噪声去掉。
     /// </remarks>
 #if NET5_0_OR_GREATER
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = MetadataHint)]
-    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = MetadataHint)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = JsonReflectionCompat.MetadataHint)]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = JsonReflectionCompat.MetadataHint)]
 #endif
     protected override T? ParseValue(string text)
     {
@@ -88,8 +86,8 @@ public class JsonDirectTag<T> : SimpleFilesDirectTagBase<T>
     /// <returns></returns>
     /// <inheritdoc cref="ParseValue(string)" path="/remarks"/>
 #if NET5_0_OR_GREATER
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = MetadataHint)]
-    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = MetadataHint)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = JsonReflectionCompat.MetadataHint)]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = JsonReflectionCompat.MetadataHint)]
 #endif
     protected override string FormatValue(T? value)
     {

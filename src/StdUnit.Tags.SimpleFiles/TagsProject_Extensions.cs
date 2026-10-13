@@ -12,7 +12,7 @@ public static class TagsProject_Extensions
     /// 登记一个 <see cref="JsonSerializerContext"/>，作为 SimpleFiles 的 JSON 测点（<c>type="JSON"</c>）的序列化元数据来源。<br/>
     /// <br/>
     /// <b>NativeAOT / 裁剪宿主必须登记</b>：这些宿主下 <c>System.Text.Json</c> 默认关闭反射序列化，
-    /// 未登记时会在构建 JSON 测点时以 <see cref="TagsProjectConfigurationException"/> 快速失败；
+    /// 未登记时会在构建 JSON 测点时以 <see cref="TagsProjectNotSupportedException"/> 快速失败；
     /// 普通 JIT 宿主可以不登记（走反射）。
     /// </summary>
     /// <param name="builder"></param>
@@ -86,7 +86,7 @@ public static class TagsProject_Extensions
                 SimpleFilesNames.DriverName,
                 configure: tagBuilder =>
                 {
-                    var contexts = sp.GetServices<JsonSerializerContext>()?.ToList();
+                    var contexts = sp.GetServices<JsonSerializerContext>().ToList();
                     tagBuilder.UseJsonSerializerContexts(contexts);
                     configure?.Invoke(tagBuilder);
                 },

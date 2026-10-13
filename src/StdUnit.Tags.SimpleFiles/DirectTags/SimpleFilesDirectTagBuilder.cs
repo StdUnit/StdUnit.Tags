@@ -1,7 +1,6 @@
-﻿
-using System.Text.Json;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using StdUnit.Tags.SimpleFiles.Compat;
 
 namespace StdUnit.Tags.SimpleFiles;
 
@@ -37,7 +36,7 @@ public partial class SimpleFilesDirectTagBuilder : TagBuilderBase
             {
                 var channel = thisChannel ?? container.SearchRequiredChannel();
                 var sfsChannel = channel as SimpleFilesTagChannel ?? throw new TagsProjectConfigurationException(
-                    $"测点 '{descriptor.TagName}' 的通道类型不匹配：期望 {nameof(SimpleFilesTagChannel)}，实际 {channel?.GetType().FullName}",
+                    $"测点 '{descriptor.TagName}' 的通道类型不匹配：期望 {nameof(SimpleFilesTagChannel)}，实际 {channel.GetType().FullName}",
                     $"Tag({descriptor.TagName})");
                 descriptor.NormalizedAddress = sfsChannel.MakePath(descriptor.RawAddress);
                 return factory(descriptor, thisChannel as SimpleFilesTagChannel, container);
@@ -68,12 +67,13 @@ public partial class SimpleFilesDirectTagBuilder : TagBuilderBase
     /// <item>登记过 → 用其中的源生成元数据（<b>AOT / 裁剪安全</b>）；</item>
     /// <item>没登记且宿主是普通 JIT → 退化为反射序列化；</item>
     /// <item>没登记且宿主禁用了反射（NativeAOT / 裁剪）→ <b>构建测点时即抛</b>
-    /// <see cref="TagsProjectConfigurationException"/>（加载期快速失败，不必等第一次读写）。</item>
+    /// <see cref="TagsProjectNotSupportedException"/>（加载期快速失败，不必等第一次读写）。</item>
     /// </list>
     /// </summary>
     /// <typeparam name="TVal"></typeparam>
     /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
+    /// <exception cref="TagsProjectConfigurationException">通道类型不匹配，或登记了上下文但没有该类型的元数据</exception>
+    /// <exception cref="TagsProjectNotSupportedException">没登记元数据，而宿主又禁用了反射序列化（NativeAOT / 裁剪）</exception>
     public SimpleFilesDirectTagBuilder WithJsonTagFactory<TVal>()
     {
         this.WithFactory(
@@ -108,7 +108,8 @@ public partial class SimpleFilesDirectTagBuilder : TagBuilderBase
     /// <param name="type">测点值类型</param>
     /// <param name="descriptor">用于报错时的定位上下文</param>
     /// <returns>元数据；null 表示调用方应走反射路径</returns>
-    /// <exception cref="TagsProjectConfigurationException">登记了上下文但没有该类型的元数据，或宿主禁用了反射序列化</exception>
+    /// <exception cref="TagsProjectConfigurationException">登记了上下文但没有该类型的元数据</exception>
+    /// <exception cref="TagsProjectNotSupportedException">没登记元数据，而宿主又禁用了反射序列化（NativeAOT / 裁剪）</exception>
     private JsonTypeInfo? ResolveJsonTypeInfo(Type type, TagDescriptor descriptor)
     {
         if (this._jsonContexts is { Count: > 0 })
@@ -128,14 +129,8 @@ public partial class SimpleFilesDirectTagBuilder : TagBuilderBase
         }
 
         // 运行至此，说明没有登记任何 JsonSerializerContext，或者登记了但都没有该类型的元数据。
-        // 如果宿主禁用了反射序列化(e.g. AOT场景)，则无法退化，需要提前丢出异常
-        if (!JsonSerializer.IsReflectionEnabledByDefault)
-        {
-            throw new TagsProjectNotSupportedException(
-                $"当前宿主（NativeAOT / 裁剪）禁用了反射序列化，{type.FullName} 需要源生成的序列化元数据："
-                + "请在注册时用 AddJsonSerializerContext(...) 登记生成该类型的 JsonSerializerContext。",
-                $"Tag({descriptor.TagName})");
-        }
+        // 宿主禁用了反射序列化(e.g. AOT场景)时无法退化，需要提前丢出异常
+        JsonReflectionCompat.EnsureReflectionSupported(type, $"Tag({descriptor.TagName})", JsonReflectionCompat.IsSupported);
 
         return null;
     }
