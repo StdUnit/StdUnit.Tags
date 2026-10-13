@@ -66,5 +66,5 @@ component_management:
 ignore:
   - "**/*.md"
   - "**/*.yml"
-  - "src/StdUnit.Tags.Tests/**"
+  - "tests/**"
   - "**/*.g.cs"

@@ -30,7 +30,7 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
 - 参考实测（2026-10，本机 WSL）：mono 上的结果与 Windows 真 .NET Framework 一致。
 - 改了 `Compat/*` 或 `#if NETFRAMEWORK` 分支时，仍建议在本机 Windows 上跑一次 `-f net472`（或在 PR 里看 `net472-on-mono`）。
 `samples/WpfDemo`（net8.0-windows + WPF）**已从解决方案移除**，目录保留、需要时在本机 Windows 上单独 `dotnet build samples/WpfDemo/WpfDemo.csproj`（只要它还留在解决方案里，Linux 上的整解构建就会失败）。
-`samples/AotSmokeTest.LogicetPlugins` 与 `samples/AotSmokeTest.SimpleFiles`（都是 net8.0 控制台 + `PublishAot=true`）**在解决方案内**（整解构建顺带编译它们），但**不要**改成 net8.0-windows 或其他不可跨平台的形态——CI 的 `aot-smoke` job 要在 Linux 上 publish 并运行它们。
+`tests/AotSmokeTest.LogicetPlugins` 与 `tests/AotSmokeTest.SimpleFiles`（都是 net8.0 控制台 + `PublishAot=true`）**在解决方案内**（整解构建顺带编译它们），但**不要**改成 net8.0-windows 或其他不可跨平台的形态——CI 的 `aot-smoke` job 要在 Linux 上 publish 并运行它们。
 
 - SDK 固定为 **8.0.102**（`global.json`，`rollForward: minor`）。
 - 依赖用 **Paket** 管理。**不要 `dotnet add package`**：请改 `paket.dependencies` 后运行 `dotnet paket install`（会更新 `paket.lock`）。
@@ -49,7 +49,7 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
 
 - **有标准库就用标准库。** 跨框架差异用调用点的 `#if NETFRAMEWORK` 或项目内 `Compat/` 目录的单点垫片（如 `StdUnit.Tags.Core/Compat/ReferenceEqualityComparer.cs`、`StdUnit.Tags/Compat/DynamicLoadingCompat.cs`、各驱动的 `Compat/*.cs`）。
 - **不要把 `#if` 铺到调用点满屏幕，也不要用 `#if` 去条件修饰公共 API**（那会给库使用者制造两套签名）。
-- `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 由 `src/Directory.Build.props` 统一提供，新建项目不用再写这几项（net472 默认 C# 7.3，少写一次就少一次 CS8630）；`TargetFrameworks` 仍写在各 csproj（存在 net8-only 项目）。不生成 XML 文档的项目在本项目显式写 `<GenerateDocumentationFile>false</GenerateDocumentationFile>`（现有：BlazorLib、两个测试项目、`samples/AotSmokeTest`；BlazorLib 是"尚未补注释"的历史包袱）。
+- `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 由 `src/` 与 `tests/` 各自的 `Directory.Build.props` 统一提供（`tests/` 那份不含 NuGet 打包元数据，且已把 `GenerateDocumentationFile` 设为 `false`），新建项目不用再写这几项（net472 默认 C# 7.3，少写一次就少一次 CS8630）；`TargetFrameworks` 仍写在各 csproj（存在 net8-only 项目）。`src/` 下不生成 XML 文档的项目仍要在本项目显式写 `<GenerateDocumentationFile>false</GenerateDocumentationFile>`（现有：BlazorLib；它是"尚未补注释"的历史包袱）。
 - **AOT 相关**（逐包状态见 `docs/设计决策与边界/4. 目标框架差异.md` 的表，新增包记得补一行并放进对应分组）：
   - `<IsAotCompatible>true</IsAotCompatible>` **无条件写**（net472 下 SDK 会自行关掉分析器，**不要**加 TFM 条件）。
     新包默认加上，除非有明确阻塞。目前已开的 **10 个**：核心 `Core` / `StdUnit.Tags`，扩展 `R3Extensions` / `McpServer`，
@@ -68,7 +68,7 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
   - ⚠ 位置敏感的坑：`PublishAot=true` 会被 SDK 写进 `runtimeconfig.json`，使 `RuntimeFeature.IsDynamicCodeSupported` 在
     **IL+JIT** 下也是 `false`；宿主据此判定"不支持动态加载"，因此 `<Logicet>` 在 AOT（以及 `PublishAot=true` 的 IL 构建）下
     **必须快速失败**（`TagsProjectNotSupportedException`），**不要**让它被 `LogicetLoader` 的通用 `catch` 吞掉——配了却静默不跑业务逻辑是硬红线。
-    `samples/AotSmokeTest.LogicetPlugins` / `samples/AotSmokeTest.SimpleFiles` 是这两条链路的端到端验证（CI 的 `aot-smoke` job）。
+    `tests/AotSmokeTest.LogicetPlugins` / `tests/AotSmokeTest.SimpleFiles` 是这两条链路的端到端验证（CI 的 `aot-smoke` job）。
 - net472 缺 init-only setter 时，在 `paket.references` 里加 `IsExternalInit`（已有先例：Core / StdUnit.Tags / ComScanner / OpcUaClient / SimpleFiles）。
 - **net472 的引用程序集没有可空标注**，`string.IsNullOrEmpty` 之类的 BCL 后置条件看不到，会出现 net472 专属的 CS8601/CS8603/CS8604 假阳性。改用语言级判空（`x is null || x.Length == 0`），**不要用 `NoWarn` 压掉**。
 - 不要用 `| Select-Object -First n` 过滤 `dotnet paket`/`dotnet build` 的长输出：会在第 n 行处终止上游进程。先 `Out-File` 再 grep。
@@ -93,10 +93,10 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 - `StdUnit.Tags.SchemaGenerator` 是源生成器，把各项目的 XSD 编译成 DLL 内字符串常量（AOT / trim 友好）。
 - 新增驱动包时，需一并提供 `Schemas/{driver}.xsd`，并以 `buildTransitive` 方式注入到消费方项目树（照抄 `StdUnit.Tags.Core.csproj` + `Schemas/StdUnit.Tags.Core.targets` 的模式），并实现 `ITagsProjectSchemaProvider` 注册为 Singleton。
 - 测试分两个项目（xUnit），且**主测试项目多目标 `net8.0;net472`**：
-  - `src/StdUnit.Tags.Tests`：主体测试，跑在两个 TFM 上；
-  - `src/StdUnit.Tags.Tests.NetCoreOnly`：**仅 net8.0**，专门存放无法面向 net472 的测试（如依赖 `AssemblyLoadContext`，或将来涉及 Blazor / ASP.NET Core 的测试）。目前为空项，作占位预留。
-- **新增测试默认放 `StdUnit.Tags.Tests`**（多目标，两个 TFM 都跑）；只有当测试依赖 `net8.0` 专属的包/项目（如 `ModelContextProtocol.AspNetCore`、`BlazorLib`）或 `net8.0` 专属运行期 API（如 `AssemblyLoadContext`）时，才放 `Tests.NetCoreOnly`。
-  不要在 `StdUnit.Tags.Tests` 里用 `#if NETFRAMEWORK` 排除整个文件——那是编译期开关，解决不了“引用 net8-only 项目”的问题（目前仅 `Core/Logicets/LogicetPluginLifecycleTests.cs` 因这一原因用 `Compile Remove` 在 net472 下排除）。
+  - `tests/StdUnit.Tags.Tests`：主体测试，跑在两个 TFM 上；
+  - `tests/StdUnit.Tags.Tests.NetCoreOnly`：**仅 net8.0**，专门存放无法面向 net472 的测试（如依赖 `AssemblyLoadContext`，或将来涉及 Blazor / ASP.NET Core 的测试）。目前为空项，作占位预留。
+- **新增测试默认放 `tests/StdUnit.Tags.Tests`**（多目标，两个 TFM 都跑）；只有当测试依赖 `net8.0` 专属的包/项目（如 `ModelContextProtocol.AspNetCore`、`BlazorLib`）或 `net8.0` 专属运行期 API（如 `AssemblyLoadContext`）时，才放 `tests/StdUnit.Tags.Tests.NetCoreOnly`。
+  不要在 `tests/StdUnit.Tags.Tests` 里用 `#if NETFRAMEWORK` 排除整个文件——那是编译期开关，解决不了“引用 net8-only 项目”的问题（目前仅 `Core/Logicets/LogicetPluginLifecycleTests.cs` 因这一原因用 `Compile Remove` 在 net472 下排除）。
 
 ## 不可破坏的设计约束
 
@@ -114,11 +114,11 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 
 - **时间戳一律 UTC**：`ITag.Timestamp` 用 `DateTime.UtcNow` 写入，**不要用 `DateTime.Now`**（本地时间跨时区/夏令时不可比）；展示或与本地时间比较时由调用方自行转换。
 - **启停语义**：`ITagsProjectCtrl.StopAsync()` 会先**等轮询循环退出**（有界超时，默认 30s）再释放项目、断开通道、触发"已停止"事件；`StartPollAsync` 的 `finally` 是项目的**唯一常规释放点**（只有等待超时那一刻才由 `StopAsync` 兜底释放，因此"只释放一次"是硬约束）。改启停或清理路径时必须保持这个顺序，详见 `docs/设计决策与边界/`。
-- 公共编译设置（`ImplicitUsings` + `Nullable` + `LangVersion latest` + XML 文档文件）与 NuGet 包元数据（作者/授权/仓库/项目主页/标签/README）统一在 `src/Directory.Build.props`；**新增会被发布的包时，务必在自己 csproj 里补一行 `<Description>`**（否则 nuget.org 上只会显示 SDK 占位文本 `Package Description`），并把项目名加进 `src/publish-packages.ps1` 的列表。
+- 公共编译设置（`ImplicitUsings` + `Nullable` + `LangVersion latest` + XML 文档文件）在 `src/Directory.Build.props`（与 `tests/Directory.Build.props`，后者不含包元数据），NuGet 包元数据（作者/授权/仓库/项目主页/标签/README）只收口在 `src/Directory.Build.props`；**新增会被发布的包时，务必在自己 csproj 里补一行 `<Description>`**（否则 nuget.org 上只会显示 SDK 占位文本 `Package Description`），并把项目名加进 `src/publish-packages.ps1` 的列表。
 - **测试代码必须跨平台**（CI 只跑 Linux），两类路径都要当心：
   - **分隔符**：相对路径一律用 `/` 或 `Path.Combine` 分段，**不要写 `@"Samples\Web\index.xml"`**——反斜杠在 Linux 是合法文件名字符，`Path.Combine` 不会转换，结果是"Windows 上绿、Linux 上 `File.Exists` 失败"。夹具/示例用 `TestPaths.Fixture("Samples", "Web", "index.xml")` 定位。
   - **Windows 专有绝对路径**：`C:\base` 在 Linux 上**不是** rooted 路径，`Path.Combine` 的行为会不同（Windows 丢弃前一段、Linux 拼接），于是同一个用例在两个平台上"测的不是同一件事"。需要"绝对路径"语义的数据请用 `TestPaths.TempPath("base")`（运行时由 `Path.GetTempPath()` 拼出，两个平台都真 rooted）。
-  - 两者都收在 `src/StdUnit.Tags.Tests/TestPaths.cs`。新增夹具/路径类用例后请在 WSL 上跑一遍 `-f net8.0`（或直接看 CI）。
+  - 两者都收在 `tests/StdUnit.Tags.Tests/TestPaths.cs`。新增夹具/路径类用例后请在 WSL 上跑一遍 `-f net8.0`（或直接看 CI）。
 - **大小写也算"跨平台"**：Linux 文件系统区分大小写，Windows 不区分。写错大小写的路径（例如测试里的 `Schemas/drivers` 而 csproj 的 `Link` 是 `Schemas\Drivers`）在 Windows 上一直绿，一到 Linux CI 就 `DirectoryNotFoundException`。
   - **警告：这个坑在 WSL 里测不出来**——`/mnt/d`（DrvFs）同样不区分大小写。要真验证，得把仓库复制到 WSL 的 ext4（`tar` 排除 `bin`/`obj`，删掉 `paket-files/paket.restore.cached` 后 `paket restore`），或直接依赖 CI。
   - 需要按名字定位文件/目录时，**大小写必须与产出方（csproj 的 `Link`、`TestPaths.Fixture(...)`）逐字符一致**——不要为了"容错"写成不区分大小写，那恰好把这个坑掩盖掉（我们就是先写成 `SchemaPath("drivers")` 才红的）。写错了就让它在 CI 上红，并顺手核对 csproj。

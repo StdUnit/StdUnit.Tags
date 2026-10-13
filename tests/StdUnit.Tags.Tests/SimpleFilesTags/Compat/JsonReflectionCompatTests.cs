@@ -9,7 +9,7 @@ namespace StdUnit.Tags.Tests.SimpleFilesTags.Compat;
 /// <br/>
 /// "宿主禁用了反射序列化"这一情形无法在 JIT 测试进程里造出来
 /// （STJ 的 feature switch 是进程级且首次访问即固化），所以本类**直接**校验判定函数的两条分支；
-/// 真实 AOT 宿主下的行为由 <c>samples/AotSmokeTest.SimpleFiles</c> 端到端验证。
+/// 真实 AOT 宿主下的行为由 <c>tests/AotSmokeTest.SimpleFiles</c> 端到端验证。
 /// </summary>
 public class JsonReflectionCompatTests
 {

@@ -11,7 +11,7 @@ namespace StdUnit.Tags.Tests.Core.Logicets;
 /// <summary>
 /// <see cref="LogicetLoader"/> 在"宿主运行时不支持动态加载程序集"（NativeAOT）时的行为。<br/>
 /// 真实 AOT 宿主没法在单元测试里跑，这里用重写探测点的子类模拟；真正的端到端验证放在
-/// <c>samples/AotSmokeTest</c>（CI 会以 NativeAOT 发布并运行它）。
+/// <c>tests/AotSmokeTest</c>（CI 会以 NativeAOT 发布并运行它）。
 /// </summary>
 public class LogicetLoaderAotTests
 {

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tests/ 下所有项目共享的编译设置（**不含** NuGet 打包元数据 —— 测试项目不发布）。
+
+  1) TargetFrameworks 有意不在这里统一：StdUnit.Tags.Tests.NetCoreOnly 与两个 AotSmokeTest
+     只面向 net8.0，StdUnit.Tags.Tests 面向 net8.0;net472，所以目标框架仍写在各 csproj 内。
+  2) GenerateDocumentationFile 设为 false：测试/冒烟代码的公开成员没有注释，
+     若像 src/Directory.Build.props 那样设成 true 会刷出大量 CS1591。
+-->
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

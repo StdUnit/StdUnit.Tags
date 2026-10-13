@@ -38,14 +38,14 @@ jobs:
     - name: Restore dependencies
       run: dotnet paket restore
 
-    # 整解构建：net8.0 + net472 编译 + 三个 net8.0 示例，一次覆盖
+    # 整解构建：net8.0 + net472 编译 + samples/ 与 tests/ 下的 net8.0 可执行项目（示例、AOT 冒烟），一次覆盖
     - name: Build (whole solution)
       run: dotnet build StdUnit.Tags.sln -c Release --nologo
 
     # 只跑 net8.0：net472 的测试需要 .NET Framework 运行时（其编译校验已由上一步覆盖）。
     # 覆盖率只统计 net8.0 —— 同一份源码，net472 专属分支在 net8.0 构建里根本不参与编译，不会被误记为未覆盖。
     - name: Test with Coverage (net8.0)
-      run: dotnet test src/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj -f net8.0 -c Release --no-build --nologo --collect:"XPlat Code Coverage" --results-directory ./TestResults
+      run: dotnet test tests/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj -f net8.0 -c Release --no-build --nologo --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
     - name: Upload Coverage to Codecov
       uses: codecov/codecov-action@v4
@@ -91,7 +91,7 @@ jobs:
       run: dotnet paket restore
 
     - name: Test (net472 on mono)
-      run: dotnet test src/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj --nologo
+      run: dotnet test tests/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj --nologo
 
   aot-smoke:
 
@@ -125,10 +125,10 @@ jobs:
     # McMaster.NetCore.Plugins 的告警只在 publish 输出里出现，不影响本 job 的成败，也不代表示例的断言失败了 —— AOT 下根本走不到动态加载那条路。
     - name: Smoke test (LogicetPlugins, NativeAOT)
       run: |
-        dotnet publish samples/AotSmokeTest.LogicetPlugins/AotSmokeTest.LogicetPlugins.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
+        dotnet publish tests/AotSmokeTest.LogicetPlugins/AotSmokeTest.LogicetPlugins.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
         ./aot-smoke-out/AotSmokeTest.LogicetPlugins
 
     - name: Smoke test (SimpleFiles, NativeAOT)
       run: |
-        dotnet publish samples/AotSmokeTest.SimpleFiles/AotSmokeTest.SimpleFiles.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
+        dotnet publish tests/AotSmokeTest.SimpleFiles/AotSmokeTest.SimpleFiles.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
         ./aot-smoke-out/AotSmokeTest.SimpleFiles

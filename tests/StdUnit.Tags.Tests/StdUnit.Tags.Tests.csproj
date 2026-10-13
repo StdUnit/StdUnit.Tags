@@ -5,22 +5,8 @@
     <IsPackable>false</IsPackable>
 	<NuGetAudit>false</NuGetAudit>
     <NoWarn>$(NoWarn);CS0067,CS1998,NU1504,NU1506</NoWarn>
-    <!-- 测试项目不生成 XML 文档：测试代码的公开成员没有注释，继承 src/Directory.Build.props 的默认值会刷出大量 CS1591 -->
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\StdUnit.Tags.ComScanner\StdUnit.Tags.ComScanner.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.Hjzk\StdUnit.Tags.Hjzk.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.ModbusTcp\StdUnit.Tags.ModbusTcp.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.OpcUaClient\StdUnit.Tags.OpcUaClient.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.RxExtensions\StdUnit.Tags.RxExtensions.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.R3Extensions\StdUnit.Tags.R3Extensions.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.S7\StdUnit.Tags.S7.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.ZLan\StdUnit.Tags.ZLan.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.SimpleFiles\StdUnit.Tags.SimpleFiles.csproj" />
-    <ProjectReference Include="..\StdUnit.Tags.McpServer\StdUnit.Tags.McpServer.csproj" />
-  </ItemGroup>
 
   <!-- 仅供 net8.0 跑的测试（依赖 net8-only 的项目/运行期 API）已拆到 StdUnit.Tags.Tests.NetCoreOnly。
        McpServer 自 v1.x 起已支持 net472（走 ModelContextProtocol 的 netstandard2.0 资产），
@@ -76,28 +62,28 @@
   <!-- Schema 校验测试所需：从各项目 Schemas/ 目录复制 schema，从 samples/ 复制示例 XML
        （Link 保持目录结构） -->
   <ItemGroup>
-    <None Include="..\StdUnit.Tags.Core\Schemas\tagsproject.xsd" Link="Schemas\tagsproject.xsd">
+    <None Include="..\..\src\StdUnit.Tags.Core\Schemas\tagsproject.xsd" Link="Schemas\tagsproject.xsd">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="..\StdUnit.Tags.S7\Schemas\s7.xsd" Link="Schemas\Drivers\s7.xsd">
+    <None Include="..\..\src\StdUnit.Tags.S7\Schemas\s7.xsd" Link="Schemas\Drivers\s7.xsd">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="..\StdUnit.Tags.ModbusTcp\Schemas\modbustcp.xsd" Link="Schemas\Drivers\modbustcp.xsd">
+    <None Include="..\..\src\StdUnit.Tags.ModbusTcp\Schemas\modbustcp.xsd" Link="Schemas\Drivers\modbustcp.xsd">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="..\StdUnit.Tags.ZLan\Schemas\zlan.xsd" Link="Schemas\Drivers\zlan.xsd">
+    <None Include="..\..\src\StdUnit.Tags.ZLan\Schemas\zlan.xsd" Link="Schemas\Drivers\zlan.xsd">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="..\StdUnit.Tags.Hjzk\Schemas\hjzk.xsd" Link="Schemas\Drivers\hjzk.xsd">
+    <None Include="..\..\src\StdUnit.Tags.Hjzk\Schemas\hjzk.xsd" Link="Schemas\Drivers\hjzk.xsd">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="..\StdUnit.Tags.ComScanner\Schemas\com.xsd" Link="Schemas\Drivers\com.xsd">
+    <None Include="..\..\src\StdUnit.Tags.ComScanner\Schemas\com.xsd" Link="Schemas\Drivers\com.xsd">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="..\StdUnit.Tags.OpcUaClient\Schemas\opcua-client.xsd" Link="Schemas\Drivers\opcua-client.xsd">
+    <None Include="..\..\src\StdUnit.Tags.OpcUaClient\Schemas\opcua-client.xsd" Link="Schemas\Drivers\opcua-client.xsd">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="..\StdUnit.Tags.SimpleFiles\Schemas\simplefiles.xsd" Link="Schemas\Drivers\simplefiles.xsd">
+    <None Include="..\..\src\StdUnit.Tags.SimpleFiles\Schemas\simplefiles.xsd" Link="Schemas\Drivers\simplefiles.xsd">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="..\..\samples\StdUnit.Tags.Web\index.xml" Link="Samples\Web\index.xml">
@@ -118,6 +104,21 @@
     <None Include="..\..\samples\NixMonitor\Tags\index.xml" Link="Samples\NixMonitor\index.xml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ComScanner\StdUnit.Tags.ComScanner.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.Core\StdUnit.Tags.Core.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.Hjzk\StdUnit.Tags.Hjzk.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.McpServer\StdUnit.Tags.McpServer.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ModbusTcp\StdUnit.Tags.ModbusTcp.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.OpcUaClient\StdUnit.Tags.OpcUaClient.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.R3Extensions\StdUnit.Tags.R3Extensions.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.RxExtensions\StdUnit.Tags.RxExtensions.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.S7\StdUnit.Tags.S7.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.SchemaGenerator\StdUnit.Tags.SchemaGenerator.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.SimpleFiles\StdUnit.Tags.SimpleFiles.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ZLan\StdUnit.Tags.ZLan.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

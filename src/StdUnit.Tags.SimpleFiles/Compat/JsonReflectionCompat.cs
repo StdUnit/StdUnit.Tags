@@ -8,7 +8,7 @@ namespace StdUnit.Tags.SimpleFiles.Compat;
 /// （调用点：<see cref="SimpleFilesDirectTagBuilder"/> 解析元数据、<see cref="JsonDirectTag{T}"/> 直接构造）。<br/>
 /// <br/>
 /// 集中到一处的理由：缺少源生成元数据时的失败语义与提示文案只有一份；宿主能力的读取只有一处。
-/// 真实 AOT 宿主下的行为由 <c>samples/AotSmokeTest.SimpleFiles</c> 端到端验证。
+/// 真实 AOT 宿主下的行为由 <c>tests/AotSmokeTest.SimpleFiles</c> 端到端验证。
 /// </summary>
 internal static class JsonReflectionCompat
 {
