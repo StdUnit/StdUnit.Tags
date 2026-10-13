@@ -1,24 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <Description>串口通信支持</Description>
-    <TargetFrameworks>net8.0;net472</TargetFrameworks>
-    <NoWarn>$(NoWarn);CS1998</NoWarn>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
-  </ItemGroup>
+	<PropertyGroup>
+		<Description>串口通信支持</Description>
+		<TargetFrameworks>net8.0;net472</TargetFrameworks>
+		<NoWarn>$(NoWarn);CS1998</NoWarn>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
+	</ItemGroup>
 
-  <!-- 驱动 schema：源生成器编译为常量（TagsGeneratedSchemas），由 ComScannerSchemaProvider 注册进运行期校验；
+	<!-- 驱动 schema：源生成器编译为常量（TagsGeneratedSchemas），由 ComScannerSchemaProvider 注册进运行期校验；
        NuGet 包经 buildTransitive targets 注入消费项目 Schemas/Drivers/com.xsd。 -->
-  <ItemGroup>
-    <AdditionalFiles Include="Schemas\com.xsd" />
-    <ProjectReference Include="..\StdUnit.Tags.SchemaGenerator\StdUnit.Tags.SchemaGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-  </ItemGroup>
+	<ItemGroup>
+		<AdditionalFiles Include="Schemas\com.xsd" />
+		<ProjectReference Include="..\StdUnit.Tags.SchemaGenerator\StdUnit.Tags.SchemaGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <None Include="Schemas\StdUnit.Tags.ComScanner.targets" Pack="true" PackagePath="buildTransitive/StdUnit.Tags.ComScanner.targets" />
-    <None Include="Schemas\com.xsd" Pack="true" PackagePath="buildTransitive/Schemas/com.xsd" />
-  </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+	<ItemGroup>
+		<None Include="Schemas\StdUnit.Tags.ComScanner.targets" Pack="true" PackagePath="buildTransitive/StdUnit.Tags.ComScanner.targets" />
+		<None Include="Schemas\com.xsd" Pack="true" PackagePath="buildTransitive/Schemas/com.xsd" />
+	</ItemGroup>
+	<Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

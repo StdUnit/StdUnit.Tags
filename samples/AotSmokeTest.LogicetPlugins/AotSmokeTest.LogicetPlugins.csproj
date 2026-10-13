@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- 示例代码不追求文档覆盖率 -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- 本示例的**唯一目的**：让"Logicet 插件的 AOT 支持"可被 CI 验证 —— 真的以 NativeAOT 发布成原生可执行文件并运行。
+         见 .github/workflows/dotnet.yml 的 aot-smoke job。 -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ModbusTcp 只是用来提供一份"能加载成功"的项目 XML（通道 + 入口测点组）。 -->
+    <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ModbusTcp\StdUnit.Tags.ModbusTcp.csproj" />
+  </ItemGroup>
+</Project>

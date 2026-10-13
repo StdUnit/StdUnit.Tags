@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json.Serialization;
 
 namespace StdUnit.Tags.SimpleFiles;
 
@@ -7,6 +8,29 @@ namespace StdUnit.Tags.SimpleFiles;
 /// </summary>
 public static class TagsProject_Extensions
 {
+    /// <summary>
+    /// 登记一个 <see cref="JsonSerializerContext"/>，作为 SimpleFiles 的 JSON 测点（<c>type="JSON"</c>）的序列化元数据来源。<br/>
+    /// <br/>
+    /// <b>NativeAOT / 裁剪宿主必须登记</b>：这些宿主下 <c>System.Text.Json</c> 默认关闭反射序列化，
+    /// 未登记时会在构建 JSON 测点时以 <see cref="TagsProjectConfigurationException"/> 快速失败；
+    /// 普通 JIT 宿主可以不登记（走反射）。
+    /// </summary>
+    /// <param name="builder"></param>
+    /// <param name="context">源生成的上下文，如 <c>MyJsonContext.Default</c>；可多次调用登记多个</param>
+    /// <returns></returns>
+    public static TagsProjectServiceBuilder AddJsonSerializerContext(
+        this TagsProjectServiceBuilder builder,
+        JsonSerializerContext context)
+    {
+        if (context is null)
+        {
+            throw new ArgumentNullException(nameof(context));
+        }
+
+        builder.Services.AddSingleton(context);
+        return builder;
+    }
+
     /// <summary>
     /// 注册SimpleFiles支持。是 <see cref="AddSimpleFilesChannel"/> 与 <see cref="AddSimpleFilesDirectTagBuilder"/> 的组合
     /// </summary>
@@ -58,7 +82,15 @@ public static class TagsProject_Extensions
         // register SimpleFiles tags loader
         builder.ConfigTagsLoader((sp, composite) =>
         {
-            composite.AddDirectTagBuilder<SimpleFilesDirectTagBuilder>(SimpleFilesNames.DriverName, configure, predicate);
+            composite.AddDirectTagBuilder<SimpleFilesDirectTagBuilder>(
+                SimpleFilesNames.DriverName,
+                configure: tagBuilder =>
+                {
+                    var contexts = sp.GetServices<JsonSerializerContext>()?.ToList();
+                    tagBuilder.UseJsonSerializerContexts(contexts);
+                    configure?.Invoke(tagBuilder);
+                },
+                predicate: predicate);
         });
 
         return builder;

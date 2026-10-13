@@ -1,4 +1,6 @@
-﻿namespace StdUnit.Tags.Logicets;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace StdUnit.Tags.Logicets;
 
 /// <summary>
 /// 测点逻辑的工厂接口
@@ -13,5 +15,12 @@ public interface ILogicetCreator
     /// <param name="channels">测点通道列表</param>
     /// <param name="tags">测点组</param>
     /// <returns>创建的 ILogicet 实例，如果创建失败则返回 null</returns>
-    ILogicet? CreateLogicet(IServiceProvider sp, Type type, IReadOnlyList<ITagChannel> channels, ITagGrp tags);
+    ILogicet? CreateLogicet(
+        IServiceProvider sp,
+#if NET5_0_OR_GREATER
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+#endif
+        Type type,
+        IReadOnlyList<ITagChannel> channels,
+        ITagGrp tags);
 }

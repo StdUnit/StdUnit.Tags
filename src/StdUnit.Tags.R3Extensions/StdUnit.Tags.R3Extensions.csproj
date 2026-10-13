@@ -3,6 +3,7 @@
   <PropertyGroup>
     <Description>R3 扩展</Description>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
+	<IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\StdUnit.Tags.Core\StdUnit.Tags.Core.csproj" />

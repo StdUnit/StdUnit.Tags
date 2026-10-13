@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <Description>MCP Server 扩展，把测点项目暴露给 AI 助手（ModelContextProtocol）</Description>
-    <TargetFrameworks>net8.0;net472</TargetFrameworks>
-    <OutputType>Library</OutputType>
-  </PropertyGroup>
-  <ItemGroup>
-    <None Remove="guide.md" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="guide.md" />
-  </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+	<PropertyGroup>
+		<Description>MCP Server 扩展，把测点项目暴露给 AI 助手（ModelContextProtocol）</Description>
+		<TargetFrameworks>net8.0;net472</TargetFrameworks>
+		<OutputType>Library</OutputType>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+	<ItemGroup>
+		<None Remove="guide.md" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<EmbeddedResource Include="guide.md" />
+	</ItemGroup>
+	<Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

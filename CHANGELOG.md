@@ -4,10 +4,12 @@
 
 ## 2.0.0
 
-> `2026-10-10`发布`2.0.0-alpha`。本节的改动自 `2.0.0-alpha` 起可用。
+> `2026-10-10`发布`2.0.0-alpha`。使能语义相关改动自 `2.0.0-alpha` 起可用；AOT 支持相关改动自 `2.0.0-beta` 起可用。
 
-本次更新的主题只有一个：把**使能**（`isEnabled`）的语义定死为"**只作用于自动轮询，且自顶向下短路整棵子树**"，
-并为此引入遍历模式 `TraversalMode`（新增公开枚举，取值 `IgnoreEnabled` / `RespectEnabled`）。下面的条目基本都是它的连带影响。
+本次更新有两个主题：
+
+1. **使能**（`isEnabled`）的语义定死为"**只作用于自动轮询，且自顶向下短路整棵子树**"，并为此引入遍历模式 `TraversalMode`（新增公开枚举，取值 `IgnoreEnabled` / `RespectEnabled`）。下面的条目基本都是它的连带影响。
+2. **AOT（NativeAOT / 裁剪）支持**。
 
 ### 破坏性变更
 
@@ -19,7 +21,7 @@
 
 ### 修复和改进
 
-`IsEnabled`语义写进了公开契约和文档：
+#### `IsEnabled`语义：
 
 - **"`isEnabled` 不影响手动读写"这件事被写进了契约**：此前它只是"没人去检查"，现在由 `TraversalMode.IgnoreEnabled` 明确表达，
   并成为单参扩展方法（`ITagGrpExtensions.ReadAsync(ct)`、`TagUnionExtensions`）的固定语义——行为不变，含义变清楚。
@@ -30,6 +32,23 @@
   想单独停采某个直连测点，套一层 `isEnabled="false"` 的 `TagGrp` 即可。
 - 文档：`ITagGrp.IsEnabled` / `ITagCbnt.IsEnabled` 的注释写明"自动轮询 + 短路语义"；`ReadAsync` / `WriteAsync` 的注释写明
   `mode` 的两种取值与"实现方必须透传"。
+
+#### `AOT` 支持
+
+- 核心包与各驱动包现在都做了AOT适配，并标注了 `IsAotCompatible`，可以被 `PublishAot=true` 的宿主直接引用；
+- 扩展包`StdUnit.Tags.RxExtensions`和`StdUnit.Tags.BlazorLib.Core`由于底层 对 AOT 支持不好，暂时不提供AOT支持;
+
+新增公开成员：
+
+- `TagsProjectNotSupportedException`：表示"配置本身合法，但当前宿主运行时没有该配置所需的能力"。与 `TagsProjectConfigurationException` 的分界是**换一个宿主是否能跑**。
+- `AddJsonSerializerContext(JsonSerializerContext)`：SimpleFiles 的 JSON 测点（`type="JSON"`）在 AOT / 裁剪宿主下必须用它登记源生成元数据。
+
+两项由于`AOT`引入，带来了两条**行为变更**（只影响 AOT / 裁剪宿主，普通 JIT 宿主完全不变）：
+
+- 由于 NativeAOT 的运行时没有动态加载程序集的能力（官方限制），所以现在一旦检测到“AOT+动态插件”这种组合，直接在加载期抛异常。异常消息里给出建议措施。
+- 由于 JSON 的AOT需要提前注册类型信息，所以现在 SimpleFiles 一旦检测到“AOT+未登记SimpleFiles JSON测点元数据”这种组合时，直接在加载期抛异常。
+
+细节与排错见文档站 [AOT 支持](https://tags.doc.stdunit.com/部署专题/AOT支持.html)。
 
 ## 1.1.0
 

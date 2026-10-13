@@ -1,26 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <Description>西门子 S7 通信支持</Description>
-    <TargetFrameworks>net8.0;net472</TargetFrameworks>
-    <OutputType>Library</OutputType>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
-  </ItemGroup>
+	<PropertyGroup>
+		<Description>西门子 S7 通信支持</Description>
+		<TargetFrameworks>net8.0;net472</TargetFrameworks>
+		<OutputType>Library</OutputType>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
+	</ItemGroup>
 
-  <!-- 驱动 schema（Schemas/s7.xsd）：源生成器编译为常量（TagsGeneratedSchemas），
+	<!-- 驱动 schema（Schemas/s7.xsd）：源生成器编译为常量（TagsGeneratedSchemas），
        由 S7SchemaProvider 注册进运行期校验；NuGet 包经 buildTransitive targets
        注入消费项目 Schemas/Drivers/s7.xsd（编辑器智能提示）。 -->
-  <ItemGroup>
-    <AdditionalFiles Include="Schemas\s7.xsd" />
-    <ProjectReference Include="..\StdUnit.Tags.SchemaGenerator\StdUnit.Tags.SchemaGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-  </ItemGroup>
+	<ItemGroup>
+		<AdditionalFiles Include="Schemas\s7.xsd" />
+		<ProjectReference Include="..\StdUnit.Tags.SchemaGenerator\StdUnit.Tags.SchemaGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <None Include="Schemas\StdUnit.Tags.S7.targets" Pack="true" PackagePath="buildTransitive/StdUnit.Tags.S7.targets" />
-    <None Include="Schemas\s7.xsd" Pack="true" PackagePath="buildTransitive/Schemas/s7.xsd" />
-  </ItemGroup>
+	<ItemGroup>
+		<None Include="Schemas\StdUnit.Tags.S7.targets" Pack="true" PackagePath="buildTransitive/StdUnit.Tags.S7.targets" />
+		<None Include="Schemas\s7.xsd" Pack="true" PackagePath="buildTransitive/Schemas/s7.xsd" />
+	</ItemGroup>
 
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+	<Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

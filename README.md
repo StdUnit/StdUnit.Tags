@@ -155,7 +155,7 @@ AI 可以直接参考 [StdUnit.Tags —— 给 AI 的参考手册](https://tags.
 | `StdUnit.Tags.BlazorLib` / `BlazorLib.Core` | 仅 `net8.0` |
 | `StdUnit.Tags.SchemaGenerator` | `netstandard2.0`（源生成器） |
 
-两个框架的能力差异（目前只有一处，即插件化的隔离与卸载）：见 [netfx 的插件化限制](#netfx-的插件化限制)。
+两个框架的能力差异在 `Logicet` 插件上（共两处）：见 [netfx 的插件化限制](#netfx-的插件化限制) 与 [AOT 的插件化限制](#aot-的插件化限制)。
 
 
 ## LICENSING
@@ -183,3 +183,15 @@ AI 可以直接参考 [StdUnit.Tags —— 给 AI 的参考手册](https://tags.
 加载时会输出 `WARNING` 日志提示上述限制。若需要完整能力（隔离 + 卸载 + 热更新），请使用 `net8.0`。
 
 > 上述限制不影响在宿主内注册逻辑组件（`TryAddLogicet<TLogicet>`），该方式在两个框架下都可用。
+
+### AOT 的插件化限制
+
+由于 **.NET NativeAOT 的运行时完全不提供「动态加载程序集」的能力**，所以在`XML`中，不支持通过配置`<Logicet/>`元素的方式为 AOT 宿主引入逻辑插件——**在 AOT 下只能使用代码注册的方式添加逻辑组件**：
+
+| 宿主形态 | XML动态插件(`<Logicet/>`)  | 编程注册(`TryAddLogicet<TLogicet>`) |
+|---|---|---|
+| `net8.0` + CoreCLR（JIT / 仅裁剪 / 单文件） | ✅ 隔离 + 卸载 | ✅ |
+| `net8.0` + **NativeAOT** | ❌ 不可用 | ✅ |
+| `net472` | ✅ 降级可用（见上一节） | ✅ |
+
+> 配了 `<Logicet/>` 的 AOT 宿主会在**加载期**抛 `TagsProjectNotSupportedException`。

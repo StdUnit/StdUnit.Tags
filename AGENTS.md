@@ -22,13 +22,15 @@ dotnet build StdUnit.Tags.sln
 dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
 ```
 
-CI（`.github/workflows/dotnet.yml`）有**两个 job**：
+CI（`.github/workflows/dotnet.yml`）有**三个 job**：
 - **`build`（ubuntu-latest，权威）**：整解 `dotnet build StdUnit.Tags.sln -c Release`（含 net472 的**编译**校验——引用程序集由 SDK 隐式引入的 `Microsoft.NETFramework.ReferenceAssemblies` 提供）+ `dotnet test -f net8.0`（带覆盖率上报 codecov）。
-- **`net472-on-mono`（ubuntu-22.04）**：用镜像**预装的 Mono** 跑 `dotnet test -f net472`，让 net472 的**运行**测试也自动化、又不占 Windows runner 的排队时间。**mono ≠ .NET Framework**，它绿只说明"大概率没退化"，（权威结果仍归发版工作流 `release-nuget.yml` / `release-baget.yml`，windows-latest 全 TFM）+ 本机 Windows。当前是**硬性把关**（未设 `continue-on-error`）；万一出现 mono 专有的伪失败，可在 job 上加 `continue-on-error: true` 降级为补充信号。mono job 红时先看是不是"mono 与真框架的差异"，别急着改产品代码。
-- 为何钉 `ubuntu-22.04`：只有该镜像预装 Mono（`ubuntu-latest`/24.04 没有）；镜像退役后改成 `apt-get install -y mono-complete` 即可。
-- 参考实测（2026-10，WSL/Ubuntu 22.04 + mono 6.8）：net472 **1028 全绿**，与 Windows 真 .NET Framework 的 1028 逐一致。
+- **`net472-on-mono`（ubuntu-latest）**：`apt-get install -y mono-complete` 自己装 Mono，跑 `dotnet test -f net472`，让 net472 的**运行**测试也自动化、又不占 Windows runner 的排队时间。**mono ≠ .NET Framework**，它绿只说明"大概率没退化"，（权威结果仍归发版工作流 `release-nuget.yml` / `release-baget.yml`，windows-latest 全 TFM）+ 本机 Windows。当前是**硬性把关**（未设 `continue-on-error`）；万一出现 mono 专有的伪失败，可在 job 上加 `continue-on-error: true` 降级为补充信号。mono job 红时先看是不是"mono 与真框架的差异"，别急着改产品代码。
+- **`aot-smoke`（ubuntu-latest）**：两个示例各自 `dotnet publish ... -r linux-x64`（需 `clang` + `zlib1g-dev`）后**运行原生产物**：`AotSmokeTest.LogicetPlugins` 验证"无 `<Logicet>` 的正常加载 + `TryAddLogicet<T>` + AOT 下配了 `<Logicet>` 必须快速失败"，`AotSmokeTest.SimpleFiles` 验证"基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败"。改了 AOT 相关代码（`IsAotCompatible`、`[DynamicallyAccessedMembers]`、`Compat/*`、插件加载路径）时以它为准；publish 输出里的 `IL2104`/`IL3053` 来自第三方 `McMaster.NETCore.Plugins`，属已知噪声。
+- 两条 Linux job 统一遵循 **"`ubuntu-latest` + 依赖自装"**，不钉镜像版本：本仓库自己装依赖（mono / clang+zlib），就没有理由把 job 的寿命绑在镜像标签上——`ubuntu-22.04` 已被官方公告 2026-09-17 起弃用、2027-04-17 退役（`actions/runner-images#14254`，期间还有 brownout 会直接判红），`ubuntu-latest` 也已宣布 2026-11 起为 26.04。
+- 参考实测（2026-10，本机 WSL）：mono 上的结果与 Windows 真 .NET Framework 一致。
 - 改了 `Compat/*` 或 `#if NETFRAMEWORK` 分支时，仍建议在本机 Windows 上跑一次 `-f net472`（或在 PR 里看 `net472-on-mono`）。
 `samples/WpfDemo`（net8.0-windows + WPF）**已从解决方案移除**，目录保留、需要时在本机 Windows 上单独 `dotnet build samples/WpfDemo/WpfDemo.csproj`（只要它还留在解决方案里，Linux 上的整解构建就会失败）。
+`samples/AotSmokeTest.LogicetPlugins` 与 `samples/AotSmokeTest.SimpleFiles`（都是 net8.0 控制台 + `PublishAot=true`）**在解决方案内**（整解构建顺带编译它们），但**不要**改成 net8.0-windows 或其他不可跨平台的形态——CI 的 `aot-smoke` job 要在 Linux 上 publish 并运行它们。
 
 - SDK 固定为 **8.0.102**（`global.json`，`rollForward: minor`）。
 - 依赖用 **Paket** 管理。**不要 `dotnet add package`**：请改 `paket.dependencies` 后运行 `dotnet paket install`（会更新 `paket.lock`）。
@@ -45,9 +47,25 @@ CI（`.github/workflows/dotnet.yml`）有**两个 job**：
 
 新增代码时的约定：
 
-- **有标准库就用标准库。** 跨框架差异用调用点的 `#if NETFRAMEWORK` 或项目内 `Compat/` 目录的单点垫片（如 `StdUnit.Tags.Core/Compat/ReferenceEqualityComparer.cs`、各驱动的 `Compat/*.cs`）。
+- **有标准库就用标准库。** 跨框架差异用调用点的 `#if NETFRAMEWORK` 或项目内 `Compat/` 目录的单点垫片（如 `StdUnit.Tags.Core/Compat/ReferenceEqualityComparer.cs`、`StdUnit.Tags/Compat/DynamicLoadingCompat.cs`、各驱动的 `Compat/*.cs`）。
 - **不要把 `#if` 铺到调用点满屏幕，也不要用 `#if` 去条件修饰公共 API**（那会给库使用者制造两套签名）。
-- `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 由 `src/Directory.Build.props` 统一提供，新建项目不用再写这几项（net472 默认 C# 7.3，少写一次就少一次 CS8630）；`TargetFrameworks` 仍写在各 csproj（存在 net8-only 项目）。不生成 XML 文档的项目在本项目显式写 `<GenerateDocumentationFile>false</GenerateDocumentationFile>`（现有：BlazorLib、两个测试项目；BlazorLib 是"尚未补注释"的历史包袱）。
+- `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 由 `src/Directory.Build.props` 统一提供，新建项目不用再写这几项（net472 默认 C# 7.3，少写一次就少一次 CS8630）；`TargetFrameworks` 仍写在各 csproj（存在 net8-only 项目）。不生成 XML 文档的项目在本项目显式写 `<GenerateDocumentationFile>false</GenerateDocumentationFile>`（现有：BlazorLib、两个测试项目、`samples/AotSmokeTest`；BlazorLib 是"尚未补注释"的历史包袱）。
+- **AOT 相关**（逐包状态见 `docs/设计决策与边界/4. 目标框架差异.md` 的表，新增包记得补一行并放进对应分组）：
+  - `<IsAotCompatible>true</IsAotCompatible>` **无条件写**（net472 下 SDK 会自行关掉分析器，**不要**加 TFM 条件）。
+    新包默认加上，除非有明确阻塞。目前已开的 **10 个**：核心 `Core` / `StdUnit.Tags`，扩展 `R3Extensions` / `McpServer`，
+    驱动 `S7` / `ModbusTcp` / `Hjzk` / `ZLan` / `OpcUaClient` / `ComScanner`；
+    `RxExtensions`（`System.Reactive` 对 AOT 支持不好）与 `BlazorLib.Core`（Blazor Server 不支持 AOT）是 **NotPlanned**；
+    JSON 测点（`type="JSON"`）的序列化元数据在 AOT/裁剪宿主下必须由使用方登记一次
+    （`AddJsonSerializerContext(MyJsonContext.Default)`，源生成），反射路径只在普通 JIT 宿主下兜底。
+  - `DynamicallyAccessedMembers` / `UnconditionalSuppressMessage` 等**只在 net5.0+ 存在**，标注用 `#if NET5_0_OR_GREATER`
+    （它们是"编译期分析器的输入"，net472 段点掉不构成两套签名）；**不要**给它们建 `Compat/` polyfill：
+    public 会与 BCL 同全名类型冲突（消费方 `CS0433`），internal 则没有分析器会读，纯属命名空间污染。
+  - 抑制告警**必须用 `[UnconditionalSuppressMessage]`、不能用 `#pragma warning disable`**——`#pragma` 只作用于编译期分析器，
+    `dotnet publish` 的 ILLink 会在元数据上重新分析并照旧报出 `IL2026`/`IL2067`（实测）。
+  - ⚠ 位置敏感的坑：`PublishAot=true` 会被 SDK 写进 `runtimeconfig.json`，使 `RuntimeFeature.IsDynamicCodeSupported` 在
+    **IL+JIT** 下也是 `false`；宿主据此判定"不支持动态加载"，因此 `<Logicet>` 在 AOT（以及 `PublishAot=true` 的 IL 构建）下
+    **必须快速失败**（`TagsProjectNotSupportedException`），**不要**让它被 `LogicetLoader` 的通用 `catch` 吞掉——配了却静默不跑业务逻辑是硬红线。
+    `samples/AotSmokeTest.LogicetPlugins` / `samples/AotSmokeTest.SimpleFiles` 是这两条链路的端到端验证（CI 的 `aot-smoke` job）。
 - net472 缺 init-only setter 时，在 `paket.references` 里加 `IsExternalInit`（已有先例：Core / StdUnit.Tags / ComScanner / OpcUaClient / SimpleFiles）。
 - **net472 的引用程序集没有可空标注**，`string.IsNullOrEmpty` 之类的 BCL 后置条件看不到，会出现 net472 专属的 CS8601/CS8603/CS8604 假阳性。改用语言级判空（`x is null || x.Length == 0`），**不要用 `NoWarn` 压掉**。
 - 不要用 `| Select-Object -First n` 过滤 `dotnet paket`/`dotnet build` 的长输出：会在第 n 行处终止上游进程。先 `Out-File` 再 grep。
@@ -104,7 +122,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 - 驱动包内的 DI 扩展类约定**同名** `TagsProject_Extensions`，各自位于自己的命名空间（如 `StdUnit.Tags.S7`）。
 - 驱动名常量集中在 `XxxNames.DriverName`（如 `S7Names.DriverName = "S7"`、`ComDriverNames.DriverName = "COM"`）；XML 中的 `driver="..."` 必须与之完全一致。
 - 每个驱动的支持注册收口为 `.AddXxxSupport()`，实现为细粒度注册（`AddXxxChannel` / `AddXxxTagCbntBuilder` / `AddXxxDirectTagBuilder`）的组合。新增驱动请沿用这个形状。可选的"策略/判定"类扩展点按这个形状走：**注册扩展方法的可选参数 → 注册时闭包构造工厂 → 通道 ctor 的可选参数（默认用内置实现）**，例：OpcUa 的 `checkIsFailed`（`AddOpcUaClientSupport(checkIsFailed:)` → `OpcUaClientTagChannelFactory` → `OpcUaClientTagChannel` ctor，默认 `OpcUaValueQuality.IsFailed`）；不要把它做成需要用户自己组装的服务类型。
-- **异常分型**（`src/StdUnit.Tags.Core/Exceptions/`）：加载期（XML 解析 / 地址解析 / 描述符解析 / 构建期配置检查 / 校验器）一律抛 `TagsProjectLoadException` 的具体子类——`TagsProjectXmlException`（属性值非法）、`TagsProjectAddressException`（地址无法解析）、`TagsProjectConfigurationException`（配置语义不自洽，含重名测点）、`TagsProjectValidationException`（校验器聚合，`Errors` 明细）。**不要**再在这些路径上抛裸 `Exception`/`ArgumentException`/`InvalidOperationException`/`NotImplementedException`。所有加载期错误消息都要带定位上下文（`XElement.GetLocationPath()` / `ITagGrp.GetLocationPath()`，段间用 `/` 连接，形如 `TagGrp(a)/TagCbnt(b)/Tag(c)`、`Channel(S7-3)`，与 `ITagGrp.Descendant("a/b/c")` 语法一致），并尽量把 `Location` 属性一起填上；具体选型见 `docs/异常处理.md` 的决策树。运行期（读写/连接/清理）**不建新类型**，但**不许抛裸 `Exception`**：一律用语义贴近的 BCL 类型（入参问题 `ArgumentNullException`/`ArgumentOutOfRangeException`/`ArgumentException`，时序/状态问题 `InvalidOperationException`，类型不符 `InvalidCastException`，按名查不到 `KeyNotFoundException`，能力不支持 `NotSupportedException`）。运行期故障消息必须能定位现场（`RunnerCrashed` 只带入口的**主通道**）：**通道名 + 操作 + 地址/端点 + 底层错误文本与错误码明细**；不要为加前缀而包装第三方异常（`SocketException`/`OpcException`/NModbus 自带端点信息，包装会改变调用方可 catch 的类型）；日志用 `LogError(ex, "...")` 而非 `LogError("...{ex}", ex.Message)`。**设备/协议报的读取失败必须抛出去**（如 OPC UA 的节点 `Bad`、PLC 错误码）——只有抛才能走"崩溃 → 断开 → 重连"恢复路径，"跳过 + 记日志 + 保留上次值"会掐断重连路径并对下游完全不可见；**不要引入质量/可信度概念**，要表达可信度就由业务另加一个测点（详见 `docs/异常处理.md`）。`NotImplementedException` 的两处合法用途（扩展点"默认实现没覆盖你的组合"、`switch` 兜底分支）保留不动，详见 `docs/异常处理.md`。
+- **异常分型**（`src/StdUnit.Tags.Core/Exceptions/`）：加载期（XML 解析 / 地址解析 / 描述符解析 / 构建期配置检查 / 校验器）一律抛 `TagsProjectLoadException` 的具体子类——`TagsProjectXmlException`（属性值非法）、`TagsProjectAddressException`（地址无法解析）、`TagsProjectConfigurationException`（配置语义不自洽，含重名测点）、`TagsProjectNotSupportedException`（配置合法但**当前宿主运行时**缺能力：如 AOT 宿主遇到 `<Logicet>` 动态插件、AOT/裁剪宿主用 SimpleFiles 的 JSON 测点却没登记源生成元数据；判据是"换宿主是否能跑"）、`TagsProjectValidationException`（校验器聚合，`Errors` 明细）。**不要**再在这些路径上抛裸 `Exception`/`ArgumentException`/`InvalidOperationException`/`NotImplementedException`。所有加载期错误消息都要带定位上下文（`XElement.GetLocationPath()` / `ITagGrp.GetLocationPath()`，段间用 `/` 连接，形如 `TagGrp(a)/TagCbnt(b)/Tag(c)`、`Channel(S7-3)`，与 `ITagGrp.Descendant("a/b/c")` 语法一致），并尽量把 `Location` 属性一起填上；具体选型见 `docs/异常处理.md` 的决策树。运行期（读写/连接/清理）**不建新类型**，但**不许抛裸 `Exception`**：一律用语义贴近的 BCL 类型（入参问题 `ArgumentNullException`/`ArgumentOutOfRangeException`/`ArgumentException`，时序/状态问题 `InvalidOperationException`，类型不符 `InvalidCastException`，按名查不到 `KeyNotFoundException`，能力不支持 `NotSupportedException`）。运行期故障消息必须能定位现场（`RunnerCrashed` 只带入口的**主通道**）：**通道名 + 操作 + 地址/端点 + 底层错误文本与错误码明细**；不要为加前缀而包装第三方异常（`SocketException`/`OpcException`/NModbus 自带端点信息，包装会改变调用方可 catch 的类型）；日志用 `LogError(ex, "...")` 而非 `LogError("...{ex}", ex.Message)`。**设备/协议报的读取失败必须抛出去**（如 OPC UA 的节点 `Bad`、PLC 错误码）——只有抛才能走"崩溃 → 断开 → 重连"恢复路径，"跳过 + 记日志 + 保留上次值"会掐断重连路径并对下游完全不可见；**不要引入质量/可信度概念**，要表达可信度就由业务另加一个测点（详见 `docs/异常处理.md`）。`NotImplementedException` 的两处合法用途（扩展点"默认实现没覆盖你的组合"、`switch` 兜底分支）保留不动，详见 `docs/异常处理.md`。
 - 公开 API 变更时，同步检查 `src/StdUnit.Tags.Core/Schemas/tagsproject.xsd`（及驱动 XSD）与 `README.md` 的文件夹/API 说明。
 
 ## 文档

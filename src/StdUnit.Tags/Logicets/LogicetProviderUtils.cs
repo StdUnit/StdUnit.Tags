@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using System.Diagnostics.CodeAnalysis;
 
 namespace StdUnit.Tags.Logicets;
 
@@ -9,7 +10,15 @@ internal static class LogicetProviderUtils
     /// 创建Logicet实例。
     /// 传入的 type 参数必须是一个实现了 ILogicet 接口的非抽象类。
     /// </summary>
-    internal static (ILogicet?, Exception?) CreateLogicet(IServiceProvider sp, Type type, IReadOnlyList<ITagChannel> channels, ITagGrp tags)
+    internal static (ILogicet?, Exception?) CreateLogicet(
+        IServiceProvider sp,
+#if NET5_0_OR_GREATER
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+#endif
+        Type type,
+        IReadOnlyList<ITagChannel> channels,
+        ITagGrp tags
+    )
     {
         if (!typeof(ILogicet).IsAssignableFrom(type))
         {

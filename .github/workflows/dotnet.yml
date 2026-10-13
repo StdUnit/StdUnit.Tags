@@ -61,13 +61,11 @@ jobs:
   net472-on-mono:
 
     # 目的：让 net472 的**运行**测试也自动化，且不占 Windows runner 的排队时间。
-    # 为什么钉 ubuntu-22.04：该镜像**预装 Mono 6.12**（当前的 ubuntu-latest/24.04 没有，得自行 apt 安装数百 MB）。
-    # 代价是钉在旧镜像上——22.04 退役后改用 apt-get install -y mono-complete 即可，其余不变。
+    #
     # 定位：**补充信号**。mono ≠ .NET Framework（那才是发布物真正跑的运行时），mono 绿只能说明"大概率没退化"；
     # 权威结果仍是 release.yml（windows-latest 全 TFM）与开发机 Windows 上的运行。
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     # 所以设了 continue-on-error：mono 的伪失败不应挡住 PR。想让它硬性把关，删掉下面这一行。
-    # 实测依据（本仓库，2026-10）：WSL/Ubuntu 22.04 + mono 6.8 → 1028 全绿，与 Windows 真 .NET Framework 的 1028 逐一致。
     continue-on-error: false
 
     steps:
@@ -78,15 +76,59 @@ jobs:
       with:
         dotnet-version: 8.0.102
 
+    # 显式安装 Mono：不再依赖镜像预装（ubuntu-latest/24.04 不带 mono；22.04 才有，而那已经是退役在即的标签）。
+    - name: Install mono
+      run: sudo apt-get update && sudo apt-get install -y mono-complete
+
+    # 显式确认 mono 真的可用：这一步的失败比 VSTest 的 "Could not find 'mono' host" 好读得多
+    - name: Check mono
+      run: mono --version
+
     - name: Restore Tool dependencies
       run: dotnet tool restore
 
     - name: Restore dependencies
       run: dotnet paket restore
 
-    # 显式确认镜像里的 mono 还在（将来镜像换代时，这一步的失败比 VSTest 的 "Could not find 'mono' host" 好读得多）
-    - name: Check mono
-      run: mono --version
-
     - name: Test (net472 on mono)
       run: dotnet test src/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj --nologo
+
+  aot-smoke:
+
+    # 目的：以 NativeAOT 发布成原生可执行文件，并运行。
+    # 两个测试：
+    #   * `AotSmokeTest.LogicetPlugins`：无 <Logicet> 的正常加载 + TryAddLogicet<T> + AOT 下配了 <Logicet> 必须快速失败；
+    #   * `AotSmokeTest.SimpleFiles`：基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败。
+    # 为什么在 Linux 跑：NativeAOT 在 ubuntu runner 上只需 clang + zlib1g-dev，比占 Windows runner 便宜，更重要的是不用排队；
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.102
+
+    # NativeAOT 在 Linux 上需要 clang（负责最终链接）与 zlib1g-dev（zlib 头文件）。
+    - name: Install Native AOT prerequisites
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+
+    - name: Restore Tool dependencies
+      run: dotnet tool restore
+
+    - name: Restore dependencies
+      run: dotnet paket restore
+
+    # 已知的第三方告警：McMaster.NETCore.Plugins（net8.0 的插件加载实现）自带 trim/AOT 分析告警 IL2104 / IL3053）。
+    # 本库自己的代码在 AOT 分析下是 0 告警；
+    # McMaster.NetCore.Plugins 的告警只在 publish 输出里出现，不影响本 job 的成败，也不代表示例的断言失败了 —— AOT 下根本走不到动态加载那条路。
+    - name: Smoke test (LogicetPlugins, NativeAOT)
+      run: |
+        dotnet publish samples/AotSmokeTest.LogicetPlugins/AotSmokeTest.LogicetPlugins.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
+        ./aot-smoke-out/AotSmokeTest.LogicetPlugins
+
+    - name: Smoke test (SimpleFiles, NativeAOT)
+      run: |
+        dotnet publish samples/AotSmokeTest.SimpleFiles/AotSmokeTest.SimpleFiles.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
+        ./aot-smoke-out/AotSmokeTest.SimpleFiles

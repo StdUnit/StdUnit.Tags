@@ -4,7 +4,11 @@
     <Description>依赖于 StdUnit.Tags.Core，补充项目、日志、插件等功能</Description>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
+    <!-- 与 Core / R3Extensions 保持一致、不按 TFM 加条件：IsAotCompatible 只对 net8.0 有意义
+         （net472 没有裁剪/AOT 分析器，SDK 会自行把它关掉；实测 net472 下无条件书写也是 0 warning / 0 error）。 -->
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
+
   <PropertyGroup>
     <XmlSerializerGeneration>GenerateSerializationAssembly</XmlSerializerGeneration>
   </PropertyGroup>
