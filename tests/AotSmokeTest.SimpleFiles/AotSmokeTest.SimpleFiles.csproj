@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- 示例代码不追求文档覆盖率 -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- 本示例的**唯一目的**：让"SimpleFiles 的 AOT 支持"可被 CI 验证 —— 真的以 NativeAOT 发布成原生可执行文件并运行。
+         见 .github/workflows/dotnet.yml 的 aot-smoke job。 -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.SimpleFiles\StdUnit.Tags.SimpleFiles.csproj" />
+  </ItemGroup>
+</Project>

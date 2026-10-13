@@ -73,8 +73,9 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 
 ### 文件夹结构
 
-- `src/`: 源码和自动化测试都放在这里，主要包括核心包、驱动包和扩展包
-- `samples/`：放喂狗测试
+- `src/`: 源码，主要包括核心包、驱动包和扩展包
+- `tests/`: 自动化测试项目（`StdUnit.Tags.Tests` / `StdUnit.Tags.Tests.NetCoreOnly`）与 AOT 冒烟程序（`AotSmokeTest.*`）
+- `samples/`：放示例与喂狗程序
 - `.config/`
     - `dotnet-tools.json`: 本项目用到的 dotnet tools 配置
 - `paket.dependencies`: 用 [`paket`](https://github.com/fsprojects/Paket)管理的依赖声明
@@ -102,7 +103,7 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 
 > 备注：源码目录中还有一个 `StdUnit.Tags.BlazorLib`(不是 `StdUnit.Tags.BlazorLib.Core`)，放的是常用硬件设备的编辑器和设计器实现。这些只是我把脑子里的片段随手写下来的实验性代码——因为将来可能做成类库，里面不少东西被标成了`public`——目前它只是实验场，不对外发布。
 
-相关测试统一放在下面两个测试项目中：
+相关测试统一放在 `tests/` 下的两个测试项目中：
 - `StdUnit.Tags.Tests`: 上述子项目的自动化测试（多目标 `net8.0` + `net472`）。
 - `StdUnit.Tags.Tests.NetCoreOnly`: **仅 `net8.0`** 的测试项目，专门存放无法面向 net472 的测试（Blazor / ASP.NET Core 等）；目前所有测试都放在 `StdUnit.Tags.Tests` 里，所以这个项目还是空项，占位预留。
 
@@ -133,7 +134,7 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 
 0. 我们为本类库编写了专门的文档和教程，部署在[https://tags.doc.stdunit.com](https://tags.doc.stdunit.com)。其中由浅入深地讲解了基本概念、常用写法、设计思路和驱动专题，也穿插了不少常见故障与排错手法。
 1. 仓库内 [`docs/`](docs/) 放**框架性**内容：[核心模型](docs/核心模型.md)、[外部意图与死锁](docs/外部意图.md)、[扩展点](docs/扩展点.md)、[错误处理](docs/异常处理.md)、[设计决策与边界](docs/设计决策与边界/)（范围与运行期契约、[CI 取舍](docs/设计决策与边界/1.%20CI.md)、[兼容与命名](docs/设计决策与边界/2.%20兼容与命名.md)、[打包与发布](docs/设计决策与边界/3.%20打包与发布.md)）；详细使用说明见上一点。
-2. 本仓库自带的 [Samples](https://github.com/StdUnit/StdUnit.Tags/tree/dev/samples)：主要用于开发验证+喂狗。（其中 `samples/WpfDemo` 是 WPF 示例，依赖 Windows SDK，所以有意**不纳入到解决方案内**；有需要时，在本地`windows`上用 `dotnet build samples/WpfDemo/WpfDemo.csproj` 单独构建。）
+2. 本仓库自带的 [Samples](https://github.com/StdUnit/StdUnit.Tags/tree/dev/samples)：主要用于开发验证+喂狗。AOT 冒烟程序（`AotSmokeTest.*`）已挪到 [`tests/`](https://github.com/StdUnit/StdUnit.Tags/tree/dev/tests)。（其中 `samples/WpfDemo` 是 WPF 示例，依赖 Windows SDK，所以有意**不纳入到解决方案内**；有需要时，在本地`windows`上用 `dotnet build samples/WpfDemo/WpfDemo.csproj` 单独构建。）
 3. 供新手熟悉功能的 [WPFDemo](https://github.com/StdUnit/StdUnit.Tags.WPFDemo)：按分支演示功能。
 4. 对于已经开放给公众使用的包，每一个公开的接口、类、方法、属性都写了`XML`注释，所以通过`*.nupkg`安装后即有完整的智能提示，也就没必要另外再提供在线版的`API`文档了,有需要的可以自己用 [`docfx`](https://github.com/dotnet/docfx) 生成(唯一的例外是 `StdUnit.Tags.BlazorLib`：它是只是实验性的代码片段，只对团队内部开放，暂时不发布到公开源上)。
 
@@ -155,7 +156,7 @@ AI 可以直接参考 [StdUnit.Tags —— 给 AI 的参考手册](https://tags.
 | `StdUnit.Tags.BlazorLib` / `BlazorLib.Core` | 仅 `net8.0` |
 | `StdUnit.Tags.SchemaGenerator` | `netstandard2.0`（源生成器） |
 
-两个框架的能力差异（目前只有一处，即插件化的隔离与卸载）：见 [netfx 的插件化限制](#netfx-的插件化限制)。
+两个框架的能力差异在 `Logicet` 插件上（共两处）：见 [netfx 的插件化限制](#netfx-的插件化限制) 与 [AOT 的插件化限制](#aot-的插件化限制)。
 
 
 ## LICENSING
@@ -183,3 +184,15 @@ AI 可以直接参考 [StdUnit.Tags —— 给 AI 的参考手册](https://tags.
 加载时会输出 `WARNING` 日志提示上述限制。若需要完整能力（隔离 + 卸载 + 热更新），请使用 `net8.0`。
 
 > 上述限制不影响在宿主内注册逻辑组件（`TryAddLogicet<TLogicet>`），该方式在两个框架下都可用。
+
+### AOT 的插件化限制
+
+由于 **.NET NativeAOT 的运行时完全不提供「动态加载程序集」的能力**，所以在`XML`中，不支持通过配置`<Logicet/>`元素的方式为 AOT 宿主引入逻辑插件——**在 AOT 下只能使用代码注册的方式添加逻辑组件**：
+
+| 宿主形态 | XML动态插件(`<Logicet/>`)  | 编程注册(`TryAddLogicet<TLogicet>`) |
+|---|---|---|
+| `net8.0` + CoreCLR（JIT / 仅裁剪 / 单文件） | ✅ 隔离 + 卸载 | ✅ |
+| `net8.0` + **NativeAOT** | ❌ 不可用 | ✅ |
+| `net472` | ✅ 降级可用（见上一节） | ✅ |
+
+> 配了 `<Logicet/>` 的 AOT 宿主会在**加载期**抛 `TagsProjectNotSupportedException`。

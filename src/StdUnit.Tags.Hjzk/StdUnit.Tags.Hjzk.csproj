@@ -4,6 +4,7 @@
 	  <Description>Hjzk 远程IO 通信支持（建立在 ModbusTcp 之上）</Description>
 	  <TargetFrameworks>net8.0;net472</TargetFrameworks>
 	  <OutputType>Library</OutputType>
+	  <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
   <ItemGroup>

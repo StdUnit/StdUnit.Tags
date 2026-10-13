@@ -4,6 +4,7 @@
 		<Description>简单文件支持，把测点树映射为文件树</Description>
 		<TargetFrameworks>net8.0;net472</TargetFrameworks>
 		<OutputType>Library</OutputType>
+		<IsAotCompatible>true</IsAotCompatible>
 	</PropertyGroup>
 
 	<ItemGroup>

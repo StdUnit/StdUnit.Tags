@@ -14,7 +14,7 @@ namespace StdUnit.Tags.Tests;
 /// 实测（net472 + 默认设置，即未关闭 AppDomain）：<br/>
 /// <c>Assembly.GetExecutingAssembly().Location</c> → <c>%TEMP%\...\dl3\c37c9b25\33718e83_6b52dd01\StdUnit.Tags.Tests.dll</c><br/>
 /// <c>typeof(ITagsProject).Assembly.Location</c> → <c>%TEMP%\...\dl3\0f770884\20707337_6a52dd01\StdUnit.Tags.Core.dll</c><br/>
-/// <c>AppContext.BaseDirectory</c> → <c>&lt;仓库&gt;\src\StdUnit.Tags.Tests\bin\Debug\net472</c><br/>
+/// <c>AppContext.BaseDirectory</c> → <c>&lt;仓库&gt;\tests\StdUnit.Tags.Tests\bin\Debug\net472</c><br/>
 /// 因此「用程序集位置推导夹具目录」在 net472 下必然失败（夹具找不到），
 /// 而 <see cref="AppContext.BaseDirectory"/> 不受影子拷贝影响，始终是真实输出目录。<br/>
 /// <br/>

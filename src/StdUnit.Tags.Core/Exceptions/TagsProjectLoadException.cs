@@ -18,6 +18,7 @@
 /// 具体的子类见 <see cref="TagsProjectXmlException"/>（XML 值不合法）、
 /// <see cref="TagsProjectAddressException"/>（地址无法解析）、
 /// <see cref="TagsProjectConfigurationException"/>（配置语义不自洽）、
+/// <see cref="TagsProjectNotSupportedException"/>（配置合法但宿主运行时缺能力，如 NativeAOT 下的 <c>&lt;Logicet&gt;</c> 插件）、
 /// <see cref="TagsProjectValidationException"/>（校验器聚合错误）。
 /// <para>
 /// <b>注意范围</b>：本类型只覆盖<b>加载期</b>。运行期（读写 / 连接 / 清理）错误不使用自定义类型，

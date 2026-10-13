@@ -1,7 +1,8 @@
-﻿using StdUnit.Tags.Core.Projects;
-using StdUnit.Tags.Logicets;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using StdUnit.Tags.Core.Projects;
+using StdUnit.Tags.Logicets;
+using System.Diagnostics.CodeAnalysis;
 
 namespace StdUnit.Tags;
 
@@ -170,7 +171,11 @@ public class TagsProjectServiceBuilder
     /// </summary>
     /// <typeparam name="TValidator">校验器实现类型（实现 <see cref="ITagsProjectValidator"/>）</typeparam>
     /// <returns></returns>
-    public TagsProjectServiceBuilder AddValidation<TValidator>()
+    public TagsProjectServiceBuilder AddValidation<
+#if NET5_0_OR_GREATER
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+#endif
+        TValidator>()
         where TValidator : class, ITagsProjectValidator
     {
         this.Services.AddSingleton<ITagsProjectValidator, TValidator>();
@@ -224,18 +229,22 @@ public class TagsProjectServiceBuilder
 /// 业务逻辑加载选项，用于配置 Logicet 插件的加载行为。<br/>
 /// </summary>
 /// <remarks>
-/// 插件加载能力因目标框架而异：<br/>
-/// * <c>net8.0</c>：基于 <c>AssemblyLoadContext</c> 按目录隔离加载，支持卸载；
+/// 插件加载能力因宿主而异：<br/>
+/// * <c>net8.0</c> + CoreCLR（JIT）：基于 <c>AssemblyLoadContext</c> 按目录隔离加载，支持卸载；
 ///   <see cref="SharedTypesFilter"/> 用于声明宿主与插件之间共享的类型。<br/>
 /// * <c>net472</c>：退化为 <c>Assembly.LoadFrom</c>，插件仍可独立编译并挂载，但
 ///   <b>无依赖隔离、无卸载能力</b>；<see cref="SharedTypesFilter"/> 仍会被调用但不产生效果
 ///   （同名程序集天然共享同一实例），加载时会输出 WARNING 日志。<br/>
-/// 上述限制不影响在宿主内注册逻辑组件（<c>TryAddLogicet&lt;TLogicet&gt;</c>），该方式在两个框架下均可用。
+/// * <c>net8.0</c> + <b>NativeAOT</b>：运行时不提供动态加载能力（官方限制 <i>No dynamic loading</i>），
+///   XML 里声明了 <c>&lt;Logicet&gt;</c> 时会抛 <c>TagsProjectNotSupportedException</c>（加载期快速失败）；
+///   此时 <see cref="SharedTypesFilter"/> 也不会生效。注意这与"插件 dll 有没有被裁剪"无关。<br/>
+/// 上述限制不影响在宿主内注册逻辑组件（<c>TryAddLogicet&lt;TLogicet&gt;</c>），该方式在所有形态下均可用。
 /// </remarks>
 public class LogicetLoadOptions
 {
     /// <summary>
-    /// 共享类型过滤器。仅 <c>net8.0</c> 生效；<c>net472</c> 下会被调用但结果被忽略（见类备注）。
+    /// 共享类型过滤器。仅 <c>net8.0</c> + CoreCLR 生效；<c>net472</c> 下会被调用但结果被忽略，
+    /// NativeAOT 下根本走不到动态加载（见类备注）。
     /// </summary>
     public LogicetSharedTypesFilter? SharedTypesFilter { get; set; }
 }
