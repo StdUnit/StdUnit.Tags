@@ -8,48 +8,13 @@ using Xunit;
 namespace StdUnit.Tags.Tests.Core.TagCbntors;
 
 /// <summary>
-/// 测试 TagCbntor 在 <see cref="IContinuousBytesBasedTagChannel"/> 上的读写行为
+/// 测试 TagCbntor 在 <see cref="S7TagChannel"/> 上的读写行为
 /// </summary>
 public class TagCbntorContinuousChannelTests
 {
-    /// <summary>
-    /// 模拟连续字节通道，跟踪读写调用的地址和字节
-    /// </summary>
-    private class MockChannel : IContinuousBytesBasedTagChannel
+    private static (TestByteTagCbnt cbnt, FakeS7TagChannel channel, S7ByteTagCbntor tag) CreateContext()
     {
-        public TagChannelDescriptor Descriptor => new TagChannelDescriptor
-        {
-            Name = "Mock",
-            Driver = "MOCK",
-        };
-        public byte[]? LastWrittenBytes { get; private set; }
-        public string? LastWrittenAddress { get; private set; }
-        public string? LastReadAddress { get; private set; }
-        public int? LastReadCount { get; private set; }
-        public byte[] ReadData { get; set; } = [0xAB, 0xCD];
-
-        public Task EnsureConnectedAsync(bool force, CancellationToken ct) => Task.CompletedTask;
-        public Task DisconnectAsync(CancellationToken ct) => Task.CompletedTask;
-        public void Dispose() { }
-
-        public Task<byte[]> ReadAsync(string address, int count, CancellationToken ct)
-        {
-            LastReadAddress = address;
-            LastReadCount = count;
-            return Task.FromResult(ReadData);
-        }
-
-        public Task WriteAsync(string address, byte[] bytes, CancellationToken ct)
-        {
-            LastWrittenAddress = address;
-            LastWrittenBytes = bytes;
-            return Task.CompletedTask;
-        }
-    }
-
-    private static (TestByteTagCbnt cbnt, MockChannel channel, S7ByteTagCbntor tag) CreateContext()
-    {
-        var channel = new MockChannel();
+        var channel = new FakeS7TagChannel();
         var cbnt = new TestByteTagCbnt(new TagCbntDescriptor { Name = "g", StartAddress = "0.0" })
         {
             Channel = channel,

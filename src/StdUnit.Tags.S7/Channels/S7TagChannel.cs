@@ -8,7 +8,7 @@ namespace StdUnit.Tags.S7;
 /// <summary>
 /// S7通道实现
 /// </summary>
-public class S7TagChannel : IContinuousBytesBasedTagChannel
+public class S7TagChannel : ITagChannel
 {
     /// <summary>
     /// c'tor
@@ -160,99 +160,86 @@ public class S7TagChannel : IContinuousBytesBasedTagChannel
         return tcs.Task;
     }
 
+
     /// <summary>
     /// 读取
     /// </summary>
+    /// <param name="address">测点地址</param>
+    /// <param name="buffer">接收数据的缓冲区，其长度即本次读取的字节数</param>
+    /// <param name="ct">
+    /// 等待 I/O 互斥体时可取消（连接/断开可能长时间占用它）；<b>不</b>作用于底层 S7 调用本身——那是同步阻塞的。
+    /// </param>
     /// <exception cref="InvalidOperationException">客户端未连接，或 PLC 返回错误码</exception>
-    public virtual async Task<byte[]> ReadAsync(string address, int length, CancellationToken ct)
+    public virtual void Read(string address, Span<byte> buffer, CancellationToken ct)
     {
         var addr = S7AddressParser.Parse(address);
-        var buffer = new byte[length];
-        if (addr.Area == AreaKinds.DB)
+        this._rw.Wait(ct);
+        try
         {
-            await this.ExecuteOneByOneAsync(
-                ct =>
-                {
-                    var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法读取：DB{addr.BlockNumber}.{addr.StartAddress}");
-                    var code = client.DBRead(addr.BlockNumber, addr.StartAddress, length, buffer);
-                    if (code != 0)
-                    {
-                        var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new InvalidOperationException($"通道({this.ChannelName()}) 读取DB失败：DB{addr.BlockNumber}.{addr.StartAddress}，长度={length}；{err.Text}（{err.Error}）");
-                    }
-                    return Task.CompletedTask;
-                },
-                ct
-            );
+            var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法读取：{addr}");
+            int code;
+            if (addr.Area == AreaKinds.DB)
+            {
+                code = client.DBRead(addr.BlockNumber, addr.StartAddress, buffer.Length, buffer);
+            }
+            else if (addr.Area == AreaKinds.MB)
+            {
+                code = client.MBRead(addr.StartAddress, buffer.Length, buffer);
+            }
+            else
+            {
+                throw new NotImplementedException($"不支持的地址区域类型={addr.Area}（地址={addr}）");
+            }
+            if (code != 0)
+            {
+                var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
+                throw new InvalidOperationException($"通道({this.ChannelName()}) 读取失败：{addr}，长度={buffer.Length}；{err.Text}（{err.Error}）");
+            }
         }
-        else if (addr.Area == AreaKinds.MB)
+        finally
         {
-            await this.ExecuteOneByOneAsync(
-                ct =>
-                {
-                    var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法读取：MB.{addr.StartAddress}");
-                    var code = client.MBRead(addr.StartAddress, length, buffer);
-                    if (code != 0)
-                    {
-                        var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new InvalidOperationException($"通道({this.ChannelName()}) 读取MB失败：MB.{addr.StartAddress}，长度={length}；{err.Text}（{err.Error}）");
-                    }
-                    return Task.CompletedTask;
-                },
-                ct
-            );
+            this._rw.Release();
         }
-        else
-        {
-            throw new NotImplementedException($"不支持的地址区域类型={addr.Area}");
-        }
-        return buffer;
     }
 
     /// <summary>
     /// 写入底层
     /// </summary>
+    /// <param name="address">测点地址</param>
+    /// <param name="buffer">待写入的字节</param>
+    /// <param name="ct">
+    /// 等待 I/O 互斥体时可取消（连接/断开可能长时间占用它）；<b>不</b>作用于底层 S7 调用本身——那是同步阻塞的。
+    /// </param>
     /// <exception cref="InvalidOperationException">客户端未连接，或 PLC 返回错误码</exception>
-    public virtual async Task WriteAsync(string address, byte[] buffer, CancellationToken ct)
+    public virtual void Write(string address, Span<byte> buffer, CancellationToken ct)
     {
         var addr = S7AddressParser.Parse(address);
-        if (addr.Area == AreaKinds.DB)
+        this._rw.Wait(ct);
+        try
         {
-            await this.ExecuteOneByOneAsync(
-                ct =>
-                {
-                    var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法写入：DB{addr.BlockNumber}.{addr.StartAddress}");
-                    var code = client.DBWrite(addr.BlockNumber, addr.StartAddress, buffer.Length, buffer);
-                    if (code != 0)
-                    {
-                        var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new InvalidOperationException($"通道({this.ChannelName()}) 写入DB失败：DB{addr.BlockNumber}.{addr.StartAddress}，长度={buffer.Length}；{err.Text}（{err.Error}）");
-                    }
-                    return Task.CompletedTask;
-                },
-                ct
-            );
+            var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法写入：{addr}");
+            int code;
+            if (addr.Area == AreaKinds.DB)
+            {
+                code = client.DBWrite(addr.BlockNumber, addr.StartAddress, buffer.Length, buffer);
+            }
+            else if (addr.Area == AreaKinds.MB)
+            {
+                code = client.MBWrite(addr.StartAddress, buffer.Length, buffer);
+            }
+            else
+            {
+                throw new NotImplementedException($"不支持的地址区域类型={addr.Area}（地址={addr}）");
+            }
+            if (code != 0)
+            {
+                var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
+                throw new InvalidOperationException($"通道({this.ChannelName()}) 写入失败：{addr}，长度={buffer.Length}；{err.Text}（{err.Error}）");
+            }
         }
-        else if (addr.Area == AreaKinds.MB)
+        finally
         {
-            await this.ExecuteOneByOneAsync(
-                ct =>
-                {
-                    var client = this.Client ?? throw new InvalidOperationException($"通道({this.ChannelName()}) 的客户端为null，无法写入：MB.{addr.StartAddress}");
-                    var code = client.MBWrite(addr.StartAddress, buffer.Length, buffer);
-                    if (code != 0)
-                    {
-                        var err = S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code);
-                        throw new InvalidOperationException($"通道({this.ChannelName()}) 写入MB失败：MB.{addr.StartAddress}，长度={buffer.Length}；{err.Text}（{err.Error}）");
-                    }
-                    return Task.CompletedTask;
-                },
-                ct
-            );
-        }
-        else
-        {
-            throw new NotImplementedException($"不支持的地址区域类型={addr.Area}");
+            this._rw.Release();
         }
     }
 

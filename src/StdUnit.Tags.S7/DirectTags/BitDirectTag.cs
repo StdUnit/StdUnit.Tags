@@ -52,14 +52,16 @@ internal class BitDirectTag : ContinuousBytesBasedDirectTag<bool>
     }
 
 
-    public override async Task WriteAsync(CancellationToken ct)
+    public override Task WriteAsync(CancellationToken ct)
     {
         var addr = this.NormalizedAddress();
-        var bytes = await this._bubbleChannel.ReadAsync(addr, BufferSize, ct);
+        Span<byte> bytes = stackalloc byte[BufferSize];
+        this._bubbleChannel.Read(addr, bytes, ct);
         this.FillBytes(bytes, this.Value);
-        await this._bubbleChannel.WriteAsync(addr, bytes, ct);
+        this._bubbleChannel.Write(addr, bytes, ct);
         this.NotifyTagWritten(this.Value);
         this.IsDirty = false;
+        return Task.CompletedTask;
     }
 }
 

@@ -191,45 +191,46 @@ public class S7TagChannelTests
 
     #endregion
 
-    #region ReadAsync - DB Area
+    #region Read - DB Area
 
     [Fact]
-    public async Task ReadAsync_DBArea_ShouldReturnBytes()
+    public void Read_DBArea_ShouldReturnBytes()
     {
         var expected = new byte[] { 0x01, 0x02, 0x03 };
         var (channel, mock) = CreateChannel(dbReadResult: 0, dbReadBuffer: expected);
         channel.Client = mock;
 
-        var result = await channel.ReadAsync("DB1.100", 3, CancellationToken.None);
+        var buffer = new byte[3];
+        channel.Read("DB1.100", buffer, CancellationToken.None);
 
-        Assert.Equal(expected, result);
+        Assert.Equal(expected, buffer);
         Assert.Equal(1, mock.DBReadCallCount);
     }
 
     [Fact]
-    public async Task ReadAsync_DBArea_ClientNull_ShouldThrow()
+    public void Read_DBArea_ClientNull_ShouldThrow()
     {
         var (channel, _) = CreateChannel();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => channel.ReadAsync("DB1.100", 3, CancellationToken.None));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => channel.Read("DB1.100", new byte[3], CancellationToken.None));
         // 多通道入口里，消息必须能定位到通道与地址
         Assert.Contains("test-channel", ex.Message);
         Assert.Contains("DB1.100", ex.Message);
     }
 
     [Fact]
-    public async Task ReadAsync_DBArea_ErrorCode_ShouldThrow()
+    public void Read_DBArea_ErrorCode_ShouldThrow()
     {
         var (channel, mock) = CreateChannel(dbReadResult: -2);
         channel.Client = mock;
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => channel.ReadAsync("DB1.100", 3, CancellationToken.None));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => channel.Read("DB1.100", new byte[3], CancellationToken.None));
         Assert.Contains("Unknown error", ex.Message);
         // 通道名 + 操作 + 地址 + 长度 + 错误码明细，缺一不可（否则轮询日志里定位不到现场）
         Assert.Contains("test-channel", ex.Message);
-        Assert.Contains("读取DB失败", ex.Message);
+        Assert.Contains("读取失败", ex.Message);
         Assert.Contains("DB1.100", ex.Message);
         Assert.Contains("长度=3", ex.Message);
         Assert.Contains("OsSockerError=", ex.Message);
@@ -237,31 +238,32 @@ public class S7TagChannelTests
 
     #endregion
 
-    #region ReadAsync - MB Area
+    #region Read - MB Area
 
     [Fact]
-    public async Task ReadAsync_MBArea_ShouldReturnBytes()
+    public void Read_MBArea_ShouldReturnBytes()
     {
         var expected = new byte[] { 0x0A, 0x0B };
         var (channel, mock) = CreateChannel(mbReadResult: 0, mbReadBuffer: expected);
         channel.Client = mock;
 
-        var result = await channel.ReadAsync("MB.100", 2, CancellationToken.None);
+        var buffer = new byte[2];
+        channel.Read("MB.100", buffer, CancellationToken.None);
 
-        Assert.Equal(expected, result);
+        Assert.Equal(expected, buffer);
         Assert.Equal(1, mock.MBReadCallCount);
     }
 
     [Fact]
-    public async Task ReadAsync_MBArea_ErrorCode_ShouldThrow()
+    public void Read_MBArea_ErrorCode_ShouldThrow()
     {
         var (channel, mock) = CreateChannel(mbReadResult: -3);
         channel.Client = mock;
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => channel.ReadAsync("MB.100", 2, CancellationToken.None));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => channel.Read("MB.100", new byte[2], CancellationToken.None));
         Assert.Contains("test-channel", ex.Message);
-        Assert.Contains("读取MB失败", ex.Message);
+        Assert.Contains("读取失败", ex.Message);
         Assert.Contains("MB.100", ex.Message);
         Assert.Contains("长度=2", ex.Message);
     }
@@ -269,70 +271,70 @@ public class S7TagChannelTests
     #endregion
 
 
-    #region WriteAsync - DB Area
+    #region Write - DB Area
 
     [Fact]
-    public async Task WriteAsync_DBArea_ShouldWriteBytes()
+    public void Write_DBArea_ShouldWriteBytes()
     {
         var (channel, mock) = CreateChannel(dbWriteResult: 0);
         channel.Client = mock;
         var data = new byte[] { 0x10, 0x20 };
 
-        await channel.WriteAsync("DB1.200", data, CancellationToken.None);
+        channel.Write("DB1.200", data, CancellationToken.None);
 
         Assert.Equal(1, mock.DBWriteCallCount);
     }
 
     [Fact]
-    public async Task WriteAsync_DBArea_ClientNull_ShouldThrow()
+    public void Write_DBArea_ClientNull_ShouldThrow()
     {
         var (channel, _) = CreateChannel();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => channel.WriteAsync("DB1.200", [0x10], CancellationToken.None));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => channel.Write("DB1.200", new byte[] { 0x10 }, CancellationToken.None));
         Assert.Contains("test-channel", ex.Message);
         Assert.Contains("DB1.200", ex.Message);
     }
 
     [Fact]
-    public async Task WriteAsync_DBArea_ErrorCode_ShouldThrow()
+    public void Write_DBArea_ErrorCode_ShouldThrow()
     {
         var (channel, mock) = CreateChannel(dbWriteResult: -4);
         channel.Client = mock;
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => channel.WriteAsync("DB1.200", [0x10], CancellationToken.None));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => channel.Write("DB1.200", new byte[] { 0x10 }, CancellationToken.None));
         Assert.Contains("test-channel", ex.Message);
-        Assert.Contains("写入DB失败", ex.Message);
+        Assert.Contains("写入失败", ex.Message);
         Assert.Contains("DB1.200", ex.Message);
         Assert.Contains("长度=1", ex.Message);
     }
 
     #endregion
 
-    #region WriteAsync - MB Area
+    #region Write - MB Area
 
     [Fact]
-    public async Task WriteAsync_MBArea_ShouldWriteBytes()
+    public void Write_MBArea_ShouldWriteBytes()
     {
         var (channel, mock) = CreateChannel(mbWriteResult: 0);
         channel.Client = mock;
 
-        await channel.WriteAsync("MB.200", [0x30], CancellationToken.None);
+        channel.Write("MB.200", new byte[] { 0x30 }, CancellationToken.None);
 
         Assert.Equal(1, mock.MBWriteCallCount);
     }
 
     [Fact]
-    public async Task WriteAsync_MBArea_ErrorCode_ShouldThrow()
+    public void Write_MBArea_ErrorCode_ShouldThrow()
     {
         var (channel, mock) = CreateChannel(mbWriteResult: -5);
         channel.Client = mock;
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => channel.WriteAsync("MB.200", [0x30], CancellationToken.None));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => channel.Write("MB.200", new byte[] { 0x30 }, CancellationToken.None));
         Assert.Contains("test-channel", ex.Message);
-        Assert.Contains("写入MB失败", ex.Message);
+        Assert.Contains("写入失败", ex.Message);
         Assert.Contains("MB.200", ex.Message);
         Assert.Contains("长度=1", ex.Message);
     }
@@ -417,13 +419,66 @@ public class S7TagChannelTests
             Interlocked.Decrement(ref concurrent);
         };
 
-        var t1 = channel.ReadAsync("DB1.100", 1, CancellationToken.None);
-        var t2 = channel.ReadAsync("DB1.100", 1, CancellationToken.None);
+        var b1 = new byte[1];
+        var b2 = new byte[1];
+        var t1 = Task.Run(() => channel.Read("DB1.100", b1, CancellationToken.None));
+        var t2 = Task.Run(() => channel.Read("DB1.100", b2, CancellationToken.None));
 
         await Task.WhenAll(t1, t2);
 
         // SemaphoreSlim serializes access, so max concurrent should be 1
         Assert.Equal(1, maxConcurrent);
+    }
+
+    [Fact]
+    public async Task Read_WhenIoMutexBusyAndTokenCancelled_ShouldThrowOperationCanceled()
+    {
+        var (channel, mock) = CreateChannel(dbReadResult: 0);
+        channel.Client = mock;
+
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        mock.DBReadAction = () =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(30)); // 兜底：测试失败时也不至于把整个测试进程挂死
+        };
+
+        // 第一次读取进到底层后会一直持有 I/O 互斥体
+        var holding = Task.Run(() => channel.Read("DB1.100", new byte[1], CancellationToken.None));
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(5)), "第一次读取没能进入底层");
+
+        try
+        {
+            // 等待互斥体必须能被取消：底层 S7 调用是同步阻塞的，交给它的 ct 只是"等锁"时的逃生口
+            using (var readCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
+            {
+                var waiting = Task.Run(() => channel.Read("DB1.100", new byte[1], readCts.Token));
+                await AssertCancelledWithin(waiting);
+            }
+
+            using (var writeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
+            {
+                var writing = Task.Run(() => channel.Write("DB1.200", new byte[1], writeCts.Token));
+                await AssertCancelledWithin(writing);
+            }
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        await holding;
+
+        // 5 秒内就该拿到 OperationCanceledException。
+        // 若 Read/Write 退化成不可取消的 Wait()，它会一直等到 finally 放开互斥体才结束，
+        // 于是先完成的是 Task.Delay ⇒ Assert.Same 失败，而不是靠"等到底"误判成通过。
+        static async Task AssertCancelledWithin(Task awaited)
+        {
+            var winner = await Task.WhenAny(awaited, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.Same(awaited, winner);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => awaited);
+        }
     }
 
     #endregion
@@ -481,36 +536,36 @@ internal class MockS7Client : S7Client
 
     public override bool IsDead(int microseconds = 0) => IsDeadResult;
 
-    public override int DBRead(int dbNumber, int start, int size, byte[] buffer)
+    public override int DBRead(int dbNumber, int start, int size, Span<byte> buffer)
     {
         DBReadCallCount++;
         DBReadAction?.Invoke();
         if (DBReadBuffer.Length > 0)
         {
             var copyLen = Math.Min(size, DBReadBuffer.Length);
-            Array.Copy(DBReadBuffer, 0, buffer, 0, copyLen);
+            DBReadBuffer.AsSpan(0, copyLen).CopyTo(buffer);
         }
         return DBReadResult;
     }
 
-    public override int DBWrite(int dbNumber, int start, int size, byte[] buffer)
+    public override int DBWrite(int dbNumber, int start, int size, Span<byte> buffer)
     {
         DBWriteCallCount++;
         return DBWriteResult;
     }
 
-    public override int MBRead(int start, int size, byte[] buffer)
+    public override int MBRead(int start, int size, Span<byte> buffer)
     {
         MBReadCallCount++;
         if (MBReadBuffer.Length > 0)
         {
             var copyLen = Math.Min(size, MBReadBuffer.Length);
-            Array.Copy(MBReadBuffer, 0, buffer, 0, copyLen);
+            MBReadBuffer.AsSpan(0, copyLen).CopyTo(buffer);
         }
         return MBReadResult;
     }
 
-    public override int MBWrite(int start, int size, byte[] buffer)
+    public override int MBWrite(int start, int size, Span<byte> buffer)
     {
         MBWriteCallCount++;
         return MBWriteResult;

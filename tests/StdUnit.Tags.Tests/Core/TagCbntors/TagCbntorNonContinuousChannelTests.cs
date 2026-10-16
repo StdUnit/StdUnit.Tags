@@ -8,14 +8,14 @@ using Xunit;
 namespace StdUnit.Tags.Tests.Core.TagCbntors;
 
 /// <summary>
-/// 默认是<see cref="TagCbntor"/>的读写行为是基于<see cref="IContinuousBytesBasedTagChannel"/>的，
-/// 为了避免滥用，如果通道不是连续字节通道，会应抛出异常。
-/// 本测试是保证应该在接口类型错误时，要抛出异常来提醒开发者。
+/// <see cref="S7TagCbntorBase"/> 的默认读写实现依赖 <see cref="S7TagChannel"/> 提供的字节读写能力，
+/// 为了避免滥用，如果通道不是 <see cref="S7TagChannel"/>，就会抛出异常。
+/// 本测试是保证应该在通道类型错误时，要抛出异常来提醒开发者。
 /// </summary>
 public class TagCbntorNonContinuousChannelTests
 {
     /// <summary>
-    /// 仅实现 ITagChannel，不实现 IContinuousBytesBasedTagChannel
+    /// 仅实现 ITagChannel，不具备 <see cref="S7TagChannel"/> 的字节读写能力
     /// </summary>
     private class NonContinuousChannel : ITagChannel
     {
@@ -48,7 +48,7 @@ public class TagCbntorNonContinuousChannelTests
         var tag = new S7ByteTagCbntor(descriptor, cbnt, 0);
 
         var ex = await Assert.ThrowsAsync<NotImplementedException>(() => tag.ReadAsync(CancellationToken.None));
-        Assert.Contains(nameof(IContinuousBytesBasedTagChannel), ex.Message);
+        Assert.Contains(nameof(S7TagChannel), ex.Message);
     }
 
     [Fact]
@@ -70,6 +70,6 @@ public class TagCbntorNonContinuousChannelTests
         var tag = new S7ByteTagCbntor(descriptor, cbnt, 0);
 
         var ex = await Assert.ThrowsAsync<NotImplementedException>(() => tag.WriteAsync(CancellationToken.None));
-        Assert.Contains(nameof(IContinuousBytesBasedTagChannel), ex.Message);
+        Assert.Contains(nameof(S7TagChannel), ex.Message);
     }
 }

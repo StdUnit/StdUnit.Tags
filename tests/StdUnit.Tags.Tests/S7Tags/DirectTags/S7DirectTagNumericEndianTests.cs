@@ -278,7 +278,7 @@ public class S7DirectTagNumericEndianTests
         grp.IntoTagContainer()
     );
 
-    private static UInt32DirectTag CreateUInt32Tag(EndianKinds endian, IContinuousBytesBasedTagChannel channel, ITagGrp grp) => new(
+    private static UInt32DirectTag CreateUInt32Tag(EndianKinds endian, S7TagChannel channel, ITagGrp grp) => new(
         new TagDescriptor
         {
             TagName = "u32",
@@ -290,7 +290,7 @@ public class S7DirectTagNumericEndianTests
         grp.IntoTagContainer()
     );
 
-    private static Int64DirectTag CreateInt64Tag(EndianKinds endian, IContinuousBytesBasedTagChannel channel, ITagGrp grp) => new(
+    private static Int64DirectTag CreateInt64Tag(EndianKinds endian, S7TagChannel channel, ITagGrp grp) => new(
         new TagDescriptor
         {
             TagName = "i64",
@@ -302,7 +302,7 @@ public class S7DirectTagNumericEndianTests
         grp.IntoTagContainer()
     );
 
-    private static UInt64DirectTag CreateUInt64Tag(EndianKinds endian, IContinuousBytesBasedTagChannel channel, ITagGrp grp) => new(
+    private static UInt64DirectTag CreateUInt64Tag(EndianKinds endian, S7TagChannel channel, ITagGrp grp) => new(
         new TagDescriptor
         {
             TagName = "u64",
@@ -314,7 +314,7 @@ public class S7DirectTagNumericEndianTests
         grp.IntoTagContainer()
     );
 
-    private static FloatDirectTag CreateFloatTag(EndianKinds endian, IContinuousBytesBasedTagChannel channel, ITagGrp grp) => new(
+    private static FloatDirectTag CreateFloatTag(EndianKinds endian, S7TagChannel channel, ITagGrp grp) => new(
         new TagDescriptor
         {
             TagName = "f32",
@@ -451,20 +451,19 @@ public class S7DirectTagNumericEndianTests
 
         public override Task EnsureConnectedAsync(bool force, CancellationToken ct) => Task.CompletedTask;
 
-        public override Task<byte[]> ReadAsync(string address, int count, CancellationToken ct)
+        public override void Read(string address, Span<byte> buffer, CancellationToken ct)
         {
-            if (count > this.LastWriteBuffer.Length)
+            if (buffer.Length > this.LastWriteBuffer.Length)
             {
-                throw new InvalidOperationException($"Unexpected read length={count}");
+                throw new InvalidOperationException($"Unexpected read length={buffer.Length}");
             }
-            this.LastReadLength = count;
-            return Task.FromResult(this.LastWriteBuffer.AsSpan(0, count).ToArray());
+            this.LastReadLength = buffer.Length;
+            this.LastWriteBuffer.AsSpan(0, buffer.Length).CopyTo(buffer);
         }
 
-        public override Task WriteAsync(string address, byte[] bytes, CancellationToken ct)
+        public override void Write(string address, Span<byte> buffer, CancellationToken ct)
         {
-            this.LastWriteBuffer = (byte[])bytes.Clone();
-            return Task.CompletedTask;
+            this.LastWriteBuffer = buffer.ToArray();
         }
 
     }

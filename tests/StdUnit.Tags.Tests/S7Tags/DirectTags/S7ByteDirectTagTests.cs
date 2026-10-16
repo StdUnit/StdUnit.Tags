@@ -122,20 +122,19 @@ public class S7ByteDirectTagTests
         public override Task DisconnectAsync(CancellationToken ct) => Task.CompletedTask;
         public override Task EnsureConnectedAsync(bool force, CancellationToken ct) => Task.CompletedTask;
 
-        public override Task<byte[]> ReadAsync(string address, int count, CancellationToken ct)
+        public override void Read(string address, Span<byte> buffer, CancellationToken ct)
         {
-            if (count > LastWriteBuffer.Length)
+            if (buffer.Length > LastWriteBuffer.Length)
             {
-                throw new System.InvalidOperationException($"Unexpected read length={count}");
+                throw new System.InvalidOperationException($"Unexpected read length={buffer.Length}");
             }
-            LastReadLength = count;
-            return Task.FromResult(LastWriteBuffer.AsSpan(0, count).ToArray());
+            LastReadLength = buffer.Length;
+            LastWriteBuffer.AsSpan(0, buffer.Length).CopyTo(buffer);
         }
 
-        public override Task WriteAsync(string address, byte[] bytes, CancellationToken ct)
+        public override void Write(string address, Span<byte> buffer, CancellationToken ct)
         {
-            LastWriteBuffer = (byte[])bytes.Clone();
-            return Task.CompletedTask;
+            LastWriteBuffer = buffer.ToArray();
         }
     }
 }

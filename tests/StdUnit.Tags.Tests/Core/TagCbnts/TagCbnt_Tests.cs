@@ -1,4 +1,4 @@
-﻿using StdUnit.Tags;
+using StdUnit.Tags;
 using StdUnit.Tags.S7;
 using System;
 using System.Collections.Generic;
@@ -17,50 +17,10 @@ namespace StdUnit.Tags.Tests.Core.TagCbnts;
 
 public class TagCbnt_Tests
 {
-    internal class MockChannel : IContinuousBytesBasedTagChannel
-    {
-        private byte[] _bytes = new byte[4]
-        {
-            0x03, 0x00, 0x00, 0x00,
-        };
-
-        public TagChannelDescriptor Descriptor => new TagChannelDescriptor
-        {
-            Name = "Mock",
-            Driver = "MOCK",
-        };
-
-        public Task DisconnectAsync(CancellationToken ct)
-        {
-            return Task.CompletedTask;
-        }
-
-        public void Dispose()
-        {
-            return;
-        }
-
-        public Task EnsureConnectedAsync(bool force, CancellationToken ct)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<byte[]> ReadAsync(string address, int count, CancellationToken ct)
-        {
-            return Task.FromResult(this._bytes);
-        }
-
-        public Task WriteAsync(string address, byte[] bytes, CancellationToken ct)
-        {
-            this._bytes = bytes;
-            return Task.CompletedTask;
-        }
-    }
-
     [Fact]
     public async Task Test_TagCnbtRWTriggerTagSyncsEvents()
     {
-        var channel = new MockChannel();
+        var channel = new FakeS7TagChannel();
         var cbnt = new TestByteTagCbnt(new TagCbntDescriptor { Name = "mock tag cbnt", StartAddress = "0.0", IsEnabled = true })
         {
             Channel = channel,
@@ -139,7 +99,7 @@ public class TagCbnt_Tests
     [Fact]
     public async Task Test_TagCnbtRWTriggerTagSyncsEventsObservable()
     {
-        var channel = new MockChannel();
+        var channel = new FakeS7TagChannel();
         var cbnt = new TestByteTagCbnt(new TagCbntDescriptor { Name = "mock tag cbnt", StartAddress = "0.0", IsEnabled = true })
         {
             Channel = channel,

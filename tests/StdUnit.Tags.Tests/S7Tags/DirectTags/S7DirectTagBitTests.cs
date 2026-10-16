@@ -81,7 +81,7 @@ public class S7DirectTagBitTests
     }
     #endregion
 
-    private static ITag CreateBitDirectTag(byte nthBit, IContinuousBytesBasedTagChannel channel, ITagGrp grp)
+    private static ITag CreateBitDirectTag(byte nthBit, S7TagChannel channel, ITagGrp grp)
     {
         var descriptor = new TagDescriptor()
         {
@@ -115,20 +115,19 @@ public class S7DirectTagBitTests
 
         public override Task EnsureConnectedAsync(bool force, CancellationToken ct) => Task.CompletedTask;
 
-        public override Task<byte[]> ReadAsync(string address, int count, CancellationToken ct)
+        public override void Read(string address, Span<byte> buffer, CancellationToken ct)
         {
-            if (count > this.LastWriteBuffer.Length)
+            if (buffer.Length > this.LastWriteBuffer.Length)
             {
-                throw new InvalidOperationException($"Unexpected read length={count}");
+                throw new InvalidOperationException($"Unexpected read length={buffer.Length}");
             }
-            this.LastReadLength = count;
-            return Task.FromResult(this.LastWriteBuffer.AsSpan(0, count).ToArray());
+            this.LastReadLength = buffer.Length;
+            this.LastWriteBuffer.AsSpan(0, buffer.Length).CopyTo(buffer);
         }
 
-        public override Task WriteAsync(string address, byte[] bytes, CancellationToken ct)
+        public override void Write(string address, Span<byte> buffer, CancellationToken ct)
         {
-            this.LastWriteBuffer = (byte[])bytes.Clone();
-            return Task.CompletedTask;
+            this.LastWriteBuffer = buffer.ToArray();
         }
     }
 }

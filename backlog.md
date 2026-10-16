@@ -19,5 +19,5 @@
   - [ ] 启用 NetAnalyzers / `TreatWarningsAsErrors`。
 - [ ] Cache 性能优化：Modbus 读路径 cache 复用——`TagCbnt<T>` 各驱动的 `ReadAsync` 每轮轮询换新 `Cache` 引用（如 `ModbusRegisterTagCbnt` 的 `this.Cache = regs`、位空间 `this.Cache = bits`），`CacheSize` 不变时可复用同一 `T[]` 消除每轮分配；需接口改动（`IModbusRegisterChannel.ReadRegistersAsync`/`IModbusBitsChannel.ReadBitsAsync` 改为写入预分配 buffer 返回元素数）
 - [ ] S7 优化：底层基于 Sharp7 一个古老的实现，有两个优化的点：
-    - 底层通道基于 Sharp7 一个古老的同步实现，用了 `Thread` 伪装成异步接口。将来可以改成真异步（上层异步接口不需要变更）。说明：PLC的并发吞吐能力远小于上位机，而且目前已经在单通道做了串行轮询机制，所以这个改进的收益不大。
-    - 底层有很多无谓的字节拷贝和内存分配操作，借助 C# 的 `Span<T>` 和 `Memory<T>` 可以大幅优化实现。
+    - 底层通道基于 Sharp7 一个古老的同步实现，用了 `Thread` 伪装成异步接口。将来可以改成真异步（上层异步接口不需要变更）。说明：PLC的并发吞吐能力远小于上位机，而且目前已经在单通道做了串行轮询机制，所以这个改进的收益不大。（2026-10 更新：通道**读写**已改成诚实的同步方法，`Thread` 伪装现在只剩**连接/断开**两条路径。）
+    - [x] ~~底层有很多无谓的字节拷贝和内存分配操作，借助 C# 的 `Span<T>` 和 `Memory<T>` 可以大幅优化实现。~~ **已改**：Sharp7 0.8.x 的 `DBRead`/`MBRead`/`DBWrite`/`MBWrite` 接受 `Span<byte>`，因此通道读写改成"调用方提供缓冲区"的同步方法（`S7TagChannel.Read/Write`，带 `ct` 仅用于等待 I/O 互斥体时可取消）。缓冲区一路透到硬件层：组合式测点直接读写 `TagCbnt<byte>.Cache`，直接测点用 `stackalloc`——读/写两条路径都不再产生 `byte[]`。
