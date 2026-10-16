@@ -3,7 +3,8 @@
   <PropertyGroup>
     <Description>R3 扩展</Description>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
-	<IsAotCompatible>true</IsAotCompatible>
+	<!-- 仅 net8.0+ 有意义：net472 没有裁剪/AOT 分析器，SDK 只会报 NETSDK1210 -->
+	<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\StdUnit.Tags.Core\StdUnit.Tags.Core.csproj" />

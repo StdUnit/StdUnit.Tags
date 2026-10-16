@@ -4,7 +4,8 @@
 		<Description>MCP Server 扩展，把测点项目暴露给 AI 助手（ModelContextProtocol）</Description>
 		<TargetFrameworks>net8.0;net472</TargetFrameworks>
 		<OutputType>Library</OutputType>
-		<IsAotCompatible>true</IsAotCompatible>
+		<!-- 仅 net8.0+ 有意义：net472 没有裁剪/AOT 分析器，SDK 只会报 NETSDK1210 -->
+		<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
 	</PropertyGroup>
 	<ItemGroup>
 		<None Remove="guide.md" />

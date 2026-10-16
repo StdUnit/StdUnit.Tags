@@ -4,7 +4,8 @@
 		<Description>串口通信支持</Description>
 		<TargetFrameworks>net8.0;net472</TargetFrameworks>
 		<NoWarn>$(NoWarn);CS1998</NoWarn>
-		<IsAotCompatible>true</IsAotCompatible>
+		<!-- 仅 net8.0+ 有意义：net472 没有裁剪/AOT 分析器，SDK 只会报 NETSDK1210 -->
+		<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />

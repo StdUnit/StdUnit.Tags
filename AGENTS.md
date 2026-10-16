@@ -51,9 +51,14 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
 - **不要把 `#if` 铺到调用点满屏幕，也不要用 `#if` 去条件修饰公共 API**（那会给库使用者制造两套签名）。
 - `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 由 `src/` 与 `tests/` 各自的 `Directory.Build.props` 统一提供（`tests/` 那份不含 NuGet 打包元数据，且已把 `GenerateDocumentationFile` 设为 `false`），新建项目不用再写这几项（net472 默认 C# 7.3，少写一次就少一次 CS8630）；`TargetFrameworks` 仍写在各 csproj（存在 net8-only 项目）。`src/` 下不生成 XML 文档的项目仍要在本项目显式写 `<GenerateDocumentationFile>false</GenerateDocumentationFile>`（现有：BlazorLib；它是"尚未补注释"的历史包袱）。
 - **AOT 相关**（逐包状态见 `docs/设计决策与边界/4. 目标框架差异.md` 的表，新增包记得补一行并放进对应分组）：
-  - `<IsAotCompatible>true</IsAotCompatible>` **无条件写**（net472 下 SDK 会自行关掉分析器，**不要**加 TFM 条件）。
-    新包默认加上，除非有明确阻塞。目前已开的 **10 个**：核心 `Core` / `StdUnit.Tags`，扩展 `R3Extensions` / `McpServer`，
-    驱动 `S7` / `ModbusTcp` / `Hjzk` / `ZLan` / `OpcUaClient` / `ComScanner`；
+  - `<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>`
+    ——**TFM 下界必须写 `net8.0`**：`NETSDK1210` 的提示文本里给的是 `'net7.0'`（SDK 的通用下界），**不要照抄**——
+    本家族的 netcore 地板是 net8.0，写 net7.0 等于在将来真加 net7.0 目标时打开分析器、并对外声称 `IsTrimmable=True`，
+    而 AOT 我们只在 net8.0 上验证过（`aot-smoke` 也只 publish net8.0）。net472 下不能无条件写：
+    SDK 既不生成 `IsTrimmable` 标记也不开分析器，只会给每个 net472 项目报一条 `NETSDK1210`
+    （实测：`obj/Debug/net8.0/*.AssemblyInfo.cs` 里有 `AssemblyMetadata("IsTrimmable", "True")`，net472 侧没有）。
+    新包默认加上，除非有明确阻塞。目前已开的 **11 个**：核心 `Core` / `StdUnit.Tags`，扩展 `R3Extensions` / `McpServer`，
+    驱动 `S7` / `ModbusTcp` / `Hjzk` / `ZLan` / `OpcUaClient` / `ComScanner` / `SimpleFiles`；
     `RxExtensions`（`System.Reactive` 对 AOT 支持不好）与 `BlazorLib.Core`（Blazor Server 不支持 AOT）是 **NotPlanned**；
     JSON 测点（`type="JSON"`）的序列化元数据在 AOT/裁剪宿主下必须由使用方登记一次
     （`AddJsonSerializerContext(MyJsonContext.Default)`，源生成），反射路径只在普通 JIT 宿主下兜底。
