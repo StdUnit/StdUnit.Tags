@@ -2,9 +2,45 @@
 
 本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
+## 2.0.0-beta2
+
+> 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
+
+主题：**S7 的读写改成"调用方提供缓冲区"的同步方法**——缓冲区一路透到硬件层，读、写两条路径都不再产生 `byte[]`。
+
+### 破坏性变更
+
+- **`S7TagChannel` 的字节读写改成同步方法**（方法名也从 `ReadAsync`/`WriteAsync` 变为 `Read`/`Write`）：
+
+  | `2.0.0-beta` 及以前 | `2.0.0-beta2` |
+  |---|---|
+  | `Task<byte[]> ReadAsync(string address, int length, CancellationToken ct)` | `void Read(string address, Span<byte> buffer, CancellationToken ct)` |
+  | `Task WriteAsync(string address, byte[] bytes, CancellationToken ct)` | `void Write(string address, Span<byte> buffer, CancellationToken ct)` |
+
+  读取长度由 `buffer.Length` 决定。**只能是同步的**：`Span<T>` 是 ref struct，既不能跨 `await` 存活、也不能作为 `Task` 的结果返回；
+  而底层 S7 调用本来就是同步阻塞的，原来那层 `Task` 只是伪装。读写失败依旧抛 `InvalidOperationException`（未连接、或 PLC 返回错误码）。
+- **删除了 `IContinuousBytesBasedTagChannel`（`StdUnit.Tags.Core` 的公开接口）**。它表达的是"能以字节方式连续读写的通道"，
+  但删除前**唯一的实现者就是 `S7TagChannel`**（Modbus 早就有自己的 `IModbusBitsChannel` / `IModbusRegisterChannel`），
+  没有第二个使用者的抽象不再保留。
+- **S7 组合测点要求通道必须是 `S7TagChannel`**：`S7TagCbnt` / `S7TagCbntorBase` 由"按接口判定"改成"按具体类型判定"，
+  于是"自己实现一个字节通道来驱动 S7 组合子"的用法不再可行——改为继承 `S7TagChannel`（`Read` / `Write` 仍是 `virtual`；
+  `EnsureConnectedAsync` / `DisconnectAsync` / `Dispose` 的签名都没变）。
+- **影响面**：只调库、不继承 `S7TagChannel` 的终端 App **编译与行为都不变**（`ITag` / `ITagCbnt` / `ITagGrp` 本次全部未动）；
+  需要动手的是自行继承/实现 S7 通道的代码，以及把 S7 通道当"连续字节通道"传递/判定的代码。
+
+### 修复和改进
+
+- **S7 读、写两条路径都不再分配 `byte[]`**：组合式测点直接读写 `TagCbnt<byte>` 的缓存，直接测点用 `stackalloc` 临时缓冲；
+  前者顺带省掉了"先读进临时数组、成功后再拷回缓存"的那次拷贝（缓冲区就是缓存本身）。
+- **`Read` / `Write` 的 `ct` 只作用于等待 I/O 互斥体**（连接/断开可能长时间占用它），底层 S7 调用本身仍不可取消——
+  可取消性与 `2.0.0-beta` 及以前**一致**（`StopAsync` 的有界等待因此仍然有效）。新增确定性回归测试覆盖"互斥体被占用时 `ct` 能中断等待"。
+- **S7 读写失败的消息更准**：地址一律用地址自身的文本（`MB` 区域此前会被拼成 `DB0.x`），措辞从"读取DB失败 / 读取MB失败"
+  统一为"读取失败 / 写入失败"（区域信息已经含在地址里）；写入失败的消息同样带上了长度。
+- 依赖：**`StdUnit.Sharp7` 升到 0.8.1**（多目标 `net6.0` / `netstandard2.0` / `netstandard2.1`）。因此 `net8.0` 侧取 `net6.0` 资产。
+
 ## 2.0.0
 
-> `2026-10-10`发布`2.0.0-alpha`。使能语义相关改动自 `2.0.0-alpha` 起可用；AOT 支持相关改动自 `2.0.0-beta` 起可用。
+> `2026-10-10`发布`2.0.0-alpha`。使能语义相关改动自 `2.0.0-alpha` 起可用；AOT 支持相关改动自 `2.0.0-beta` 起可用；S7 读写路径的破坏性改造自 `2.0.0-beta2` 起可用。
 
 本次更新有两个主题：
 
