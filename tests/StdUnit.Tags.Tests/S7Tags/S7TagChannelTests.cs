@@ -482,6 +482,41 @@ public class S7TagChannelTests
     }
 
     #endregion
+
+    #region 不支持的地址区域
+
+    [Fact]
+    public void Read_UnsupportedArea_ShouldThrowNotImplemented()
+    {
+        var (channel, mock) = CreateChannel(dbReadResult: 0);
+        channel.Client = mock;
+
+        // DB / MB 之外的区域（$$ 相对地址）：必须显式失败，不能静默乱读
+        var ex = Assert.Throws<NotImplementedException>(
+            () => channel.Read("$$100", new byte[1], CancellationToken.None));
+
+        Assert.Contains("不支持的地址区域类型", ex.Message);
+        Assert.Contains("$$100", ex.Message);
+        Assert.Equal(0, mock.DBReadCallCount);
+        Assert.Equal(0, mock.MBReadCallCount);
+    }
+
+    [Fact]
+    public void Write_UnsupportedArea_ShouldThrowNotImplemented()
+    {
+        var (channel, mock) = CreateChannel(dbWriteResult: 0);
+        channel.Client = mock;
+
+        var ex = Assert.Throws<NotImplementedException>(
+            () => channel.Write("$$100", new byte[] { 0x01 }, CancellationToken.None));
+
+        Assert.Contains("不支持的地址区域类型", ex.Message);
+        Assert.Contains("$$100", ex.Message);
+        Assert.Equal(0, mock.DBWriteCallCount);
+        Assert.Equal(0, mock.MBWriteCallCount);
+    }
+
+    #endregion
 }
 
 /// <summary>
