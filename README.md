@@ -129,7 +129,6 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 
 > 警告：有一些未在本仓库中列出的驱动及扩展，却由我发布到公开的`nuget.org`上以及私有的测试源上(比如[`StdUnit.Tags.LinuxFs.ProcInfo`](https://www.nuget.org/packages/StdUnit.Tags.LinuxFs.ProcInfo)、[`StdUnit.Tags.WinUsbKeyboardCodeScanners`](https://www.nuget.org/packages/StdUnit.Tags.WinUsbKeyboardCodeScanners/))，只供内部使用——那部分包不对外提供任何质量保证，请谨慎使用。
 
-
 ### 给人类的
 
 0. 我们为本类库编写了专门的文档和教程，部署在[https://tags.doc.stdunit.com](https://tags.doc.stdunit.com)。其中由浅入深地讲解了基本概念、常用写法、设计思路和驱动专题，也穿插了不少常见故障与排错手法。

@@ -58,6 +58,35 @@ jobs:
         fail_ci_if_error: true
         verbose: true
 
+    # 迭代产物通道：这**不是**发布，只是把每次构建的 13 个包传上来，好让现场用户/公测者提前试。
+    # 版本号故意写成"构建号"（<基础版本>-dev.<run>.<attempt>），它不是语义化版本：
+    #   * 落在"下一个计划发布的正式号"的预发布位上 ⇒ 排序上低于该正式号（正式版一发就自然覆盖），
+    #     又高于此前任何正式版（装了它还能正常往前走，不会出现版本降级）；
+    #   * 每次构建都唯一 ⇒ 不需要人工决定"这算 minor 还是 major"，也不占任何正式号位。
+    # 基础版本号**不在这里写死**：唯一来源是仓库根的 next-release-version.txt，
+    # 本步只传构建号，由 publish-packages.ps1 读该文件并拼成 <基础版本>-dev.<构建号>。
+    # ⚠ 维护点：正式版发布后，把 next-release-version.txt 改成下一个计划发布的号
+    #   （如 2.0.1），否则迭代产物的版本会低于已发布的正式版，装上它反而成了降级。
+    #   详见 docs/设计决策与边界/3. 打包与发布.md。
+    # 用法：从本 job 的 Artifacts 下载 dev-packages.zip，解压成一个文件夹源，然后
+    #   dotnet nuget add source <解压目录> -n stdunit-dev
+    # 注意：这里的版本号**不承诺任何兼容性**，只作"提前试"用，别做长期依赖。
+    # 只在 push 到 main/dev 时产出（PR 不产，避免噪声 artifact 堆积）。
+    - name: Pack dev packages (迭代产物，不发布)
+      if: github.event_name == 'push'
+      working-directory: ./src
+      run: dotnet pwsh ./publish-packages.ps1 -DevBuildNumber "${{ github.run_number }}.${{ github.run_attempt }}" -SkipPush -OutputDir ../dev-packages
+
+    - name: Upload dev packages
+      if: github.event_name == 'push'
+      uses: actions/upload-artifact@v4
+      with:
+        name: dev-packages
+        # 用脚本 -OutputDir 指定的独立目录：直接 glob bin/Release 会把上次构建残留的旧版本 nupkg 也传上来
+        path: dev-packages/*.nupkg
+        retention-days: 30
+        if-no-files-found: error
+
   net472-on-mono:
 
     # 目的：让 net472 的**运行**测试也自动化，且不占 Windows runner 的排队时间。

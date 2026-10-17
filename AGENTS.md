@@ -120,6 +120,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 - **时间戳一律 UTC**：`ITag.Timestamp` 用 `DateTime.UtcNow` 写入，**不要用 `DateTime.Now`**（本地时间跨时区/夏令时不可比）；展示或与本地时间比较时由调用方自行转换。
 - **启停语义**：`ITagsProjectCtrl.StopAsync()` 会先**等轮询循环退出**（有界超时，默认 30s）再释放项目、断开通道、触发"已停止"事件；`StartPollAsync` 的 `finally` 是项目的**唯一常规释放点**（只有等待超时那一刻才由 `StopAsync` 兜底释放，因此"只释放一次"是硬约束）。改启停或清理路径时必须保持这个顺序，详见 `docs/设计决策与边界/`。
 - 公共编译设置（`ImplicitUsings` + `Nullable` + `LangVersion latest` + XML 文档文件）在 `src/Directory.Build.props`（与 `tests/Directory.Build.props`，后者不含包元数据），NuGet 包元数据（作者/授权/仓库/项目主页/标签/README）只收口在 `src/Directory.Build.props`；**新增会被发布的包时，务必在自己 csproj 里补一行 `<Description>`**（否则 nuget.org 上只会显示 SDK 占位文本 `Package Description`），并把项目名加进 `src/publish-packages.ps1` 的列表。
+- **版本号不要写进 workflow**：dev 通道（CI 的迭代产物 / 本地预演）用 `src/publish-packages.ps1 -DevBuildNumber <构建号>`，基础版本由脚本读仓库根的 `next-release-version.txt` 拼成 `<基础版本>-dev.<构建号>`；正式发布仍用 `-packageVersion <语义化版本>`。正式版发布后要改的是那个文件。README **不写**发版细节（它会被打进每个 nupkg），版本通道与发布流程都在 `docs/设计决策与边界/3. 打包与发布.md`。
 - **测试代码必须跨平台**（CI 只跑 Linux），两类路径都要当心：
   - **分隔符**：相对路径一律用 `/` 或 `Path.Combine` 分段，**不要写 `@"Samples\Web\index.xml"`**——反斜杠在 Linux 是合法文件名字符，`Path.Combine` 不会转换，结果是"Windows 上绿、Linux 上 `File.Exists` 失败"。夹具/示例用 `TestPaths.Fixture("Samples", "Web", "index.xml")` 定位。
   - **Windows 专有绝对路径**：`C:\base` 在 Linux 上**不是** rooted 路径，`Path.Combine` 的行为会不同（Windows 丢弃前一段、Linux 拼接），于是同一个用例在两个平台上"测的不是同一件事"。需要"绝对路径"语义的数据请用 `TestPaths.TempPath("base")`（运行时由 `Path.GetTempPath()` 拼出，两个平台都真 rooted）。
