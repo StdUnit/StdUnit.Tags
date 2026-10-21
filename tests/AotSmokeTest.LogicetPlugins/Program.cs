@@ -157,8 +157,8 @@ static XElement BuildProjectXml(bool withPlugin)
 /// </summary>
 internal sealed class DemoLogicet : LogicetBase
 {
-    public DemoLogicet(IReadOnlyList<ITagChannel> channels, ITagGrp tags)
-        : base(channels, tags)
+    public DemoLogicet(ITagsProject project)
+        : base(project)
     {
     }
 

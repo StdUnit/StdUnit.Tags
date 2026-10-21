@@ -96,7 +96,7 @@ internal class TagsProject : ITagsProject
         var dlls = elements
             .Where(e => !string.IsNullOrEmpty(e.Value))
             .Select(e => string.IsNullOrEmpty(this.ProjectRoot) ? e.Value : Path.Combine(this.ProjectRoot, e.Value));
-        var logicets = this._logicetLoader.LoadLogicets(this._sp, dlls, this.Channels, this.Tags);
+        var logicets = this._logicetLoader.LoadLogicets(this._sp, dlls, this);
         this.AddLogicets(logicets.Logicets);
         this._disposables.AddRange(logicets.Disposables);
         return this;

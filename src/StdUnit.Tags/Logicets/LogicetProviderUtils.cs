@@ -16,8 +16,7 @@ internal static class LogicetProviderUtils
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
 #endif
         Type type,
-        IReadOnlyList<ITagChannel> channels,
-        ITagGrp tags
+        ITagsProject proj
     )
     {
         if (!typeof(ILogicet).IsAssignableFrom(type))
@@ -29,7 +28,7 @@ internal static class LogicetProviderUtils
         var creator = sp.GetService<ILogicetCreator>();
         if (creator is not null)
         {
-            var item = creator.CreateLogicet(sp, type, channels, tags);
+            var item = creator.CreateLogicet(sp, type, proj);
             if (item is not null)
                 return (item, null);
         }
@@ -37,7 +36,7 @@ internal static class LogicetProviderUtils
         // fallback
         try
         {
-            var logicet = ActivatorUtilities.CreateInstance(sp, type, channels, tags);
+            var logicet = ActivatorUtilities.CreateInstance(sp, type, proj);
             return (logicet as ILogicet, null);
         }
         // 吞掉任何异常，返回 null 以表示创建失败

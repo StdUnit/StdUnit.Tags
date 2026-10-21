@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Channels;
+using System.Xml.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -26,6 +28,54 @@ public class LogicetLoaderAotTests
         protected override bool SupportsDynamicAssemblyLoading => false;
     }
 
+    private sealed class DummyProject : ITagsProject
+    {
+        public IReadOnlyList<ITagChannel> Channels { get; } = [];
+
+        public IList<ILogicet> Logicets { get; } = [];
+
+        public ITagGrp Tags { get; } = new TagGrp(new TagGrpDescriptor() { }, null);
+
+        public string? ProjectRoot => throw new NotImplementedException();
+
+        public int IntentCapacity { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+        public event RunnerStarted? RunnerStarted;
+        public event RunnerCrashed? RunnerCrashed;
+
+        public void Dispose() { }
+
+        public ChannelReader<IntentCompletion>? GetIntentReader(string entry)
+        {
+            throw new NotImplementedException();
+        }
+
+        public XElement? GetRootElement()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Initialize(string projRoot, XElement? root = null)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task RunAsync(CancellationToken ct)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool WriteIntent(string entry, TagGrpWriteIntent intent, out Task task)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool WriteIntent(string entry, TagGrpWriteIntent intent)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     private static LogicetLoader CreateDefaultLoader() =>
         new(Options.Create(new LogicetLoadOptions()), NullLogger<LogicetLoader>.Instance);
 
@@ -40,8 +90,7 @@ public class LogicetLoaderAotTests
             loader.LoadLogicets(
                 CreateServices(),
                 new[] { "plugins/Demo.Logicets.dll" },
-                Array.Empty<ITagChannel>(),
-                null!));
+                new DummyProject()));
 
         // 加载期异常必须带定位上下文（与 Channel(S7-3) 同一语法族），并且要说清补救办法。
         Assert.Equal("Logicet(plugins/Demo.Logicets.dll)", ex.Location);
@@ -56,8 +105,7 @@ public class LogicetLoaderAotTests
         var result = loader.LoadLogicets(
             CreateServices(),
             Array.Empty<string>(),
-            Array.Empty<ITagChannel>(),
-            null!);
+            new DummyProject());
 
         // "不配 <Logicet> 就不受影响" 是 AOT 支持的核心承诺：宿主不支持动态加载也必须能正常跑。
         Assert.Empty(result.Logicets);
@@ -72,8 +120,7 @@ public class LogicetLoaderAotTests
         var result = loader.LoadLogicets(
             CreateServices(),
             new[] { "not-exists/Demo.Logicets.dll" },
-            Array.Empty<ITagChannel>(),
-            null!);
+            new DummyProject());
 
         // 单个插件坏了不应阻断项目加载（只有"宿主不支持"才快速失败）——这是既有语义，勿改。
         Assert.Empty(result.Logicets);

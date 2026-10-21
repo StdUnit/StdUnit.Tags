@@ -20,9 +20,9 @@ public class HeartBeatLogicet : LogicetBase
     private bool _fst = true;
     private TimeSpan _duration = TimeSpan.Zero;
 
-    public HeartBeatLogicet(IReadOnlyList<ITagChannel> channels, ITagGrp tags, ILogger<HeartBeatLogicet> logger) : base(channels, tags)
+    public HeartBeatLogicet(ITagsProject project, ILogger<HeartBeatLogicet> logger) : base(project)
     {
-        var grp = tags.SelectGrp("IoBox/通用状态");
+        var grp = this.Tags.SelectGrp("IoBox/通用状态");
 
         _heartReq = grp.SelectTag("PLC/心跳请求");
         _heartAck = grp.SelectTag("MST/心跳响应");

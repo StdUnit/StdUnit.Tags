@@ -17,7 +17,7 @@ internal class Handle1Snap : LogicetBase
     private ITagCbntor _inBtnReset;
     private ITagCbntor _outLedRed;
 
-    public Handle1Snap(IReadOnlyList<ITagChannel> channels, ITagGrp tags) : base(channels, tags)
+    public Handle1Snap(ITagsProject project) : base(project)
     {
         this._cbnt1 = this.Tags.SelectCbnt("IoBox/输入");
         this._inBtnReset = _cbnt1.SelectTag("复位_执行键");

@@ -16,7 +16,7 @@ namespace StdUnit.Tags.Tests.Core.Logicets;
 public class ProjectAddLogicetTests
 {
     /// <summary>
-    /// 一个简单的 ILogicet 实现，可通过 (IReadOnlyList&lt;ITagChannel&gt;, ITagGrp) 构造。
+    /// 一个简单的 ILogicet 实现，可通过 <see cref="ITagsProject"/> 构造。
     /// </summary>
     private class SimpleLogicet : ILogicet
     {
@@ -25,10 +25,13 @@ public class ProjectAddLogicetTests
         public ITagGrp Tags { get; }
         public bool Enabled => true;
 
-        public SimpleLogicet(IReadOnlyList<ITagChannel> channels, ITagGrp tags)
+        public ITagsProject Project { get; }
+
+        public SimpleLogicet(ITagsProject project)
         {
-            Channels = channels;
-            Tags = tags;
+            Project = project;
+            Channels = project.Channels;
+            Tags = project.Tags;
         }
 
         public bool MatchEntry(ITagGrp entry) => true;
@@ -40,12 +43,13 @@ public class ProjectAddLogicetTests
     /// </summary>
     private class ThrowingLogicet : ILogicet
     {
+        public ITagsProject Project { get; }
         public int Order => 0;
         public IReadOnlyList<ITagChannel> Channels => Array.Empty<ITagChannel>();
         public ITagGrp Tags => null!;
         public bool Enabled => false;
 
-        public ThrowingLogicet(IReadOnlyList<ITagChannel> channels, ITagGrp tags)
+        public ThrowingLogicet(ITagsProject project)
         {
             throw new InvalidOperationException("ctor failure");
         }
@@ -62,7 +66,7 @@ public class ProjectAddLogicetTests
         /// <summary>当不为 null 时，始终返回此实例。</summary>
         public ILogicet? FixedInstance { get; set; }
 
-        public ILogicet? CreateLogicet(IServiceProvider sp, Type type, IReadOnlyList<ITagChannel> channels, ITagGrp tags)
+        public ILogicet? CreateLogicet(IServiceProvider sp, Type type, ITagsProject proj)
             => FixedInstance;
     }
 
@@ -74,17 +78,16 @@ public class ProjectAddLogicetTests
         var tags = new MockTagGrp(new TagGrpDescriptor { Name = "mock" });
         var project = new MockProject(channels, tags);
 
-        var services = new ServiceCollection();
-        services.AddScoped(_ => channels);
-        services.AddScoped(_ => tags);
-        var sp = services.BuildServiceProvider();
+        var sp = new ServiceCollection().BuildServiceProvider();
 
         // Act
         var result = project.TryAddLogicet<SimpleLogicet>(sp);
 
         // Assert
         Assert.True(result);
-        Assert.Contains(project.Logicets, l => l is SimpleLogicet);
+        var logicet = Assert.IsType<SimpleLogicet>(Assert.Single(project.Logicets));
+        Assert.Same(project, logicet.Project);
+        Assert.Same(project.Tags, logicet.Tags);
     }
 
     [Fact]
@@ -95,10 +98,7 @@ public class ProjectAddLogicetTests
         var tags = new MockTagGrp(new TagGrpDescriptor { Name = "mock" });
         var project = new MockProject(channels, tags);
 
-        var services = new ServiceCollection();
-        services.AddScoped(_ => channels);
-        services.AddScoped(_ => tags);
-        var sp = services.BuildServiceProvider();
+        var sp = new ServiceCollection().BuildServiceProvider();
 
         // Act
         var result = project.TryAddLogicet<ThrowingLogicet>(sp);
@@ -116,12 +116,10 @@ public class ProjectAddLogicetTests
         var tags = new MockTagGrp(new TagGrpDescriptor { Name = "mock" });
         var project = new MockProject(channels, tags);
 
-        var customLogicet = new SimpleLogicet(channels, tags);
+        var customLogicet = new SimpleLogicet(project);
         var creator = new ConfigurableLogicetCreator { FixedInstance = customLogicet };
 
         var services = new ServiceCollection();
-        services.AddScoped(_ => channels);
-        services.AddScoped(_ => tags);
         services.AddSingleton<ILogicetCreator>(creator);
         var sp = services.BuildServiceProvider();
 
@@ -131,6 +129,7 @@ public class ProjectAddLogicetTests
         // Assert
         Assert.True(result);
         Assert.Contains(project.Logicets, l => ReferenceEquals(l, customLogicet));
+        Assert.Same(project, customLogicet.Project);
     }
 
     [Fact]
@@ -145,8 +144,6 @@ public class ProjectAddLogicetTests
         var creator = new ConfigurableLogicetCreator { FixedInstance = null };
 
         var services = new ServiceCollection();
-        services.AddScoped(_ => channels);
-        services.AddScoped(_ => tags);
         services.AddSingleton<ILogicetCreator>(creator);
         var sp = services.BuildServiceProvider();
 
@@ -155,7 +152,8 @@ public class ProjectAddLogicetTests
 
         // Assert
         Assert.True(result);
-        Assert.Contains(project.Logicets, l => l is SimpleLogicet);
+        var logicet = Assert.IsType<SimpleLogicet>(Assert.Single(project.Logicets));
+        Assert.Same(project, logicet.Project);
     }
 
     /// <summary>

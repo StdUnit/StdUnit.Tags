@@ -12,8 +12,7 @@ public interface ILogicetCreator
     /// </summary>
     /// <param name="sp">服务提供者</param>
     /// <param name="type"><see cref="ILogicet"/> 类型</param>
-    /// <param name="channels">测点通道列表</param>
-    /// <param name="tags">测点组</param>
+    /// <param name="project">测点项目</param>
     /// <returns>创建的 ILogicet 实例，如果创建失败则返回 null</returns>
     ILogicet? CreateLogicet(
         IServiceProvider sp,
@@ -21,6 +20,5 @@ public interface ILogicetCreator
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
 #endif
         Type type,
-        IReadOnlyList<ITagChannel> channels,
-        ITagGrp tags);
+        ITagsProject project);
 }

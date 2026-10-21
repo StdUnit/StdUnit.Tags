@@ -26,10 +26,9 @@ public interface ILogicetsLoader
     /// </summary>
     /// <param name="sp"></param>
     /// <param name="dlls">dll路径列表</param>
-    /// <param name="channels"></param>
-    /// <param name="tags"></param>
+    /// <param name="project"></param>
     /// <returns></returns>
-    LoadedLogicets LoadLogicets(IServiceProvider sp, IEnumerable<string> dlls, IReadOnlyList<ITagChannel> channels, ITagGrp tags);
+    LoadedLogicets LoadLogicets(IServiceProvider sp, IEnumerable<string> dlls, ITagsProject project);
 }
 
 /// <summary>

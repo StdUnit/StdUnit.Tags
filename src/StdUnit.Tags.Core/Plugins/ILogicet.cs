@@ -7,19 +7,15 @@
 public interface ILogicet
 {
     /// <summary>
+    /// 所属的测点项目。<br/>
+    /// 逻辑组件创建时注入：构造期间 <see cref="ITagsProject.Channels"/> / <see cref="ITagsProject.Tags"/> 已加载完成，可直接使用。
+    /// </summary>
+    ITagsProject Project { get; }
+
+    /// <summary>
     /// 运行顺序
     /// </summary>
     int Order { get; }
-
-    /// <summary>
-    /// 通道
-    /// </summary>
-    IReadOnlyList<ITagChannel> Channels { get; }
-
-    /// <summary>
-    /// 测点
-    /// </summary>
-    ITagGrp Tags { get; }
 
     /// <summary>
     /// 启用？

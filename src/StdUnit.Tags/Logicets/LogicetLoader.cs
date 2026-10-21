@@ -42,7 +42,7 @@ internal class LogicetLoader : ILogicetsLoader
 
 
     /// <inheritdoc/>
-    public LoadedLogicets LoadLogicets(IServiceProvider sp, IEnumerable<string> dllLocations, IReadOnlyList<ITagChannel> channels, ITagGrp tags)
+    public LoadedLogicets LoadLogicets(IServiceProvider sp, IEnumerable<string> dllLocations, ITagsProject proj)
     {
         var dlls = dllLocations as IReadOnlyList<string> ?? dllLocations.ToList();
         WarnAboutNetFrameworkLimitations(dlls);
@@ -64,6 +64,7 @@ internal class LogicetLoader : ILogicetsLoader
             {
                 List<Type> sharedTypes = new List<Type> {
                     typeof(ILogicet),
+                    typeof(ITagsProject),
                     typeof(ITagChannel),
                     typeof(ITagGrp),
                     typeof(IServiceProvider),
@@ -71,7 +72,7 @@ internal class LogicetLoader : ILogicetsLoader
                     typeof(ILogger),
                 };
 
-                (batch, loader) = MakeCore(sp, channels, tags, dll, sharedTypes);
+                (batch, loader) = MakeCore(sp, proj, dll, sharedTypes);
                 logicets.AddRange(batch);
                 disposables.Add(loader);
             }
@@ -95,7 +96,7 @@ internal class LogicetLoader : ILogicetsLoader
         return new LoadedLogicets(logicets, disposables);
     }
 
-    private (IList<ILogicet> batch, IDisposable loader) MakeCore(IServiceProvider sp, IReadOnlyList<ITagChannel> channels, ITagGrp tags, string dll, List<Type> sharedTypes)
+    private (IList<ILogicet> batch, IDisposable loader) MakeCore(IServiceProvider sp, ITagsProject proj, string dll, List<Type> sharedTypes)
     {
         this._options.SharedTypesFilter?.Invoke(dll, sharedTypes);
 #if NETFRAMEWORK
@@ -107,7 +108,7 @@ internal class LogicetLoader : ILogicetsLoader
         // 注意：不要改用 Assembly.LoadFile——它不做标识匹配，插件里的 ILogicet 会被判定为
         //       与宿主不同型（IsAssignableFrom 为 false）而被全部跳过。
         var pluginAssembly = Assembly.LoadFrom(dll);
-        var fallbackBatch = MakeLogicets(sp, pluginAssembly, channels, tags);
+        var fallbackBatch = MakeLogicets(sp, pluginAssembly, proj);
 
         return (fallbackBatch, _noopDisposable);
 #else
@@ -117,7 +118,7 @@ internal class LogicetLoader : ILogicetsLoader
             sharedTypes: [.. sharedTypes]
         );
         var plugin = loader.LoadDefaultAssembly();
-        var batch = MakeLogicets(sp, plugin, channels, tags);
+        var batch = MakeLogicets(sp, plugin, proj);
 
         return (batch, loader);
 #endif
@@ -165,8 +166,7 @@ internal class LogicetLoader : ILogicetsLoader
     /// </summary>
     /// <param name="sp"></param>
     /// <param name="assembly"></param>
-    /// <param name="channels"></param>
-    /// <param name="tags"></param>
+    /// <param name="project"></param>
     /// <returns></returns>
     /// <remarks>
     /// 由于本方法只服务「从程序集动态挂载」这一条路径，传入的 <paramref name="assembly"/>是运行期从 dll 加载的<b>外部程序集</b>：<br/>
@@ -181,7 +181,7 @@ internal class LogicetLoader : ILogicetsLoader
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "assembly 是运行期按路径加载的插件 dll，不属于宿主的裁剪范围，其类型不会被移除。")]
     [UnconditionalSuppressMessage("Trimming", "IL2067", Justification = "GetTypes() 返回的插件类型来自未裁剪的外部程序集，其公共构造函数一定存在。")]
 #endif
-    protected virtual IList<ILogicet> MakeLogicets(IServiceProvider sp, Assembly assembly, IReadOnlyList<ITagChannel> channels, ITagGrp tags)
+    protected virtual IList<ILogicet> MakeLogicets(IServiceProvider sp, Assembly assembly, ITagsProject project)
     {
         var types = assembly.GetTypes()
             .Where(t =>
@@ -192,7 +192,7 @@ internal class LogicetLoader : ILogicetsLoader
         var logicets = types
             .Select(t =>
             {
-                var (logicet, ex) = LogicetProviderUtils.CreateLogicet(sp, t, channels, tags);
+                var (logicet, ex) = LogicetProviderUtils.CreateLogicet(sp, t, project);
                 if (logicet is null)
                 {
                     _logger.LogError(ex, "构建Logicet错误：t={t}", t.Name);

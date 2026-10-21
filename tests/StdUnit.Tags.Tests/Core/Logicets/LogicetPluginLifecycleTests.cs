@@ -135,8 +135,8 @@ public class LogicetPluginLifecycleTests
 
     sealed class TestUnloadableLogicet : LogicetBase
     {
-        public TestUnloadableLogicet(IReadOnlyList<ITagChannel> channels, ITagGrp tags)
-            : base(channels, tags)
+        public TestUnloadableLogicet(ITagsProject project)
+            : base(project)
         {
         }
 

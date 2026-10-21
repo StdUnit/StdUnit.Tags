@@ -12,7 +12,7 @@ internal class HandleSnap14 : LogicetBase
     private ITagCbnt _cbnt1;
     private ITagCbntor _reqFlag;
 
-    public HandleSnap14(IReadOnlyList<ITagChannel> channels, ITagGrp tags) : base(channels, tags)
+    public HandleSnap14(ITagsProject project) : base(project)
     {
         this._cbnt1 = this.Tags.SelectCbnt("拧紧枪/1#/拧紧请求");
         this._reqFlag = _cbnt1.SelectTag("请求标志");

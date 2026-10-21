@@ -15,7 +15,7 @@ internal class HandleSnap11 : LogicetBase
     private ITagCbntor _ackTag;
 
 
-    public HandleSnap11(IReadOnlyList<ITagChannel> channels, ITagGrp tags) : base(channels, tags)
+    public HandleSnap11(ITagsProject project) : base(project)
     {
         this._cbnt1 = this.Tags.SelectCbnt("g4/输入");
         this._reqTag = _cbnt1.SelectTag("心跳请求");

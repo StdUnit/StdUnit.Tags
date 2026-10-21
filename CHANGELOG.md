@@ -2,6 +2,26 @@
 
 本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
+## 2.0.0-beta3
+
+> 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
+
+主题：**逻辑组件（`ILogicet`）改为持有整个测点项目**，构造函数不再逐个注入通道集与测点树。
+
+### 破坏性变更
+
+- **`ILogicet` 新增 `Project`、移除 `Channels` / `Tags`**：逻辑组件改为通过 `Project.Channels` / `Project.Tags` 访问通道与测点。
+  `LogicetBase` 仍保留同名的 `Channels` / `Tags` 便捷属性（等价于 `Project.Channels` / `Project.Tags`），所以继承 `LogicetBase` 的子类里
+  `this.Tags.SelectCbnt(...)` 这类写法**不用改**；要从 `ILogicet` 变量上读的代码需要改成 `logicet.Project.Tags` / `logicet.Project.Channels`。
+- **`LogicetBase` 的构造函数改为 `LogicetBase(ITagsProject project)`**：旧的 `(IReadOnlyList<ITagChannel> channels, ITagGrp tags)` 重载已删除。
+  继承 `LogicetBase` 的子类需要把构造函数改成接收 `ITagsProject` 并 `: base(project)`；原来用参数 `tags` 的地方改用 `this.Tags`
+  （构造期间通道与测点已加载完成，可直接使用）。
+- **`ILogicetCreator.CreateLogicet` / `ILogicetsLoader.LoadLogicets` 的参数由 `channels + tags` 改为 `ITagsProject`**：自己实现这两个扩展点的代码需要跟着改。
+- **旧插件 dll 必须重编**：上面两处签名变化都是二进制层面的——用旧版本编译出的插件在加载期会创建失败（日志中是"构建Logicet错误"或"加载Logicet失败"），
+  不支持"只替换 dll"的升级方式。
+- **影响面**：只调库、不继承 `LogicetBase`、不实现上述接口、也不从 `ILogicet` 上读 `Channels` / `Tags` 的终端 App，**编译与行为都不变**。
+- 示例与 AOT 冒烟测试（`samples/Samples.Plugin1`、`samples/StdUnit.Tags.Web`、`samples/WpfDemo`、`tests/AotSmokeTest.LogicetPlugins`）已按新签名更新。
+
 ## 2.0.0-beta2
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。

@@ -8,20 +8,25 @@ public abstract class LogicetBase : ILogicet
     /// <summary>
     /// c'tor
     /// </summary>
-    /// <param name="channels"></param>
-    /// <param name="tags"></param>
-    /// <exception cref="ArgumentNullException">channels 或 tags 为 null</exception>
-    public LogicetBase(IReadOnlyList<ITagChannel> channels, ITagGrp tags)
+    /// <param name="project">逻辑组件所属的测点项目</param>
+    /// <exception cref="ArgumentNullException">project 为 null</exception>
+    public LogicetBase(ITagsProject project)
     {
-        this.Channels = channels ?? throw new ArgumentNullException(nameof(channels), "构造逻辑组件时通道集不可为空");
-        this.Tags = tags ?? throw new ArgumentNullException(nameof(tags), "构造逻辑组件时测点集不可为空");
+        this.Project = project ?? throw new ArgumentNullException(nameof(project), "构造逻辑组件时项目不可为空");
     }
 
     /// <inheritdoc/>
-    public virtual IReadOnlyList<ITagChannel> Channels { get; }
+    public ITagsProject Project { get; }
 
-    /// <inheritdoc/>
-    public virtual ITagGrp Tags { get; }
+    /// <summary>
+    /// 项目的通道列表，等价于 <c>Project.Channels</c>。<br/>
+    /// </summary>
+    public virtual IReadOnlyList<ITagChannel> Channels => this.Project.Channels;
+
+    /// <summary>
+    /// 项目的测点组，等价于 <c>Project.Tags</c>。<br/>
+    /// </summary>
+    public virtual ITagGrp Tags => this.Project.Tags;
 
     /// <inheritdoc/>
     public abstract int Order { get; }
