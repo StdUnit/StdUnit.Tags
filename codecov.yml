@@ -2,6 +2,14 @@ coverage:
   precision: 2
   round: down
   range: "80...100"
+  status:
+    # Pin patch coverage to a fixed target. The default `auto` compares a small
+    # commit's changed lines against the whole project's coverage, so a couple
+    # of uncovered trivial lines fail the patch check even when project
+    # coverage goes up.
+    patch:
+      default:
+        target: 91%
 
 comment:
   layout: "header, diff, components"

@@ -157,6 +157,36 @@ public class ProjectAddLogicetTests
     }
 
     /// <summary>
+    /// 继承 <see cref="LogicetBase"/> 的最小实现，用于验证基类成员都从项目转发。
+    /// </summary>
+    private sealed class ProbeLogicet : LogicetBase
+    {
+        public ProbeLogicet(ITagsProject project) : base(project) { }
+
+        public override int Order => 0;
+
+        public override bool MatchEntry(ITagGrp entry) => false;
+
+        public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public void LogicetBase_ExposesProject()
+    {
+        // Arrange
+        var tags = new MockTagGrp(new TagGrpDescriptor { Name = "mock" });
+        var project = new MockProject(Array.Empty<ITagChannel>(), tags);
+
+        // Act
+        var logicet = new ProbeLogicet(project);
+
+        // Assert
+        Assert.Same(project, logicet.Project);
+        Assert.Same(project.Channels, logicet.Channels);
+        Assert.Same(project.Tags, logicet.Tags);
+    }
+
+    /// <summary>
     /// 用于测试的 ITagsProject 存根。
     /// </summary>
     private class MockProject : ITagsProject
