@@ -42,7 +42,7 @@ internal class HandleSnap13 : LogicetBase
 
     private int i = 0;
 
-    public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel)
+    public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct)
     {
         var letgo = this._btnLetGo.GetTagValue<bool>();
         var red = this._ledRed.GetTagValue<bool>();

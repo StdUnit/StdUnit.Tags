@@ -32,7 +32,7 @@ internal class HandleSnap11 : LogicetBase
         return entry.TagName() == "g4";
     }
 
-    public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel)
+    public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct)
     {
         var hasReq = this._reqTag.GetTagValue<bool>();
         var hasAck = _ackTag.GetTagValue<bool?>() == true;

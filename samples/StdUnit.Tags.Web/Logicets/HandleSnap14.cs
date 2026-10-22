@@ -27,7 +27,7 @@ internal class HandleSnap14 : LogicetBase
     }
 
 
-    public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel)
+    public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct)
     {
         _reqFlag.Value = true;
         return Task.CompletedTask;

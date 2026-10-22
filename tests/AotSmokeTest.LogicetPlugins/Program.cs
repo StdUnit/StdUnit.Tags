@@ -166,5 +166,5 @@ internal sealed class DemoLogicet : LogicetBase
 
     public override bool MatchEntry(ITagGrp entry) => entry.TagName() == "g1";
 
-    public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel) => Task.CompletedTask;
+    public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct) => Task.CompletedTask;
 }

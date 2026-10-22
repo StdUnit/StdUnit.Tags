@@ -243,7 +243,7 @@ internal class TagsProject : ITagsProject
                     {
                         continue;
                     }
-                    await l.ProcessAsync(entry, ch);
+                    await l.ProcessAsync(entry, ch, ct);
                 }
             };
             runner.RunnerCrashed += RunnerCrashed;

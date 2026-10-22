@@ -38,5 +38,5 @@ public abstract class LogicetBase : ILogicet
     public virtual bool Enabled { get; set; } = true;
 
     /// <inheritdoc/>
-    public abstract Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel);
+    public abstract Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct = default);
 }

@@ -147,7 +147,7 @@ public class LogicetPluginLifecycleTests
             return entry.TagName() == "g1";
         }
 
-        public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel)
+        public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct)
         {
             return Task.CompletedTask;
         }
