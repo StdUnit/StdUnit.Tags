@@ -2,6 +2,26 @@
 
 本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
+## 2.0.0-beta4
+
+> 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
+
+主题：**逻辑组件能拿到项目声明周期的取消令牌**。
+
+### 破坏性变更
+
+- **`ILogicet.ProcessAsync` 增加取消令牌**：签名由 `Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel)`
+  变为 `Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct = default)`（`LogicetBase` 的抽象方法同步修改）。
+  - **调用方不用改代码**：`ct` 是可选参数，`logicet.ProcessAsync(entry, ch)` 照旧编译，取值为 `default`。
+  - **实现方要改签名**：实现 `ILogicet`、或继承 `LogicetBase` 并 override 该方法的代码必须补上参数；二进制层面同样是破坏性的，
+    **旧插件 dll 需要重编**（与 beta3 的迁移动作相同）。
+  - **`ct` 的语义是项目的生命周期**：`TagsProjectCtrl.StopAsync()` 时取消，**不是**"单轮超时"——框架不会为某一轮单独取消，
+    同一入口的每一轮拿到的都是同一个令牌。停机时想尽快收手请用 `if (ct.IsCancellationRequested) return;`；
+    **不要**在 `ProcessAsync` 里抛 `OperationCanceledException`，它会被运行器当成一次失败（触发 `RunnerCrashed`、按策略断开重连）。
+    "回调必须尽快返回"的约束不因新增令牌而放松。
+  - **影响面**：只调库、不实现/继承逻辑组件的终端 App **编译与行为都不变**。
+- 示例与 AOT 冒烟测试（`samples/Samples.Plugin1`、`samples/StdUnit.Tags.Web`、`samples/WpfDemo`、`tests/AotSmokeTest.LogicetPlugins`）已按新签名更新。
+
 ## 2.0.0-beta3
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
@@ -58,7 +78,7 @@
   统一为"读取失败 / 写入失败"（区域信息已经含在地址里）；写入失败的消息同样带上了长度。
 - 依赖：**`StdUnit.Sharp7` 升到 0.8.1**（多目标 `net6.0` / `netstandard2.0` / `netstandard2.1`）。因此 `net8.0` 侧取 `net6.0` 资产。
 
-## 2.0.0
+## 2.0.0-alpha
 
 > `2026-10-10`发布`2.0.0-alpha`。使能语义相关改动自 `2.0.0-alpha` 起可用；AOT 支持相关改动自 `2.0.0-beta` 起可用；S7 读写路径的破坏性改造自 `2.0.0-beta2` 起可用。
 

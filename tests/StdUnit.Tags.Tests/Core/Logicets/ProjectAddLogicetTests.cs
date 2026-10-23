@@ -35,7 +35,7 @@ public class ProjectAddLogicetTests
         }
 
         public bool MatchEntry(ITagGrp entry) => true;
-        public Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel) => Task.CompletedTask;
+        public Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public class ProjectAddLogicetTests
         }
 
         public bool MatchEntry(ITagGrp entry) => false;
-        public Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel) => Task.CompletedTask;
+        public Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>
@@ -167,7 +167,7 @@ public class ProjectAddLogicetTests
 
         public override bool MatchEntry(ITagGrp entry) => false;
 
-        public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel) => Task.CompletedTask;
+        public override Task ProcessAsync(ITagGrp entry, ITagChannel? thisChannel, CancellationToken ct) => Task.CompletedTask;
     }
 
     [Fact]
