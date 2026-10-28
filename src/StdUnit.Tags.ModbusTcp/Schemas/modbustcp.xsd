@@ -39,10 +39,25 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <xs:element name="IpAddr" type="IpAddrType"/>
-  <xs:element name="Port" type="PortType"/>
-  <xs:element name="MaxWriteRegisters" type="SingleFrameLimitType"/>
-  <xs:element name="MaxReadRegisters" type="SingleFrameLimitType"/>
-  <xs:element name="MaxReadBits" type="SingleFrameLimitType"/>
+  <!-- 设计器元数据：driver@name 必须与 ModbusTcpNames.DriverName 完全一致（即 Channel/@driver 的取值）。 -->
+  <xs:annotation><xs:appinfo>
+    <driver name="ModbusTcp" displayName="Modbus TCP" prefix="mb"/>
+  </xs:appinfo></xs:annotation>
+
+  <xs:element name="IpAddr" type="IpAddrType">
+    <xs:annotation><xs:appinfo><ui label="IP 地址" order="1" group="连接" placeholder="192.168.1.10"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="Port" type="PortType">
+    <xs:annotation><xs:appinfo><ui label="端口" order="2" group="连接" placeholder="502"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="MaxWriteRegisters" type="SingleFrameLimitType">
+    <xs:annotation><xs:appinfo><ui label="单帧最大写寄存器数" order="3" group="高级" help="省略时用协议默认 123"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="MaxReadRegisters" type="SingleFrameLimitType">
+    <xs:annotation><xs:appinfo><ui label="单帧最大读寄存器数" order="4" group="高级" help="省略时用协议默认 125"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="MaxReadBits" type="SingleFrameLimitType">
+    <xs:annotation><xs:appinfo><ui label="单帧最大读位数量" order="5" group="高级" help="省略时用协议默认 2000"/></xs:appinfo></xs:annotation>
+  </xs:element>
 
 </xs:schema>

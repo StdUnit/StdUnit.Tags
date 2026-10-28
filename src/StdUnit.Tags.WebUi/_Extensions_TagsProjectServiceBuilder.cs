@@ -38,7 +38,7 @@ public static class TagsStreamExtensions_TagsProjectServiceBuilder
     /// <param name="builder"></param>
     /// <param name="projctrlKey">
     /// 控制器的注册键，同时作为路由里的 <c>{keyed}</c> 段：允许字母/数字/<c>.</c>/<c>-</c>/<c>_</c>，
-    /// 且不能是 <c>ui</c>/<c>tree</c>/<c>stream</c>/<c>value</c>/<c>rescan</c>。
+    /// 且不能是 <c>ui</c>/<c>designer</c>/<c>tree</c>/<c>stream</c>/<c>value</c>/<c>rescan</c>/<c>catalog</c>。
     /// </param>
     /// <param name="configure">这一路流的配置回调（每次调用各一份，互不影响）</param>
     /// <returns>同一个 builder，便于链式配置</returns>

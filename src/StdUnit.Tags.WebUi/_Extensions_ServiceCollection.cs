@@ -2,12 +2,13 @@ using StdUnit.Tags;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using StdUnit.Tags.WebUi.Internal;
 
 
 namespace StdUnit.Tags.WebUi;
 
 /// <summary>
-/// 只读观测流的 DI 注册入口：<see cref="AddTagsStream"/> / <see cref="AddKeyedTagsStream"/>。<br/>
+/// 观测流（外加设计器元数据）的 DI 注册入口：<see cref="AddTagsStream"/> / <see cref="AddKeyedTagsStream"/>。<br/>
 /// 端点映射不在这里，见 <see cref="TagsStreamExtensions_Endpoints"/> 里的 <c>MapTagsStream</c>。
 /// </summary>
 public static class TagsStreamExtensions_ServiceCollection
@@ -64,7 +65,7 @@ public static class TagsStreamExtensions_ServiceCollection
     /// <param name="services">服务集合</param>
     /// <param name="projctrlKey">
     /// 控制器的注册键，同时作为路由里的 <c>{keyed}</c> 段：允许字母/数字/<c>.</c>/<c>-</c>/<c>_</c>，
-    /// 且不能是 <c>ui</c>/<c>tree</c>/<c>stream</c>/<c>value</c>/<c>rescan</c>（会与不具名流的端点撞车）。
+    /// 且不能是 <c>ui</c>/<c>designer</c>/<c>tree</c>/<c>stream</c>/<c>value</c>/<c>rescan</c>/<c>catalog</c>（会与不具名流的端点撞车）。
     /// </param>
     /// <param name="configure">这一路流的配置回调（每次调用各一份，互不影响）</param>
     /// <returns></returns>
@@ -105,6 +106,10 @@ public static class TagsStreamExtensions_ServiceCollection
         // 每路流都有自己的一份 options；这里只登记第一条（服务面上仍可解析到它）。
         services.TryAddSingleton(options);
         services.TryAddSingleton<TagsStreamRegistry>();
+
+        // 设计器元数据（{prefix}/catalog）与具体流无关：核心 schema + 各驱动注册的
+        // ITagsProjectSchemaProvider，解析时一次性内省并缓存。
+        services.TryAddSingleton<DesignerCatalog>();
         return options;
     }
 
@@ -140,5 +145,5 @@ public static class TagsStreamExtensions_ServiceCollection
     }
 
     private static readonly HashSet<string> ReservedStreamKeys =
-        new(new[] { "ui", "tree", "stream", "value", "rescan" }, StringComparer.OrdinalIgnoreCase);
+        new(new[] { "ui", "designer", "tree", "stream", "value", "rescan", "catalog" }, StringComparer.OrdinalIgnoreCase);
 }

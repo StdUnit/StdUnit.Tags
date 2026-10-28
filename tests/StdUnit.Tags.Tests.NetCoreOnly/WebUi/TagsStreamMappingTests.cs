@@ -46,7 +46,9 @@ public class TagsStreamMappingTests
             var normalized = prefix.TrimEnd('/');
             var expected = new[]
             {
-                // 不具名流
+                // 不具名流（含与流无关的 catalog / designer）
+                $"{normalized}/catalog",
+                $"{normalized}/designer",
                 $"{normalized}/rescan",
                 $"{normalized}/stream",
                 $"{normalized}/tree",
@@ -114,6 +116,44 @@ public class TagsStreamMappingTests
     }
 
     [Fact]
+    public async Task DesignerPage_IsServedWithRelativeCatalogAndBase()
+    {
+        var (app, builder) = CreateApp();
+        try
+        {
+            builder.MapTagsStream("/monitor");
+
+            var designerPage = Assert.Single(
+                builder.DataSources.SelectMany(ds => ds.Endpoints).OfType<RouteEndpoint>(),
+                e => e.RoutePattern.RawText == "/monitor/designer");
+
+            var context = new DefaultHttpContext { RequestServices = app.Services };
+            context.Request.Path = "/monitor/designer";
+            context.Response.Body = new MemoryStream();
+            await designerPage.RequestDelegate!(context);
+
+            var html = Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
+
+            Assert.Equal("text/html; charset=utf-8", context.Response.ContentType);
+            Assert.Contains("<base href=\"/monitor/\" />", html);
+            // catalog / 监控页都是相对路径（模板占位符必须全部替换干净）。
+            Assert.Contains("new URL('catalog', document.baseURI).href", html);
+            Assert.Contains("new URL('ui', document.baseURI).href", html);
+            // 四个页签（通道 / 测点 / 导入 / 导出）与导入解析入口都在嵌入资源里。
+            Assert.Contains("data-tab=\"channels\"", html);
+            Assert.Contains("data-tab=\"tags\"", html);
+            Assert.Contains("data-tab=\"import\"", html);
+            Assert.Contains("data-tab=\"export\"", html);
+            Assert.Contains("parseProjectXml", html);
+            Assert.DoesNotContain("%%", html);
+        }
+        finally
+        {
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task MapTagsStream_CanBeMountedOnAnotherGroup()
     {
         var (app, builder) = CreateApp();
@@ -124,6 +164,8 @@ public class TagsStreamMappingTests
 
             var expected = new[]
             {
+                "/monitor/stdunit.tags/catalog",
+                "/monitor/stdunit.tags/designer",
                 "/monitor/stdunit.tags/rescan",
                 "/monitor/stdunit.tags/stream",
                 "/monitor/stdunit.tags/tree",
@@ -156,7 +198,7 @@ public class TagsStreamMappingTests
             builder.MapTagsStream().RequireAuthorization();
 
             var endpoints = builder.DataSources.SelectMany(ds => ds.Endpoints).OfType<RouteEndpoint>().ToArray();
-            Assert.Equal(10, endpoints.Length);
+            Assert.Equal(12, endpoints.Length);
             Assert.All(endpoints, e => Assert.Contains(e.Metadata, m => m is IAuthorizeData));
 
             // 不传 prefix 时必须落在默认前缀下（= EndpointConstants.DefaultPrefix）。
@@ -180,7 +222,7 @@ public class TagsStreamMappingTests
             builder.MapTagsStream("/internal/tags").RequireAuthorization("ops");
 
             var endpoints = builder.DataSources.SelectMany(ds => ds.Endpoints).OfType<RouteEndpoint>().ToArray();
-            Assert.Equal(10, endpoints.Length);
+            Assert.Equal(12, endpoints.Length);
             Assert.All(endpoints, e => Assert.Contains(
                 e.Metadata.OfType<IAuthorizeData>(),
                 m => m.Policy == "ops"));
@@ -191,3 +233,4 @@ public class TagsStreamMappingTests
         }
     }
 }
+

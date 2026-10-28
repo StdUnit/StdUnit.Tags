@@ -190,6 +190,17 @@ public class TagsStreamRegistrationTests
     }
 
     [Fact]
+    public void AddKeyedTagsStream_RejectsTheReservedCatalogKey()
+    {
+        var services = CreateServices();
+        services.AddKeyedSingleton<ITagsProjectCtrl>("catalog", new FakeProjectCtrl());
+
+        // /catalog 是设计器元数据端点（与具体流无关），不能被某一路具名流占用。
+        var ex = Assert.Throws<ArgumentException>(() => services.AddKeyedTagsStream("catalog"));
+        Assert.Contains("catalog", ex.Message);
+    }
+
+    [Fact]
     public void AddTagsStream_WhenTheKeyedControllerIsMissing_SaysWhichKey()
     {
         var services = CreateServices();

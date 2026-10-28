@@ -34,20 +34,40 @@
            targetNamespace="tags:opcuaclient"
            elementFormDefault="qualified">
 
+  <!-- 设计器元数据：driver@name 必须与 OpcUaClientNames.DriverName 完全一致。 -->
+  <xs:annotation><xs:appinfo>
+    <driver name="OpcUaClient" displayName="OPC UA 客户端" prefix="ua"/>
+  </xs:appinfo></xs:annotation>
+
   <xs:complexType name="ServerOptType">
+    <xs:annotation><xs:appinfo><ui label="服务器" group="服务器"/></xs:appinfo></xs:annotation>
     <xs:sequence>
-      <xs:element name="DiscoveryUrl" type="xs:string" minOccurs="0"/>
-      <xs:element name="UsePassword" type="xs:boolean" minOccurs="0"/>
-      <xs:element name="UserName" type="xs:string" minOccurs="0"/>
-      <xs:element name="Password" type="xs:string" minOccurs="0"/>
+      <xs:element name="DiscoveryUrl" type="xs:string" minOccurs="0">
+        <xs:annotation><xs:appinfo><ui label="发现地址" order="1" group="服务器" placeholder="opc.tcp://localhost:4840"/></xs:appinfo></xs:annotation>
+      </xs:element>
+      <xs:element name="UsePassword" type="xs:boolean" minOccurs="0">
+        <xs:annotation><xs:appinfo><ui label="使用密码" order="2" group="服务器" help="默认 false"/></xs:appinfo></xs:annotation>
+      </xs:element>
+      <xs:element name="UserName" type="xs:string" minOccurs="0">
+        <xs:annotation><xs:appinfo><ui label="用户名" order="3" group="服务器"/></xs:appinfo></xs:annotation>
+      </xs:element>
+      <xs:element name="Password" type="xs:string" minOccurs="0">
+        <xs:annotation><xs:appinfo><ui label="密码" order="4" group="服务器"/></xs:appinfo></xs:annotation>
+      </xs:element>
     </xs:sequence>
   </xs:complexType>
 
   <xs:complexType name="SecurityOptType">
+    <xs:annotation><xs:appinfo><ui label="安全" group="安全"/></xs:appinfo></xs:annotation>
     <xs:sequence>
-      <xs:element name="AutoAcceptUntrustedCertificates" type="xs:boolean" minOccurs="0"/>
-      <xs:element name="RejectSHA1SignedCertificates" type="xs:boolean" minOccurs="0"/>
+      <xs:element name="AutoAcceptUntrustedCertificates" type="xs:boolean" minOccurs="0">
+        <xs:annotation><xs:appinfo><ui label="自动接受不可信证书" order="1" group="安全" help="默认取值偏宽松；生产环境请显式收紧"/></xs:appinfo></xs:annotation>
+      </xs:element>
+      <xs:element name="RejectSHA1SignedCertificates" type="xs:boolean" minOccurs="0">
+        <xs:annotation><xs:appinfo><ui label="拒绝 SHA1 签名证书" order="2" group="安全"/></xs:appinfo></xs:annotation>
+      </xs:element>
       <xs:element name="MinimumCertificateKeySize" minOccurs="0">
+        <xs:annotation><xs:appinfo><ui label="最小证书密钥长度" order="3" group="安全" placeholder="2048"/></xs:appinfo></xs:annotation>
         <xs:simpleType>
           <xs:restriction base="xs:unsignedShort">
             <xs:minInclusive value="1"/>
@@ -57,12 +77,20 @@
       <!-- 证书库根目录（MachineDefault / UA Certificate Authorities / UA Applications / RejectedCertificates 的父目录）。
            省略即用 %ProgramData%/OPC Foundation/CertificateStores；Linux 上默认位置通常需要 root 才能写入。
            取值按原样使用，不做占位符替换（%...% 与反斜杠在 Linux 上都只是普通字符）。 -->
-      <xs:element name="CertificateStoreRoot" type="xs:string" minOccurs="0"/>
+      <xs:element name="CertificateStoreRoot" type="xs:string" minOccurs="0">
+        <xs:annotation><xs:appinfo><ui label="证书库根目录" order="4" group="安全" help="省略时用 %ProgramData%/OPC Foundation/CertificateStores（Linux 上通常需要 root，建议显式指定可写目录）"/></xs:appinfo></xs:annotation>
+      </xs:element>
     </xs:sequence>
   </xs:complexType>
 
-  <xs:element name="ClientName" type="xs:string"/>
-  <xs:element name="ServerOpt" type="ServerOptType"/>
-  <xs:element name="SecurityOpt" type="SecurityOptType"/>
+  <xs:element name="ClientName" type="xs:string">
+    <xs:annotation><xs:appinfo><ui label="客户端名称" order="1" group="基础" help="默认 StdUnitTagsOpcUaClient"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="ServerOpt" type="ServerOptType">
+    <xs:annotation><xs:appinfo><ui label="服务器" order="2" group="服务器"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="SecurityOpt" type="SecurityOptType">
+    <xs:annotation><xs:appinfo><ui label="安全" order="3" group="安全"/></xs:appinfo></xs:annotation>
+  </xs:element>
 
 </xs:schema>

@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
 
-    <!-- 本示例的定位：**NativeAOT 可发布**的只读观测流 demo。
+    <!-- 本示例的定位：**NativeAOT 可发布**的 WebUi demo（监控页 + 设计器 + 观测流）。
          发布：dotnet publish samples/WebMonitor/WebMonitor.csproj -c Release -r linux-x64
          产物是真·原生可执行文件，不依赖 .NET 运行时。 -->
     <PublishAot>true</PublishAot>

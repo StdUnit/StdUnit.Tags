@@ -18,17 +18,32 @@
            targetNamespace="tags:hjzk"
            elementFormDefault="qualified">
 
+  <!-- 设计器元数据：driver@name 必须与 HjzkNames.DriverName 完全一致（注意不是 "Hjzk"）。 -->
+  <xs:annotation><xs:appinfo>
+    <driver name="HjzkIoBox" displayName="华杰智控 IO 盒" prefix="hj"/>
+  </xs:appinfo></xs:annotation>
+
   <xs:simpleType name="SingleFrameLimitType">
     <xs:restriction base="xs:unsignedShort">
       <xs:minInclusive value="1"/>
     </xs:restriction>
   </xs:simpleType>
 
-  <xs:element name="IpAddr" type="xs:string"/>
+  <xs:element name="IpAddr" type="xs:string">
+    <xs:annotation><xs:appinfo><ui label="IP 地址" order="1" group="连接" placeholder="172.16.2.21"/></xs:appinfo></xs:annotation>
+  </xs:element>
   <!-- Port 为字符串以兼容 COM 的 "COM1" 形式；Hjzk 侧运行期解析为整数 -->
-  <xs:element name="Port" type="xs:string"/>
-  <xs:element name="MaxWriteRegisters" type="SingleFrameLimitType"/>
-  <xs:element name="MaxReadRegisters" type="SingleFrameLimitType"/>
-  <xs:element name="MaxReadBits" type="SingleFrameLimitType"/>
+  <xs:element name="Port" type="xs:string">
+    <xs:annotation><xs:appinfo><ui label="端口" order="2" group="连接" placeholder="502"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="MaxWriteRegisters" type="SingleFrameLimitType">
+    <xs:annotation><xs:appinfo><ui label="单帧最大写寄存器数" order="3" group="高级"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="MaxReadRegisters" type="SingleFrameLimitType">
+    <xs:annotation><xs:appinfo><ui label="单帧最大读寄存器数" order="4" group="高级"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="MaxReadBits" type="SingleFrameLimitType">
+    <xs:annotation><xs:appinfo><ui label="单帧最大读位数量" order="5" group="高级"/></xs:appinfo></xs:annotation>
+  </xs:element>
 
 </xs:schema>

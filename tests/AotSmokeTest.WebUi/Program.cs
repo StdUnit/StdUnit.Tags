@@ -39,8 +39,8 @@ try
     builder.WebHost.UseUrls("http://127.0.0.1:0");
     builder.Services.AddTagsProjectServices(b =>
     {
-        b.AddSimpleFilesChannel();
-        b.AddSimpleFilesDirectTagBuilder();
+        // Support = Channel + DirectTagBuilder + SchemaProvider：设计器元数据（/catalog）需要后者。
+        b.AddSimpleFilesSupport();
     });
     builder.Services.AddTagsStream(o =>
     {
@@ -99,6 +99,40 @@ try
         Require(html.Contains("new URL('tree', document.baseURI)", StringComparison.Ordinal), "结构树端点应注入相对路径并由页面解析");
         Require(!html.Contains("%%", StringComparison.Ordinal), "监控页不应残留未替换的占位符");
         Console.WriteLine("[+] 监控页可访问且基路径已注入");
+    }
+
+    // ①d 设计器：catalog（运行期读 XSD + 源生成 JSON）与页面（嵌入资源 + 占位符注入）。
+    //     这两条在 AOT 下最容易出问题：XmlSchema 的读取/编译 + 元数据驱动的 JSON 序列化。
+    using (var catalog = await http.GetAsync($"{baseUrl}/stdunit.tags/catalog", cts.Token))
+    {
+        Require(catalog.IsSuccessStatusCode, $"设计器元数据应返回 2xx，实际 {(int)catalog.StatusCode}");
+        Require(
+            catalog.Content.Headers.ContentType?.MediaType == "application/json",
+            "设计器元数据 Content-Type 应为 application/json");
+
+        var json = await catalog.Content.ReadAsStringAsync(cts.Token);
+        Require(json.Contains("\"root\":{", StringComparison.Ordinal), "元数据应带根节点定义");
+        Require(json.Contains("\"name\":\"Channel\"", StringComparison.Ordinal), "元数据应包含 Channel 节点");
+        Require(json.Contains("\"name\":\"TagGrp\"", StringComparison.Ordinal), "元数据应包含 TagGrp 节点");
+        // 驱动来自 schema 里的 <driver name>（不是命名空间约定）：SimpleFiles 必须出现。
+        Require(json.Contains("\"name\":\"SimpleFiles\"", StringComparison.Ordinal), "元数据应绑定 SimpleFiles 驱动");
+        Require(json.Contains("\"prefix\":\"sf\"", StringComparison.Ordinal), "驱动前缀应来自 schema 声明");
+        Require(json.Contains("\"name\":\"BaseDir\"", StringComparison.Ordinal), "驱动字段应来自驱动 schema");
+        Console.WriteLine("[+] 设计器元数据（runtime XSD 内省）正常");
+    }
+
+    using (var designer = await http.GetAsync($"{baseUrl}/stdunit.tags/designer", cts.Token))
+    {
+        Require(designer.IsSuccessStatusCode, $"设计器页应返回 2xx，实际 {(int)designer.StatusCode}");
+        Require(
+            designer.Content.Headers.ContentType?.MediaType == "text/html",
+            "设计器页 Content-Type 应为 text/html");
+
+        var html = await designer.Content.ReadAsStringAsync(cts.Token);
+        Require(html.Contains("<base href=\"/stdunit.tags/\" />", StringComparison.Ordinal), "设计器页应按请求路径注入 <base href>");
+        Require(html.Contains("new URL('catalog', document.baseURI)", StringComparison.Ordinal), "设计器页应注入 catalog 的相对路径");
+        Require(!html.Contains("%%", StringComparison.Ordinal), "设计器页不应残留未替换的占位符");
+        Console.WriteLine("[+] 设计器页可访问");
     }
 
     // ①c 多流：具名流的页面基路径落在它自己的目录下；未知 key 返回 404。

@@ -15,6 +15,13 @@
            targetNamespace="tags:simplefiles"
            elementFormDefault="qualified">
 
-  <xs:element name="BaseDir" type="xs:string"/>
+  <!-- 设计器元数据：driver@name 必须与 SimpleFilesNames.DriverName 完全一致。 -->
+  <xs:annotation><xs:appinfo>
+    <driver name="SimpleFiles" displayName="磁盘文件（SimpleFiles）" prefix="sf"/>
+  </xs:appinfo></xs:annotation>
+
+  <xs:element name="BaseDir" type="xs:string">
+    <xs:annotation><xs:appinfo><ui label="数据目录" order="1" group="基础" placeholder="." help="省略时使用通道所在目录"/></xs:appinfo></xs:annotation>
+  </xs:element>
 
 </xs:schema>

@@ -15,7 +15,7 @@
   另外：不要在 StdUnit.Tags.Tests 里用 #if NETFRAMEWORK 排除整个文件来回避 net8-only 依赖 ——
   那是编译期开关，解决不了"引用 net8-only 项目"的问题。
 
-  现状：承载 StdUnit.Tags.WebUi（ASP.NET Core / SSE 只读观测流）的测试。
+  现状：承载 StdUnit.Tags.WebUi（ASP.NET Core：监控页 + 设计器 + SSE 观测流）的测试。
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>

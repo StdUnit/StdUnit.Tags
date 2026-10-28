@@ -142,3 +142,33 @@ services.AddTagsProjectServices(b =>
 ```
 
 > 注：运行时校验（步骤 1）与编辑器注入（步骤 2）相互独立。没有硬性要求全部完成。
+
+### 3. 设计器元数据：让 schema 自己声明驱动名（可选，但推荐）
+
+`StdUnit.Tags.WebUi` 的 `GET {prefix}/catalog` 会把**所有注册了 `ITagsProjectSchemaProvider` 的 schema**
+内省成设计器元数据（通道/测点设计器据此渲染表单、导出 XML）。它需要知道"哪个 schema 属于哪个 `driver`"——
+这件事 **XSD 1.0 表达不了**（不能按属性值切换内容模型），而且靠命名约定也不行
+（`HjzkIoBox` ↔ `tags:hjzk`、`ZLanTcp` ↔ `tags:zlan` 就对不上）。所以由 schema 自己声明：
+
+```xml
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="tags:mydriver" elementFormDefault="qualified">
+  <xs:annotation><xs:appinfo>
+    <driver name="MyDriver" displayName="我的驱动" prefix="md"/>
+  </xs:appinfo></xs:annotation>
+
+  <xs:element name="Host" type="xs:string">
+    <xs:annotation><xs:appinfo>
+      <ui label="主机" order="1" group="连接" placeholder="localhost" help="省略时用 localhost"/>
+    </xs:appinfo></xs:annotation>
+  </xs:element>
+</xs:schema>
+```
+
+- `<driver name>` **必须与运行时 `XxxNames.DriverName`（即 XML 里的 `driver="…"`）完全一致**；
+  `prefix` 缺省取命名空间后缀（`tags:mydriver` → `mydriver`）。
+- `<ui>` 只影响 UI：`label` / `order` / `group` / `placeholder` / `help`。XSD 会忽略 `appinfo`
+  里的自定义元素，对校验零影响；**不写也能用**（设计器退化为按属性名显示）。
+- 这两种元素都按**本地名**匹配，跟 `xs:schema` 上有没有默认 `xmlns` 无关。
+- 没声明 `<driver>` 的 schema 仍然参与校验，只是不出现在设计器的驱动列表里。
+

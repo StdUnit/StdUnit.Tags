@@ -7,35 +7,80 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>测点监控 · StdUnit.Tags</title>
 <style>
-  :root { color-scheme: light dark; --bg:#fff; --fg:#1f2328; --muted:#656d76; --line:#d0d7de; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8b949e; --line:#30363d; --accent:#58a6ff; --ok:#3fb950; --warn:#d29922; --err:#f85149; } }
+  :root {
+    color-scheme: light dark;
+    --bg:#fff; --panel:#f6f8fa; --fg:#1f2328; --muted:#5b6572; --line:#d8dee4;
+    --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --err:#cf222e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --panel:#161b22; --fg:#e6edf3; --muted:#9198a1; --line:#30363d; --accent:#58a6ff; --ok:#3fb950; --warn:#d29922; --err:#f85149; }
+  }
   * { box-sizing: border-box; }
-  body { margin:0; font:13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background:var(--bg); color:var(--fg); }
-  header { position:sticky; top:0; z-index:1; display:flex; gap:10px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--bg); }
-  header h1 { font-size:14px; margin:0 6px 0 0; font-weight:600; white-space:nowrap; }
-  .badge { padding:1px 8px; border-radius:10px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  body {
+    margin:0; min-height:100%;
+    font:16px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background:var(--bg); color:var(--fg); -webkit-font-smoothing:antialiased;
+  }
+  header {
+    position:sticky; top:0; z-index:1;
+    display:flex; gap:16px; align-items:center; flex-wrap:wrap;
+    padding:14px 28px; border-bottom:1px solid var(--line); background:var(--bg);
+  }
+  header h1 { font-size:19px; margin:0 8px 0 0; font-weight:600; white-space:nowrap; }
+  .badge {
+    padding:3px 11px; border-radius:999px; border:1px solid var(--line);
+    color:var(--muted); white-space:nowrap; font-size:14px;
+  }
   .badge.ok { color:var(--ok); border-color:var(--ok); }
   .badge.err { color:var(--err); border-color:var(--err); }
   .muted { color:var(--muted); }
-  input[type=search] { margin-left:auto; padding:4px 8px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; min-width:220px; }
-  main { padding:8px 12px 40px; }
-  details { margin-left:10px; }
-  summary { cursor:pointer; padding:2px 0; }
-  .tag { display:grid; grid-template-columns:minmax(140px,1fr) minmax(90px,240px) auto auto; gap:8px; align-items:baseline; padding:1px 0 1px 16px; }
-  .tag .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .tag .val { font-family:ui-monospace, Consolas, monospace; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  header a { font-size:15px; padding:7px 12px; border-radius:8px; white-space:nowrap; }
+  header a:hover { background:var(--panel); text-decoration:none; }
+  input[type=search] {
+    margin-left:auto; font:inherit; font-size:16px; padding:10px 14px;
+    border:1px solid var(--line); border-radius:9px; background:var(--bg); color:inherit; min-width:260px;
+  }
+  input[type=search]:focus-visible, button:focus-visible, a:focus-visible {
+    outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent);
+  }
+  main { padding:24px 28px 64px; max-width:1440px; margin:0 auto; }
+  details { margin-left:16px; }
+  summary { cursor:pointer; padding:6px 0; }
+  .tag {
+    display:grid; grid-template-columns:minmax(170px,1fr) minmax(100px,200px) minmax(0,2fr) auto;
+    gap:14px; align-items:baseline; padding:7px 10px 7px 24px; border-radius:6px;
+  }
+  .tag:hover { background:var(--panel); }
+  .tag .name { font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tag .val { font-family:ui-monospace, Consolas, monospace; font-size:15.5px; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tag .val.dirty { color:var(--warn); }
   .tag .val.editable { cursor:pointer; border-bottom:1px dashed var(--line); }
   .tag .val.editable:hover { color:var(--accent); border-color:var(--accent); }
-  .tag .meta { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tag .act { border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
-  .tag .act:hover { color:var(--accent); }
+  .tag .meta { color:var(--muted); font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tag .act {
+    border:none; background:transparent; color:var(--muted); cursor:pointer;
+    font-size:15px; line-height:1; padding:6px 9px; border-radius:6px;
+  }
+  .tag .act:hover { color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); }
   .tag .act:disabled { opacity:.4; cursor:default; }
-  .inline-edit { width:100%; font:inherit; font-family:ui-monospace, Consolas, monospace; text-align:right; padding:0 2px; border:1px solid var(--accent); border-radius:3px; background:transparent; color:inherit; }
-  #msg { font-size:12px; }
+  .inline-edit {
+    width:100%; font:inherit; font-family:ui-monospace, Consolas, monospace; font-size:15.5px; text-align:right;
+    padding:4px 10px; border:1px solid var(--accent); border-radius:6px; background:var(--bg); color:inherit;
+  }
+  #msg { font-size:15px; }
   #msg.err { color:var(--err); }
-  .k { color:var(--muted); font-size:11px; margin-left:6px; }
+  .k { color:var(--muted); font-size:13.5px; margin-left:8px; }
   .hidden { display:none !important; }
+
+  @media (max-width: 900px) {
+    header { padding:12px 18px; gap:12px; }
+    main { padding:18px 18px 56px; }
+    input[type=search] { margin-left:0; width:100%; min-width:0; }
+    .tag { grid-template-columns:minmax(120px,1fr) minmax(90px,1fr); row-gap:4px; }
+    .tag .meta { grid-column:1 / -1; white-space:normal; }
+  }
 </style>
 </head>
 <body>
@@ -44,6 +89,7 @@
   <span id="status" class="badge">连接中…</span>
   <span id="meta" class="muted"></span>
   <span id="msg" class="muted"></span>
+  <a id="designer" href="#" title="通道 / 测点设计器">设计器 →</a>
   <input id="filter" type="search" placeholder="过滤：名称 / 路径" />
 </header>
 <main id="tree"><p class="muted">加载中…</p></main>
@@ -57,12 +103,16 @@
   const STREAM_URL = new URL('%%STREAM_URL%%', document.baseURI).href;
   const WRITE_URL = new URL('%%WRITE_URL%%', document.baseURI).href;
   const RESCAN_URL = new URL('%%RESCAN_URL%%', document.baseURI).href;
+  const DESIGNER_URL = new URL('%%DESIGNER_URL%%', document.baseURI).href;
 
   const statusEl = document.getElementById('status');
   const metaEl = document.getElementById('meta');
   const msgEl = document.getElementById('msg');
   const treeEl = document.getElementById('tree');
   const filterEl = document.getElementById('filter');
+
+  // 设计器只有不具名的一份（与 schema 一样全局），具名流的页面里这个链接指向共享的那一页。
+  document.getElementById('designer').href = DESIGNER_URL;
 
   const BIT_KINDS = new Set(['BIT', 'DI', 'DO']);
   const EDITABLE_KINDS = new Set([

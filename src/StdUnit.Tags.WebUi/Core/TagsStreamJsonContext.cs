@@ -17,6 +17,7 @@ namespace StdUnit.Tags.WebUi;
 [JsonSerializable(typeof(WriteTagValueRequest))]
 [JsonSerializable(typeof(RescanTagRequest))]
 [JsonSerializable(typeof(CommandResult))]
+[JsonSerializable(typeof(DesignerCatalogDto))]
 internal sealed partial class TagsStreamJsonContext : JsonSerializerContext
 {
 }
