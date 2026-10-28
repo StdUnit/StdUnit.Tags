@@ -1,4 +1,4 @@
-using StdUnit.Tags.WebStream;
+using StdUnit.Tags.WebUi;
 using WebMonitor.Tags;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -9,7 +9,7 @@ builder.Services.AddTags();
 
 var app = builder.Build();
 
-// WebStream 的端点：结构树 / 值流(SSE) / 写命令 / 监控页；不具名流与每个具名流各一套。
+// WebUi 的端点：结构树 / 值流(SSE) / 写命令 / 监控页；不具名流与每个具名流各一套。
 app.MapTagsStream();
 
 app.Run();

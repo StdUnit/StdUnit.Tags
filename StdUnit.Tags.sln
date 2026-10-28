@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.8.12023.21
@@ -61,11 +61,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StdUnit.Tags.Tests", "tests
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{2215F920-F9B4-4801-88A1-5F3E3E65B9CA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StdUnit.Tags.WebStream", "src\StdUnit.Tags.WebStream\StdUnit.Tags.WebStream.csproj", "{1B85FF35-7A81-4CB7-924A-441EC3DA9218}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StdUnit.Tags.WebUi", "src\StdUnit.Tags.WebUi\StdUnit.Tags.WebUi.csproj", "{1B85FF35-7A81-4CB7-924A-441EC3DA9218}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{B9E1E3A0-6B7E-4A15-AB8C-CB5E3FFB29C8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AotSmokeTest.WebStream", "tests\AotSmokeTest.WebStream\AotSmokeTest.WebStream.csproj", "{87CBE561-3796-48DE-B121-E7534B49FE45}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AotSmokeTest.WebUi", "tests\AotSmokeTest.WebUi\AotSmokeTest.WebUi.csproj", "{87CBE561-3796-48DE-B121-E7534B49FE45}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebMonitor", "samples\WebMonitor\WebMonitor.csproj", "{018E69DC-830B-4DD4-BC68-7716821226E0}"
 EndProject

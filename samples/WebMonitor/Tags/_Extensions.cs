@@ -1,6 +1,6 @@
 using StdUnit.Tags;
 using StdUnit.Tags.SimpleFiles;
-using StdUnit.Tags.WebStream;
+using StdUnit.Tags.WebUi;
 
 namespace WebMonitor.Tags;
 
@@ -18,7 +18,7 @@ public static class ServiceCollectionExtensions
         // 第二路控制器（具名注册）：项目配置在 Tags/line-b/index.xml。
         services.AddKeyedTagsProjectCtrl(TagsPathDefines.LineBKey);
 
-        // WebStream：不具名流 + 一路具名流（多流各有一套端点与监控页）。
+        // WebUi：不具名流 + 一路具名流（多流各有一套端点与监控页）。
         services.AddTagsStream(o =>
         {
             o.ReconcileInterval = TimeSpan.FromMilliseconds(20);

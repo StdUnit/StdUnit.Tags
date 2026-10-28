@@ -78,7 +78,7 @@ $projects = @(
     "StdUnit.Tags.R3Extensions",
 
     "StdUnit.Tags.BlazorLib.Core",
-    "StdUnit.Tags.WebStream"
+    "StdUnit.Tags.WebUi"
     )
 
 $baseDir=Split-Path $script:MyInvocation.MyCommand.Path

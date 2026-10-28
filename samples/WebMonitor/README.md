@@ -1,6 +1,6 @@
-# WebMonitor —— WebStream 监控 demo（NativeAOT 可发布）
+# WebMonitor —— WebUi 监控 demo（NativeAOT 可发布）
 
-与 `dotnet new tags.web` 生成的模板同构，只是把 Blazor 监控页换成了 **WebStream** 的只读观测流：
+与 `dotnet new tags.web` 生成的模板同构，只是把 Blazor 监控页换成了 **WebUi** 的只读观测流：
 
 ```
 WebMonitor/

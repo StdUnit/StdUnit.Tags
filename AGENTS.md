@@ -25,12 +25,12 @@ dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./Tes
 CI（`.github/workflows/dotnet.yml`）有**三个 job**：
 - **`build`（ubuntu-latest，权威）**：整解 `dotnet build StdUnit.Tags.sln -c Release`（含 net472 的**编译**校验——引用程序集由 SDK 隐式引入的 `Microsoft.NETFramework.ReferenceAssemblies` 提供）+ `dotnet test -f net8.0`（带覆盖率上报 codecov）。
 - **`net472-on-mono`（ubuntu-latest）**：`apt-get install -y mono-complete` 自己装 Mono，跑 `dotnet test -f net472`，让 net472 的**运行**测试也自动化、又不占 Windows runner 的排队时间。**mono ≠ .NET Framework**，它绿只说明"大概率没退化"，（权威结果仍归发版工作流 `release-nuget.yml` / `release-baget.yml`，windows-latest 全 TFM）+ 本机 Windows。当前是**硬性把关**（未设 `continue-on-error`）；万一出现 mono 专有的伪失败，可在 job 上加 `continue-on-error: true` 降级为补充信号。mono job 红时先看是不是"mono 与真框架的差异"，别急着改产品代码。
-- **`aot-smoke`（ubuntu-latest）**：三个示例各自 `dotnet publish ... -r linux-x64`（需 `clang` + `zlib1g-dev`）后**运行原生产物**：`AotSmokeTest.LogicetPlugins` 验证"无 `<Logicet>` 的正常加载 + `TryAddLogicet<T>` + AOT 下配了 `<Logicet>` 必须快速失败"，`AotSmokeTest.SimpleFiles` 验证"基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败"，`AotSmokeTest.WebStream` 验证"起 Kestrel + 结构树的多态 JSON 序列化（`[JsonDerivedType]` 源生成）+ SSE 从全量基线到增量"。改了 AOT 相关代码（`IsAotCompatible`、`[DynamicallyAccessedMembers]`、`Compat/*`、插件加载路径、WebStream 的 DTO/序列化）时以它为准；publish 输出里的 `IL2104`/`IL3053` 来自第三方 `McMaster.NETCore.Plugins`，属已知噪声。
+- **`aot-smoke`（ubuntu-latest）**：三个示例各自 `dotnet publish ... -r linux-x64`（需 `clang` + `zlib1g-dev`）后**运行原生产物**：`AotSmokeTest.LogicetPlugins` 验证"无 `<Logicet>` 的正常加载 + `TryAddLogicet<T>` + AOT 下配了 `<Logicet>` 必须快速失败"，`AotSmokeTest.SimpleFiles` 验证"基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败"，`AotSmokeTest.WebUi` 验证"起 Kestrel + 结构树的多态 JSON 序列化（`[JsonDerivedType]` 源生成）+ SSE 从全量基线到增量"。改了 AOT 相关代码（`IsAotCompatible`、`[DynamicallyAccessedMembers]`、`Compat/*`、插件加载路径、WebUi 的 DTO/序列化）时以它为准；publish 输出里的 `IL2104`/`IL3053` 来自第三方 `McMaster.NETCore.Plugins`，属已知噪声。
 - 两条 Linux job 统一遵循 **"`ubuntu-latest` + 依赖自装"**，不钉镜像版本：本仓库自己装依赖（mono / clang+zlib），就没有理由把 job 的寿命绑在镜像标签上——`ubuntu-22.04` 已被官方公告 2026-09-17 起弃用、2027-04-17 退役（`actions/runner-images#14254`，期间还有 brownout 会直接判红），`ubuntu-latest` 也已宣布 2026-11 起为 26.04。
 - 参考实测（2026-10，本机 WSL）：mono 上的结果与 Windows 真 .NET Framework 一致。
 - 改了 `Compat/*` 或 `#if NETFRAMEWORK` 分支时，仍建议在本机 Windows 上跑一次 `-f net472`（或在 PR 里看 `net472-on-mono`）。
 `samples/WpfDemo`（net8.0-windows + WPF）**已从解决方案移除**，目录保留、需要时在本机 Windows 上单独 `dotnet build samples/WpfDemo/WpfDemo.csproj`（只要它还留在解决方案里，Linux 上的整解构建就会失败）。
-`tests/AotSmokeTest.LogicetPlugins`、`tests/AotSmokeTest.SimpleFiles` 与 `tests/AotSmokeTest.WebStream`（都是 net8.0 + `PublishAot=true`）**在解决方案内**（整解构建顺带编译它们），但**不要**改成 net8.0-windows 或其他不可跨平台的形态——CI 的 `aot-smoke` job 要在 Linux 上 publish 并运行它们。
+`tests/AotSmokeTest.LogicetPlugins`、`tests/AotSmokeTest.SimpleFiles` 与 `tests/AotSmokeTest.WebUi`（都是 net8.0 + `PublishAot=true`）**在解决方案内**（整解构建顺带编译它们），但**不要**改成 net8.0-windows 或其他不可跨平台的形态——CI 的 `aot-smoke` job 要在 Linux 上 publish 并运行它们。
 
 - SDK 固定为 **8.0.102**（`global.json`，`rollForward: minor`）。
 - 依赖用 **Paket** 管理。**不要 `dotnet add package`**：请改 `paket.dependencies` 后运行 `dotnet paket install`（会更新 `paket.lock`）。
@@ -73,7 +73,7 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
   - ⚠ 位置敏感的坑：`PublishAot=true` 会被 SDK 写进 `runtimeconfig.json`，使 `RuntimeFeature.IsDynamicCodeSupported` 在
     **IL+JIT** 下也是 `false`；宿主据此判定"不支持动态加载"，因此 `<Logicet>` 在 AOT（以及 `PublishAot=true` 的 IL 构建）下
     **必须快速失败**（`TagsProjectNotSupportedException`），**不要**让它被 `LogicetLoader` 的通用 `catch` 吞掉——配了却静默不跑业务逻辑是硬红线。
-    `tests/AotSmokeTest.LogicetPlugins` / `tests/AotSmokeTest.SimpleFiles` / `tests/AotSmokeTest.WebStream` 是这些链路的端到端验证（CI 的 `aot-smoke` job）。
+    `tests/AotSmokeTest.LogicetPlugins` / `tests/AotSmokeTest.SimpleFiles` / `tests/AotSmokeTest.WebUi` 是这些链路的端到端验证（CI 的 `aot-smoke` job）。
 - net472 缺 init-only setter 时，在 `paket.references` 里加 `IsExternalInit`（已有先例：Core / StdUnit.Tags / ComScanner / OpcUaClient / SimpleFiles）。
 - **net472 的引用程序集没有可空标注**，`string.IsNullOrEmpty` 之类的 BCL 后置条件看不到，会出现 net472 专属的 CS8601/CS8603/CS8604 假阳性。改用语言级判空（`x is null || x.Length == 0`），**不要用 `NoWarn` 压掉**。
 - 不要用 `| Select-Object -First n` 过滤 `dotnet paket`/`dotnet build` 的长输出：会在第 n 行处终止上游进程。先 `Out-File` 再 grep。
