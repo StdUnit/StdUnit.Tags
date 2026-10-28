@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Channels;
 using System.Xml.Linq;
@@ -42,6 +42,7 @@ public class LogicetLoaderAotTests
 
         public event RunnerStarted? RunnerStarted;
         public event RunnerCrashed? RunnerCrashed;
+        public void SetTurnProcessHandler(string entry, TurnProcess? handler) => throw new NotImplementedException();
 
         public void Dispose() { }
 

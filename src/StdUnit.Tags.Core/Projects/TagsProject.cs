@@ -225,6 +225,9 @@ internal class TagsProject : ITagsProject
             throw new InvalidOperationException("未配置入口测点组");
         }
 
+        // 进入运行期：此后不再接受 TurnProcess 回调注册（见 AddTurnProcessHandler）。
+        this._running = true;
+
         var tasks = new ConcurrentBag<Task>();
         Parallel.ForEach(entries, entry =>
         {
@@ -235,7 +238,7 @@ internal class TagsProject : ITagsProject
                 .ToList();
             var runner = this._tagGrpRunnerFactory.Create(this);
             runner.RunnerStarted += RunnerStarted;
-            runner.TurnProcess += async (entry, ch) =>
+            runner.TurnProcess += async (entry, ch, turnCt) =>
             {
                 foreach (var l in logicets)
                 {
@@ -243,7 +246,15 @@ internal class TagsProject : ITagsProject
                     {
                         continue;
                     }
-                    await l.ProcessAsync(entry, ch, ct);
+                    await l.ProcessAsync(entry, ch, turnCt);
+                }
+
+                // 公共回调排在 Logicets 之后：订阅者看到的是逻辑处理完成后的值。
+                // 有意不 catch：回调抛异常等价于本轮失败（与 Logicet 抛异常同义），见 ITagsProject.SetTurnProcessHandler 的文档。
+                // 回调表在运行期只读（设置在运行前完成），因此这里不需要任何同步。
+                if (this._entryTurnHandlers.TryGetValue(entry.TagName(), out var handler))
+                {
+                    await handler(entry, ch, turnCt);
                 }
             };
             runner.RunnerCrashed += RunnerCrashed;
@@ -338,6 +349,50 @@ internal class TagsProject : ITagsProject
     public event RunnerCrashed? RunnerCrashed;
     /// <inheritdoc/>
     public event RunnerStarted? RunnerStarted;
+
+    #region TurnProcess handlers
+    /// <summary>
+    /// 入口名 → 该入口的回调（每个入口最多一个）。<b>只在运行前写入、运行期只读</b>
+    /// （见 <see cref="SetTurnProcessHandler"/> 的"只能在运行前设置"约定），因此轮询线程读取时不需要任何同步。
+    /// </summary>
+    private readonly Dictionary<string, TurnProcess> _entryTurnHandlers = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 是否已进入运行期（<see cref="RunAsync"/> 已开始）。运行期不再接受设置。
+    /// </summary>
+    private volatile bool _running;
+
+    /// <inheritdoc/>
+    public void SetTurnProcessHandler(string entry, TurnProcess? handler)
+    {
+        if (entry is null)
+        {
+            throw new ArgumentNullException(nameof(entry));
+        }
+        if (this._running)
+        {
+            throw new InvalidOperationException(
+                $"TurnProcess 回调只能在项目运行之前设置（入口={entry}）：请在启动 hook 或 StartedOrStopped 的\"已启动\"事件里设置，" +
+                "运行期如需动态开关观测，请在已设置的回调内部判断。");
+        }
+
+        // 与 WriteIntent 的入口校验保持一致：只允许向合法的入口设置
+        if (!this.GetEntries().Any(e => e.TagName() == entry))
+        {
+            throw new KeyNotFoundException($"未找到指定的入口测点组: {entry}");
+        }
+
+        // 替换语义：需要组合多个观察者时，由调用方自己组装成一个 TurnProcess。
+        if (handler is null)
+        {
+            this._entryTurnHandlers.Remove(entry);
+        }
+        else
+        {
+            this._entryTurnHandlers[entry] = handler;
+        }
+    }
+    #endregion
 
 
     #region
