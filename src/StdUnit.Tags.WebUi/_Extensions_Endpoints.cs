@@ -1,16 +1,14 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using StdUnit.Tags.WebUi.Internal;
 
-
 namespace StdUnit.Tags.WebUi;
 
+/// <summary>
+/// extensions for Endpoints
+/// </summary>
 public static class TagsStreamExtensions_Endpoints
 {
-
     /// <summary>
     /// 映射端点（全部挂在 <paramref name="prefix"/> 下，相对路径固定）：<br/>
     /// <b>不具名流</b>（<c>AddTagsStream()</c>）：

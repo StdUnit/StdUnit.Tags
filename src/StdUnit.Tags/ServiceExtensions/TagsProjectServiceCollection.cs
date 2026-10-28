@@ -47,7 +47,7 @@ public static class TagsProjectServiceCollection
     /// <returns></returns>
     public static TagsProjectServiceBuilder AddKeyedTagsProjectCtrl(this TagsProjectServiceBuilder builder, string key)
     {
-        builder.Services.AddKeyedSingleton<ITagsProjectCtrl, TagsProjectCtrl>(key);
+        builder.Services.AddKeyedTagsProjectCtrl(key);
         return builder;
     }
 

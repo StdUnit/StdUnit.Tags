@@ -287,7 +287,7 @@ internal sealed class TagsStreamHostedService : ITagsStreamHub, IHostedService, 
                 }
             }
 
-            // 必须在项目开始轮询之前注册（见 ITagsProject.SetTurnProcessHandler 的"只能在运行前设置"）。
+            // 运行期也能挂（SetTurnProcessHandler 从下一轮生效）：hub 晚于轮询启动时，这里就是在补挂回调。
             foreach (var entry in index.Entries)
             {
                 var entryKey = entry.Key;
@@ -303,7 +303,7 @@ internal sealed class TagsStreamHostedService : ITagsStreamHub, IHostedService, 
                 {
                     this._logger?.LogWarning(
                         ex,
-                        "无法为入口 {Entry} 注册轮次回调（项目可能已在运行）：该入口只能观测结构，观测不到值",
+                        "无法为入口 {Entry} 注册轮次回调（项目可能已释放）：该入口只能观测结构，观测不到值",
                         entryKey);
                 }
             }

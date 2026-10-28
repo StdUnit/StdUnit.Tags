@@ -2,15 +2,13 @@ using StdUnit.Tags;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Routing;
-using StdUnit.Tags.WebUi.Internal;
 
 
 namespace StdUnit.Tags.WebUi;
 
 /// <summary>
-/// 只读观测流的入口：<see cref="AddTagsStream"/> 做 DI 注册，<see cref="MapTagsStream"/> 映射端点。
+/// 只读观测流的 DI 注册入口：<see cref="AddTagsStream"/> / <see cref="AddKeyedTagsStream"/>。<br/>
+/// 端点映射不在这里，见 <see cref="TagsStreamExtensions_Endpoints"/> 里的 <c>MapTagsStream</c>。
 /// </summary>
 public static class TagsStreamExtensions_ServiceCollection
 {
@@ -19,10 +17,10 @@ public static class TagsStreamExtensions_ServiceCollection
     /// 端点落在 <c>{prefix}/tree|stream|value|rescan|ui</c>。<br/>
     /// 一个容器里只能有一路不具名流；要多路请用 <see cref="AddKeyedTagsStream"/>。<br/>
     /// <br/>
-    /// <b>启动顺序</b>：hub 以 <see cref="IHostedService"/> 注册，随宿主一起启动。它需要在<b>项目开始轮询之前</b>
-    /// 拿到 <see cref="ITagsProject"/> 才能挂上"轮次完成"回调，所以请让轮询在宿主启动之后才开始
-    /// （例如在请求里/更晚注册的 hosted service 里 <c>StartPollAsync</c>）。
-    /// 若 hub 启动时项目已在运行，结构树仍可观测，但值观测会缺失并记一条 Warning。
+    /// <b>启动顺序</b>：hub 以 <see cref="IHostedService"/> 注册，随宿主一起启动。它在启动时按
+    /// <see cref="ITagsProjectCtrl.Project"/> 对账，所以<b>晚启动也能补上</b>：即使项目已在轮询，
+    /// 结构树与值流都正常（轮次回调运行期也能挂，从下一轮开始生效）。
+    /// 想尽早拿到结构树，就把轮询放在宿主启动之后（例如在请求里/更晚注册的 hosted service 里 <c>StartPollAsync</c>）。
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <param name="configure">这一路流的配置回调</param>

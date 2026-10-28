@@ -115,4 +115,22 @@ public class TagsProjectServiceCollectionTests
         Assert.Throws<InvalidOperationException>(() =>
             sp.GetRequiredKeyedService<ITagsProjectCtrl>("unregistered_key"));
     }
+
+    /// <summary>
+    /// <see cref="TagsProjectServiceCollection.AddKeyedTagsProjectCtrl(TagsProjectServiceBuilder, string)"/>
+    /// 应等价于 <see cref="TagsProjectServiceCollection.AddKeyedTagsProjectCtrl(IServiceCollection, string)"/>：
+    /// 在 <c>AddTagsProjectServices</c> 的回调里注册即可按 key 解析，且与不具名的那个互不干扰。
+    /// </summary>
+    [Fact]
+    public void AddKeyedTagsProjectCtrl_OnBuilder_RegistersKeyedCtrl()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddTagsProjectServices(builder => builder.AddKeyedTagsProjectCtrl("alpha"));
+
+        using var sp = services.BuildServiceProvider();
+        var ctrl = sp.GetRequiredKeyedService<ITagsProjectCtrl>("alpha");
+        Assert.NotNull(ctrl);
+        Assert.NotSame(sp.GetRequiredService<ITagsProjectCtrl>(), ctrl);
+    }
 }

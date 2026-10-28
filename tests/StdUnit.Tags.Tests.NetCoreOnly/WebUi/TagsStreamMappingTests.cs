@@ -12,10 +12,6 @@ using Xunit;
 
 namespace StdUnit.Tags.Tests.NetCoreOnly.WebUi;
 
-/// <summary>
-/// <see cref="TagsStreamServiceCollection.MapTagsStream"/>：对外只能改前缀，相对路径固定；
-/// 返回的路由组能整组加鉴权。
-/// </summary>
 public class TagsStreamMappingTests
 {
     private static (WebApplication App, IEndpointRouteBuilder Builder) CreateApp()

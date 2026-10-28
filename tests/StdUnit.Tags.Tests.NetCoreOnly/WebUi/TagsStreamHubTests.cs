@@ -155,6 +155,38 @@ public class TagsStreamHubTests : IDisposable
         await hub.StopAsync(default);
     }
 
+    [Fact]
+    public async Task Hub_StartedAfterProject_StillAttachesTurnHandlers()
+    {
+        using var project = CreateSingleEntryProject(this._scope);
+        var ctrl = new FakeProjectCtrl();
+
+        // 项目先跑起来，hub 还没启动（顺序反了：以前这里会挂不上轮次回调，只能观测结构）。
+        ctrl.RaiseStarted(project);
+        using var runCts = new CancellationTokenSource();
+        var run = project.RunAsync(runCts.Token);
+
+        using var hub = new TagsStreamHostedService(ctrl, FastOptions());
+        await hub.StartAsync(default);
+        Assert.True(hub.GetTree().IsStarted);
+
+        using var output = new RecordingStream();
+        using var piperCts = new CancellationTokenSource();
+        using var piper = hub.Subscribe(entries: null);
+        var writer = piper.PipeFramesToStreamAsync(output, piperCts.Token);
+
+        // 订阅即拿到全量基线（只读当前值，不能证明回调挂上了）。
+        Assert.True(StreamTestContext.WaitUntil(() => output.Text.Contains("\"full\":true")));
+
+        // 再改一次值：能收到增量就说明轮次回调确实在运行期补挂上了。
+        StreamTestContext.TagAt(project, "g1/a").Value = (short)99;
+        Assert.True(StreamTestContext.WaitUntil(() => output.Text.Contains("\"raw\":\"99\"")));
+
+        await StreamTestContext.StopAsync(runCts, run);
+        await StopSubscriberAsync(piperCts, writer);
+        await hub.StopAsync(default);
+    }
+
     /// <summary>取出包含指定片段的那一帧（以空行分隔）。</summary>
     private static string? FrameContaining(string text, string needle)
     {

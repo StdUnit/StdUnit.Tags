@@ -16,7 +16,7 @@ namespace StdUnit.Tags.Tests.NetCoreOnly.WebUi;
 /// </summary>
 public class TagsStreamRegistrationTests
 {
-    private static ServiceCollection CreateServices()
+    private static ServiceCollection CreateServices(Action<TagsProjectServiceBuilder>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -24,6 +24,7 @@ public class TagsStreamRegistrationTests
         {
             b.AddFakedSupport();
             b.AddFakedTagSupport();
+            configure?.Invoke(b);
         });
         return services;
     }
@@ -233,5 +234,67 @@ public class TagsStreamRegistrationTests
         {
             await hosted.StopAsync(default);
         }
+    }
+
+    /// <summary>
+    /// builder 版（<c>builder.AddTagsStream(...)</c>）只是转调 services 版：注册结果、hosted service 绑定、
+    /// 配置回调的去向，以及"不具名只能一路"的校验，都应与 services 版完全一致。
+    /// </summary>
+    [Fact]
+    public void AddTagsStream_OnTheProjectBuilder_RegistersTheUnnamedStream()
+    {
+        var services = CreateServices(b => b.AddTagsStream(o => o.HeartbeatInterval = TimeSpan.FromSeconds(7)));
+
+        // 同一个服务集合：services 版仍能看到 builder 版注册的那一路，重复注册照样被拒。
+        var ex = Assert.Throws<InvalidOperationException>(() => services.AddTagsStream());
+        Assert.Contains("AddKeyedTagsStream", ex.Message);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true,
+        });
+
+        var hub = provider.GetRequiredService<ITagsStreamHub>();
+        Assert.Same(hub, provider.GetRequiredService<ITagsStreamHub>());
+        Assert.Contains(provider.GetServices<IHostedService>(), h => ReferenceEquals(h, hub));
+
+        // configure 落在这一路流自己的描述符上（不是被丢掉的临时对象）。
+        var descriptor = Assert.Single(provider.GetServices<TagsStreamDescriptor>());
+        Assert.Null(descriptor.Key);
+        Assert.Equal(TimeSpan.FromSeconds(7), descriptor.Options.HeartbeatInterval);
+    }
+
+    /// <summary>
+    /// builder 版 <c>AddKeyedTagsStream(key, ...)</c> 应绑定到同 key 的具名控制器，
+    /// 并把它自己的 <see cref="TagsStreamOptions"/> 交给这一路流。
+    /// </summary>
+    [Fact]
+    public void AddKeyedTagsStream_OnTheProjectBuilder_RegistersTheKeyedStream()
+    {
+        var named = new FakeProjectCtrl();
+        var services = CreateServices(b =>
+        {
+            b.AddKeyedTagsProjectCtrl("dev");
+            b.AddKeyedTagsStream("dev", o => o.ReconcileInterval = TimeSpan.FromMilliseconds(5));
+        });
+
+        // 后注册的实例覆盖 builder 里注册的实现，便于断言"这一路流到底绑了谁"。
+        services.AddKeyedSingleton<ITagsProjectCtrl>("dev", named);
+
+        using var provider = services.BuildServiceProvider();
+
+        var hub = provider.GetRequiredKeyedService<ITagsStreamHub>("dev");
+        var hosted = Assert.Single(provider.GetServices<IHostedService>());
+        Assert.Same(hub, hosted);
+
+        var descriptor = Assert.Single(provider.GetServices<TagsStreamDescriptor>());
+        Assert.Equal("dev", descriptor.Key);
+        Assert.Equal(TimeSpan.FromMilliseconds(5), descriptor.Options.ReconcileInterval);
+
+        // registry 里那一路流观测的就是具名控制器（端点/命令都走同一个 Ctrl）。
+        var entry = provider.GetRequiredService<TagsStreamRegistry>().Get("dev");
+        Assert.NotNull(entry);
+        Assert.Same(named, entry!.Ctrl);
     }
 }
