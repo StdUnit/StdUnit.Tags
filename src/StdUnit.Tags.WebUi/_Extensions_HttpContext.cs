@@ -7,7 +7,7 @@ namespace StdUnit.Tags.WebUi.Internal;
 /// 端点层的 HTTP 适配：<see cref="HttpContext"/> / 路由值 / 404 响应都留在这里，
 /// <see cref="TagsStreamRegistry"/> 只认 key，不认识 HTTP。
 /// </summary>
-internal static class TagsStreamEndpointExtensions
+internal static class TagsStreamExtensions_HttpContext
 {
     /// <summary>
     /// 取当前请求对应的那一路观测流：路由里有 <c>{keyed}</c> 就按它找，否则用不具名那一路。<br/>
