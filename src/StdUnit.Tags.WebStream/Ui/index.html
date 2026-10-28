@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<!-- 服务端按"本次请求的路径"填成页面所在目录（如 /stdunit.tags/）。下面 JS 里的相对路径都用它解析。 -->
+<base href="%%BASE%%" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>测点监控 · StdUnit.Tags</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1f2328; --muted:#656d76; --line:#d0d7de; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8b949e; --line:#30363d; --accent:#58a6ff; --ok:#3fb950; --warn:#d29922; --err:#f85149; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background:var(--bg); color:var(--fg); }
+  header { position:sticky; top:0; z-index:1; display:flex; gap:10px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--bg); }
+  header h1 { font-size:14px; margin:0 6px 0 0; font-weight:600; white-space:nowrap; }
+  .badge { padding:1px 8px; border-radius:10px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .badge.ok { color:var(--ok); border-color:var(--ok); }
+  .badge.err { color:var(--err); border-color:var(--err); }
+  .muted { color:var(--muted); }
+  input[type=search] { margin-left:auto; padding:4px 8px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; min-width:220px; }
+  main { padding:8px 12px 40px; }
+  details { margin-left:10px; }
+  summary { cursor:pointer; padding:2px 0; }
+  .tag { display:grid; grid-template-columns:minmax(140px,1fr) minmax(90px,240px) auto auto; gap:8px; align-items:baseline; padding:1px 0 1px 16px; }
+  .tag .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tag .val { font-family:ui-monospace, Consolas, monospace; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tag .val.dirty { color:var(--warn); }
+  .tag .val.editable { cursor:pointer; border-bottom:1px dashed var(--line); }
+  .tag .val.editable:hover { color:var(--accent); border-color:var(--accent); }
+  .tag .meta { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tag .act { border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
+  .tag .act:hover { color:var(--accent); }
+  .tag .act:disabled { opacity:.4; cursor:default; }
+  .inline-edit { width:100%; font:inherit; font-family:ui-monospace, Consolas, monospace; text-align:right; padding:0 2px; border:1px solid var(--accent); border-radius:3px; background:transparent; color:inherit; }
+  #msg { font-size:12px; }
+  #msg.err { color:var(--err); }
+  .k { color:var(--muted); font-size:11px; margin-left:6px; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>测点监控</h1>
+  <span id="status" class="badge">连接中…</span>
+  <span id="meta" class="muted"></span>
+  <span id="msg" class="muted"></span>
+  <input id="filter" type="search" placeholder="过滤：名称 / 路径" />
+</header>
+<main id="tree"><p class="muted">加载中…</p></main>
+<script>
+(() => {
+  'use strict';
+
+  // 相对路径由服务端注入（与 C# 的 TagsStreamEndpointConstants 同源）；真正的 URL 用 <base> 解析，
+  // 所以前缀 / PathBase / 嵌套路由组都不影响前端。
+  const TREE_URL = new URL('%%TREE_URL%%', document.baseURI).href;
+  const STREAM_URL = new URL('%%STREAM_URL%%', document.baseURI).href;
+  const WRITE_URL = new URL('%%WRITE_URL%%', document.baseURI).href;
+  const RESCAN_URL = new URL('%%RESCAN_URL%%', document.baseURI).href;
+
+  const statusEl = document.getElementById('status');
+  const metaEl = document.getElementById('meta');
+  const msgEl = document.getElementById('msg');
+  const treeEl = document.getElementById('tree');
+  const filterEl = document.getElementById('filter');
+
+  const BIT_KINDS = new Set(['BIT', 'DI', 'DO']);
+  const EDITABLE_KINDS = new Set([
+    'BYTE', 'INT16', 'UINT16', 'INT32', 'UINT32', 'INT64', 'UINT64',
+    'FLOAT', 'DOUBLE', 'STR', 'BIT', 'DI', 'DO'
+  ]);
+
+  /** @type {Map<string, HTMLElement>} path → 值单元格 */
+  const valueCells = new Map();
+  /** @type {Map<string, HTMLElement>} path → 测点行 */
+  const tagRows = new Map();
+
+  let source = null;
+  let currentEpoch = null;
+  let lastState = null;
+  let lastSampled = '';
+  let entryCount = 0;
+  let tagCount = 0;
+  let restarting = false;
+
+  function setStatus(text, cls) {
+    statusEl.textContent = text;
+    statusEl.className = 'badge' + (cls ? ' ' + cls : '');
+  }
+
+  function updateMeta() {
+    const parts = [`epoch ${currentEpoch ?? '-'}`, `入口 ${entryCount}`, `测点 ${tagCount}`];
+    if (lastSampled) parts.push('最近采集 ' + lastSampled);
+    metaEl.textContent = parts.join(' · ');
+  }
+
+  function childrenByParent(nodes) {
+    const map = new Map();
+    for (const n of nodes) {
+      // 根的 parent 是 null；它自己的 path 是 ''。若直接用 parent 作键，根会和"根的孩子们"
+      // 落进同一个桶，递归时会自己渲染自己（栈溢出）。
+      const key = n.parent == null ? '\u0000root' : n.parent;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(n);
+    }
+    return map;
+  }
+
+  function label(n) {
+    const bits = [];
+    if (n.kind === 'grp') {
+      if (n.entryKey) bits.push('入口');
+      if (n.channelName) bits.push(n.channelName);
+      if (n.scanIntervalMs != null) bits.push(n.scanIntervalMs + 'ms');
+      if (n.isEnabled === false) bits.push('已禁用');
+    } else if (n.kind === 'cbnt') {
+      if (n.startAddress) bits.push('@' + n.startAddress);
+      if (n.channelName) bits.push(n.channelName);
+      if (n.isEnabled === false) bits.push('已禁用');
+    } else {
+      if (n.tagKind) bits.push(n.tagKind);
+      if (n.address) bits.push('@' + n.address);
+      if (n.accessMode) bits.push(n.accessMode);
+    }
+    return bits.join(' · ');
+  }
+
+  function createTagRow(n) {
+    const row = document.createElement('div');
+    row.className = 'tag';
+
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = n.name;
+    name.title = n.path;
+
+    const val = document.createElement('span');
+    val.className = 'val';
+    val.textContent = '—';
+
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = label(n);
+
+    row.append(name, val, meta);
+
+    const kind = (n.tagKind || '').toUpperCase();
+    if (WRITE_URL && !n.isReadOnly && EDITABLE_KINDS.has(kind)) {
+      val.classList.add('editable');
+      val.title = '点击修改';
+      val.addEventListener('click', () => beginEdit(n, val));
+    }
+
+    if (RESCAN_URL) {
+      const act = document.createElement('button');
+      act.type = 'button';
+      act.className = 'act';
+      act.textContent = '↻';
+      act.title = '标记未扫描（R1W 测点会强制重读）';
+      act.addEventListener('click', () => rescanTag(n.path, act));
+      row.appendChild(act);
+    }
+
+    valueCells.set(n.path, val);
+    tagRows.set(n.path, row);
+    tagCount++;
+    return row;
+  }
+
+  let flashTimer = null;
+  function flash(text, isError) {
+    msgEl.textContent = text;
+    msgEl.className = 'muted' + (isError ? ' err' : '');
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => {
+      msgEl.textContent = '';
+      msgEl.className = 'muted';
+    }, isError ? 6000 : 2500);
+  }
+
+  async function postJson(url, body) {
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const result = await resp.json().catch(() => ({ ok: false, error: 'HTTP ' + resp.status }));
+      if (!resp.ok || !result.ok) {
+        flash(result.error || ('HTTP ' + resp.status), true);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      flash('请求失败：' + err.message, true);
+      return false;
+    }
+  }
+
+  function beginEdit(n, cell) {
+    if (cell.dataset.editing === '1') return;
+
+    const kind = (n.tagKind || '').toUpperCase();
+    const current = cell.textContent;
+
+    // 布尔类：点一下直接取反，不弹输入框
+    if (BIT_KINDS.has(kind)) {
+      const next = current !== '1';
+      void postJson(WRITE_URL, { path: n.path, raw: next ? 'true' : 'false' })
+        .then((ok) => { if (ok) cell.textContent = next ? '1' : '0'; });
+      return;
+    }
+
+    // 其余类型：行内输入，Enter 提交、Esc 取消
+    cell.dataset.editing = '1';
+    const input = document.createElement('input');
+    input.className = 'inline-edit';
+    input.value = current === '—' ? '' : current;
+    cell.textContent = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      const text = input.value;
+      cell.textContent = current;
+      delete cell.dataset.editing;
+      if (!commit) return;
+
+      void postJson(WRITE_URL, { path: n.path, raw: text }).then((ok) => {
+        if (ok) cell.textContent = text;   // 乐观回显，下一次增量帧会用真实值覆盖
+      });
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(false));
+  }
+
+  async function rescanTag(path, button) {
+    button.disabled = true;
+    try {
+      if (await postJson(RESCAN_URL, { path })) flash('已标记未扫描：' + path);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function renderNode(n, byParent, into) {
+    if (n.kind === 'tag') {
+      into.appendChild(createTagRow(n));
+      return;
+    }
+
+    const details = document.createElement('details');
+    details.open = n.kind === 'grp';
+
+    const summary = document.createElement('summary');
+    const name = document.createElement('span');
+    name.textContent = n.name;
+    const meta = document.createElement('span');
+    meta.className = 'k';
+    meta.textContent = label(n);
+    summary.append(name, meta);
+    details.appendChild(summary);
+
+    for (const child of byParent.get(n.path) ?? []) {
+      renderNode(child, byParent, details);
+    }
+    into.appendChild(details);
+  }
+
+  function renderTree(tree) {
+    currentEpoch = tree.epoch;
+    lastSampled = '';
+    valueCells.clear();
+    tagRows.clear();
+    entryCount = 0;
+    tagCount = 0;
+    treeEl.innerHTML = '';
+
+    if (!tree.isStarted) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = '项目未运行——启动测点项目后这里会自动刷新。';
+      treeEl.appendChild(p);
+      updateMeta();
+      return;
+    }
+
+    const byParent = childrenByParent(tree.nodes);
+    for (const n of tree.nodes) if (n.entryKey) entryCount++;
+
+    // 根节点（__main__）只是个挂载点，直接渲染它的孩子（契约：根在最前）。
+    const root = tree.nodes[0];
+    for (const n of (root ? byParent.get(root.path) ?? [] : [])) renderNode(n, byParent, treeEl);
+    updateMeta();
+    applyFilter();
+  }
+
+  function formatValue(v) {
+    if (v.raw == null) return '—';
+    const kind = (v.tagKind || '').toUpperCase();
+    if (kind === 'BIT' || kind === 'DI' || kind === 'DO') {
+      const on = v.raw.toLowerCase() === 'true' || v.raw === '1';
+      return on ? '1' : '0';
+    }
+    return v.raw;
+  }
+
+  function applyValues(frame) {
+    if (frame.epoch !== currentEpoch) return;   // 旧代际的帧直接丢弃
+
+    for (const v of frame.values ?? []) {
+      const cell = valueCells.get(v.path);
+      if (!cell || cell.dataset.editing === '1') continue;
+
+      cell.textContent = formatValue(v);
+      cell.classList.toggle('dirty', !!v.isDirty);
+
+      const ts = v.timestampUtc ? new Date(v.timestampUtc).toLocaleTimeString() : '';
+      cell.parentElement.title =
+        v.path + '\n值: ' + (v.raw ?? 'null') +
+        (ts ? '\n读/写: ' + ts : '') +
+        (v.isScanned ? '\n已扫描' : '') +
+        (v.isDirty ? '\n有未刷写的改动' : '');
+    }
+
+    if (frame.sampledAtUtc) {
+      const sampled = new Date(frame.sampledAtUtc).toLocaleTimeString();
+      if (sampled !== lastSampled) {
+        lastSampled = sampled;
+        updateMeta();
+      }
+    }
+  }
+
+  function applyFilter() {
+    const q = filterEl.value.trim().toLowerCase();
+    for (const [path, row] of tagRows) {
+      row.classList.toggle('hidden', q.length > 0 && !path.toLowerCase().includes(q));
+    }
+    if (q.length > 0) {
+      for (const d of treeEl.querySelectorAll('details')) d.open = true;
+    }
+  }
+
+  async function loadTree() {
+    const resp = await fetch(TREE_URL, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderTree(await resp.json());
+  }
+
+  function connect() {
+    if (source) source.close();
+
+    source = new EventSource(STREAM_URL);
+
+    source.addEventListener('state', (e) => {
+      const s = JSON.parse(e.data);
+      lastState = s;
+      metaEl.title = s.projectRoot || '';
+
+      if (s.isStarted && s.epoch !== currentEpoch) {
+        // 新的一次启动：结构可能变了，而且服务端会为新订阅者重发全量基线。
+        // 先取结构、再重新订阅，保证基线到达时单元格已经存在。
+        restart();
+        return;
+      }
+
+      if (!s.isStarted) {
+        renderTree({ epoch: s.epoch, isStarted: false, nodes: [] });
+      }
+
+      setStatus(s.isStarted ? '运行中' : '未启动', s.isStarted ? 'ok' : '');
+    });
+
+    source.addEventListener('values', (e) => applyValues(JSON.parse(e.data)));
+
+    source.onopen = () => {
+      setStatus(lastState && lastState.isStarted ? '运行中' : '已连接', 'ok');
+    };
+
+    source.onerror = () => {
+      // EventSource 会自动重连
+      setStatus('连接断开，重试中…', 'err');
+    };
+  }
+
+  async function restart() {
+    if (restarting) return;
+    restarting = true;
+    try {
+      await loadTree();
+      setStatus(lastState && lastState.isStarted ? '运行中' : '未启动', lastState && lastState.isStarted ? 'ok' : '');
+      connect();
+    } catch (err) {
+      setStatus('取结构失败：' + err.message, 'err');
+    } finally {
+      restarting = false;
+    }
+  }
+
+  filterEl.addEventListener('input', applyFilter);
+
+  (async () => {
+    try {
+      await loadTree();
+      connect();
+    } catch (err) {
+      setStatus('取结构失败：' + err.message, 'err');
+    }
+  })();
+})();
+</script>
+</body>
+</html>

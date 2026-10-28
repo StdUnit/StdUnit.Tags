@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<Description>测点项目的只读观测流：结构快照（HTTP）+ 按入口、按轮次的值推送（SSE）</Description>
+		<!-- ASP.NET Core 只有 net8.0（net472 无此框架），本包也就只面向 net8.0 -->
+		<TargetFramework>net8.0</TargetFramework>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- 内置的极简监控页（不引入 npm/前端工程）。显式 LogicalName，免得靠目录推断资源名。
+		     注意目录名是 Ui（大小写敏感：Linux CI 上 ui\index.html 会找不到文件）。 -->
+		<EmbeddedResource Include="Ui\index.html" LogicalName="StdUnit.Tags.WebStream.Ui.index.html" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- 让 net8-only 的测试项目能直接测 internal 的索引/收集器/帧渲染 -->
+		<InternalsVisibleTo Include="StdUnit.Tags.Tests.NetCoreOnly" />
+	</ItemGroup>
+	<Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

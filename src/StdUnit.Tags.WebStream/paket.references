@@ -1,0 +1,1 @@
+# 本包没有 paket 依赖：ASP.NET Core 通过 <FrameworkReference Include="Microsoft.AspNetCore.App" /> 提供。

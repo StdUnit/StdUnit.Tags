@@ -100,12 +100,13 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 - `StdUnit.Tags.R3Extensions`: `Cysharp/R3`扩展，只依赖于`StdUnit.Tags.Core`
 - `StdUnit.Tags.BlazorLib.Core`: Blazor 类库，包含核心功能抽象，以及一个极简的监控页面。
 - `StdUnit.Tags.McpServer`: 这是一个把`StdUnit.Tags`暴露成 [Model Context Protocol Server](https://modelcontextprotocol.io/) 的类库。
+- `StdUnit.Tags.WebStream`: 只读观测流（ASP.NET Core）。结构树走一次性 `GET`，测点值按"入口 + 轮次"以 SSE（`text/event-stream`）推送；不依赖 Blazor / SignalR，可在 NativeAOT 宿主下使用。自带一个极简监控页（`GET /stdunit.tags/ui`，单文件 HTML + 内嵌 JS，无需 npm 工程），并附带两个写命令（`POST /stdunit.tags/value` 改值、`POST /stdunit.tags/rescan` 标记未扫描）。端点只允许改**路由前缀**（`app.MapTagsStream("/internal/tags")`），相对路径是线协议的一部分；**不内置任何鉴权**，暴露到非受信网络前请对返回的路由组加策略，例如 `app.MapTagsStream().RequireAuthorization()`。
 
 > 备注：源码目录中还有一个 `StdUnit.Tags.BlazorLib`(不是 `StdUnit.Tags.BlazorLib.Core`)，放的是常用硬件设备的编辑器和设计器实现。这些只是我把脑子里的片段随手写下来的实验性代码——因为将来可能做成类库，里面不少东西被标成了`public`——目前它只是实验场，不对外发布。
 
 相关测试统一放在 `tests/` 下的两个测试项目中：
 - `StdUnit.Tags.Tests`: 上述子项目的自动化测试（多目标 `net8.0` + `net472`）。
-- `StdUnit.Tags.Tests.NetCoreOnly`: **仅 `net8.0`** 的测试项目，专门存放无法面向 net472 的测试（Blazor / ASP.NET Core 等）；目前所有测试都放在 `StdUnit.Tags.Tests` 里，所以这个项目还是空项，占位预留。
+- `StdUnit.Tags.Tests.NetCoreOnly`: **仅 `net8.0`** 的测试项目，专门存放无法面向 net472 的测试（Blazor / ASP.NET Core 等）；目前承载 `StdUnit.Tags.WebStream` 的测试。
 
 这里的自动化测试会在 `main`/`dev` 的推送、PR、发布新版时自动执行，并把结果传到 [codecov.io](https://app.codecov.io/gh/StdUnit/StdUnit.Tags)。
 
@@ -124,6 +125,7 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 | R3扩展 | `StdUnit.Tags.R3Extensions` | ✅ 支持 |
 | McpServer扩展 | `StdUnit.Tags.McpServer` | ✅ 支持 |
 | BlazorLibCore扩展 | `StdUnit.Tags.BlazorLib.Core` | ✅ 支持 |
+| 只读观测流 | `StdUnit.Tags.WebStream` | 🧪 实验 |
 
 上表列出的包中，标记为“实验”的，`<Major>.<Minor>.<Patch>` 里的 `<Minor>` 跳变可能包含破坏性更新；标记为“支持”的，只有 `<Major>` 跳变才可能包含破坏性更新。核心包（`StdUnit.Tags`、`StdUnit.Tags.Core`）不属于驱动/扩展、因此不在此表内，按语义化版本处理——同样只有 `<Major>` 跳变才可能包含破坏性更新。
 
@@ -153,6 +155,7 @@ AI 可以直接参考 [StdUnit.Tags —— 给 AI 的参考手册](https://tags.
 | `StdUnit.Tags.S7` / `ModbusTcp` / `Hjzk` / `ZLan` / `OpcUaClient` / `ComScanner` / `SimpleFiles` | `net8.0` + `net472` |
 | `StdUnit.Tags.McpServer` | `net8.0` + `net472`（经 `ModelContextProtocol` 核心包的 `netstandard2.0` 资产） |
 | `StdUnit.Tags.BlazorLib` / `BlazorLib.Core` | 仅 `net8.0` |
+| `StdUnit.Tags.WebStream` | 仅 `net8.0`（ASP.NET Core；依赖 `Microsoft.AspNetCore.App` 框架引用） |
 | `StdUnit.Tags.SchemaGenerator` | `netstandard2.0`（源生成器） |
 
 两个框架的能力差异在 `Logicet` 插件上（共两处）：见 [netfx 的插件化限制](#netfx-的插件化限制) 与 [AOT 的插件化限制](#aot-的插件化限制)。

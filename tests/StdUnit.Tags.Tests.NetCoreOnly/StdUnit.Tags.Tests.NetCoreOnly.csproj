@@ -15,7 +15,7 @@
   另外：不要在 StdUnit.Tags.Tests 里用 #if NETFRAMEWORK 排除整个文件来回避 net8-only 依赖 ——
   那是编译期开关，解决不了"引用 net8-only 项目"的问题。
 
-  现状：暂无测试，作为占位预留。首个用例预期来自 ASP.NET Core / Blazor 方向。
+  现状：承载 StdUnit.Tags.WebStream（ASP.NET Core / SSE 只读观测流）的测试。
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -27,10 +27,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- net8.0 专属的被测项目。当前尚无测试，故先只引用基础库；
-         将来写 Blazor / ASP.NET Core 测试时按需追加
-         StdUnit.Tags.BlazorLib.Core / StdUnit.Tags.BlazorLib。 -->
+    <!-- net8.0 专属的被测项目。 -->
     <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.WebStream\StdUnit.Tags.WebStream.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 直接复用主测试项目的纯内存假驱动/夹具助手（链接源码，避免重复实现） -->
+    <Compile Include="..\StdUnit.Tags.Tests\Fakes\FakedChannel.cs" Link="Fakes\FakedChannel.cs" />
+    <Compile Include="..\StdUnit.Tags.Tests\Fakes\FakedChannelFactory.cs" Link="Fakes\FakedChannelFactory.cs" />
+    <Compile Include="..\StdUnit.Tags.Tests\Fakes\FakedTag.cs" Link="Fakes\FakedTag.cs" />
+    <Compile Include="..\StdUnit.Tags.Tests\Fakes\TagsProject_Extensions.cs" Link="Fakes\TagsProject_Extensions.cs" />
   </ItemGroup>
 
   <Import Project="..\..\.paket\Paket.Restore.targets" />
