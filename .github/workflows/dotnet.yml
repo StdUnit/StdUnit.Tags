@@ -167,3 +167,7 @@ jobs:
       run: |
         dotnet publish tests/AotSmokeTest.WebStream/AotSmokeTest.WebStream.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
         ./aot-smoke-out/AotSmokeTest.WebStream
+
+    # 示例（常驻服务，不在这里运行）也要保证 AOT 可发布：只 publish，防止它悄悄退化成需要 JIT。
+    - name: Publish sample (WebMonitor, NativeAOT)
+      run: dotnet publish samples/WebMonitor/WebMonitor.csproj -c Release -r linux-x64 -o ./aot-sample-out --nologo

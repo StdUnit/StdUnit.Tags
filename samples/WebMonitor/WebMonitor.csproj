@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+
+    <!-- 本示例的定位：**NativeAOT 可发布**的只读观测流 demo。
+         发布：dotnet publish samples/WebMonitor/WebMonitor.csproj -c Release -r linux-x64
+         产物是真·原生可执行文件，不依赖 .NET 运行时。 -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- 与 `dotnet new tags.web` 生成的模板同构：仓库内用 ProjectReference，
+       消费 nuget 包时对应的就是 StdUnit.Tags / StdUnit.Tags.SimpleFiles / StdUnit.Tags.WebStream。 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.SimpleFiles\StdUnit.Tags.SimpleFiles.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.WebStream\StdUnit.Tags.WebStream.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 测点配置随产物走：两路观测流各一个项目目录，index.xml 由 TagBackgroundService 加载。 -->
+    <None Update="Tags\main\index.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Tags\line-b\index.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>
