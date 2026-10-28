@@ -60,7 +60,7 @@ public class TagGrpRunnerTests
             turnStartedCalled = true;
             return Task.CompletedTask;
         };
-        runner.TurnProcess += (grp, ch) =>
+        runner.TurnProcess += (grp, ch, _) =>
         {
             turnProcessCalled = true;
             cts.Cancel();
@@ -137,7 +137,7 @@ public class TagGrpRunnerTests
         entry.OnRead = () => processOrder.Add("Read");
         entry.OnWrite = () => processOrder.Add("Write");
 
-        runner.TurnProcess += (grp, ch) =>
+        runner.TurnProcess += (grp, ch, _) =>
         {
             processOrder.Add("Process");
             cts.Cancel();
@@ -171,7 +171,7 @@ public class TagGrpRunnerTests
         entry.OnWrite = () => callOrder.Add("Write");
         entry.OnRead = () => callOrder.Add("Read");
 
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -283,7 +283,7 @@ public class TagGrpRunnerTests
 
         using var cts = new CancellationTokenSource();
         // 在 TurnProcess 中取消（模拟正常轮询中用户停止）
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -319,7 +319,7 @@ public class TagGrpRunnerTests
         var runner = new TagGrpRunner(new MockProject(), loggerFactory.CreateLogger<TagGrpRunner>());
 
         using var cts = new CancellationTokenSource();
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -356,7 +356,7 @@ public class TagGrpRunnerTests
             disconnectStrategy: strategy);
 
         using var cts = new CancellationTokenSource();
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -392,7 +392,7 @@ public class TagGrpRunnerTests
         var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance);
 
         using var cts = new CancellationTokenSource();
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -432,7 +432,7 @@ public class TagGrpRunnerTests
         var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance, disconnectStrategy: strategy);
 
         using var cts = new CancellationTokenSource();
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -467,7 +467,7 @@ public class TagGrpRunnerTests
         var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance);
 
         using var cts = new CancellationTokenSource();
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -500,7 +500,7 @@ public class TagGrpRunnerTests
         var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance);
 
         using var cts = new CancellationTokenSource();
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -536,7 +536,7 @@ public class TagGrpRunnerTests
             return default;
         }, out var intentTask);
 
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -576,7 +576,7 @@ public class TagGrpRunnerTests
             return default;
         }, out var second);
 
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -739,7 +739,7 @@ public class TagGrpRunnerTests
         var runner = new TagGrpRunner(project, NullLogger<TagGrpRunner>.Instance);
         using var cts = new CancellationTokenSource();
 
-        runner.TurnProcess += (_, _) =>
+        runner.TurnProcess += (_, _, _) =>
         {
             cts.Cancel();
             return Task.CompletedTask;
@@ -921,6 +921,7 @@ public class TagGrpRunnerTests
 
         public event RunnerStarted? RunnerStarted;
         public event RunnerCrashed? RunnerCrashed;
+        public void SetTurnProcessHandler(string entry, TurnProcess? handler) => throw new NotImplementedException();
     }
 
     /// <summary>

@@ -12,8 +12,13 @@ namespace StdUnit.Tags;
 /// 入口下若还挂了其它通道，运行器会自动为它们建连，但不会在这里逐个暴露；
 /// 需要用到辅通道时，请自行从 <paramref name="grp"/> 上解析（如 <c>grp.SelectGrp("grp2").SearchChannel()</c>）。
 /// </param>
+/// <param name="ct">
+/// 项目的生命周期取消令牌（与本轮读/写用的是同一个）。<br/>
+/// 回调里发起的异步操作应把它透传下去，这样"停止项目"能及时打断，
+/// 不至于拖到 <see cref="ITagsProjectCtrl.StopAsync"/> 的等待超时。
+/// </param>
 /// <returns></returns>
-public delegate Task TurnProcess(ITagGrp grp, ITagChannel? channel);
+public delegate Task TurnProcess(ITagGrp grp, ITagChannel? channel, CancellationToken ct);
 
 /// <summary>
 /// <see cref="ITagGrpRunner"/>中有轮训启动

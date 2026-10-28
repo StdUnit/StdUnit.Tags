@@ -95,7 +95,7 @@ internal class TagGrpRunner : ITagGrpRunner
                     await entry.ReadAsync(TraversalMode.RespectEnabled, ct);
                     if (TurnProcess is not null)
                     {
-                        await TurnProcess(entry, channel);
+                        await TurnProcess(entry, channel, ct);
                     }
                     await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
 

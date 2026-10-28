@@ -215,6 +215,7 @@ public class ProjectAddLogicetTests
 
         public event RunnerStarted? RunnerStarted;
         public event RunnerCrashed? RunnerCrashed;
+        public void SetTurnProcessHandler(string entry, TurnProcess? handler) => throw new NotImplementedException();
     }
 
     /// <summary>

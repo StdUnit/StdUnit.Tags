@@ -48,6 +48,7 @@ internal class MockTagsProject : ITagsProject
 
     public event RunnerStarted? RunnerStarted;
     public event RunnerCrashed? RunnerCrashed;
+    public void SetTurnProcessHandler(string entry, TurnProcess? handler) => throw new NotImplementedException();
     public void Initialize(string projRoot, XElement? root = null)
     {
         InitializeCallCount++;
