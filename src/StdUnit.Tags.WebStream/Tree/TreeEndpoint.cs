@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace StdUnit.Tags.WebStream.Internal;
 
@@ -11,10 +10,15 @@ internal static class TreeEndpoint
 {
     public static async Task HandleAsync(HttpContext context)
     {
-        var hub = context.RequestServices.GetRequiredService<ITagsStreamHub>();
+        var entry = context.GetKeyedTagsStreamEntry();
+        if (entry is null)
+        {
+            await context.WriteKeyedStreamNotFoundAsync();
+            return;
+        }
 
         // 自己序列化：不走 MVC / 无参序列化，AOT/裁剪下没有反射路径。
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(hub.GetTree(), TagsStreamJsonContext.Default.TreeDto);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(entry.HostedService.GetTree(), TagsStreamJsonContext.Default.TreeDto);
 
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = "application/json; charset=utf-8";

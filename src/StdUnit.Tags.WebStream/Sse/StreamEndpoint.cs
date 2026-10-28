@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace StdUnit.Tags.WebStream.Internal;
 
@@ -11,7 +10,12 @@ internal static class StreamEndpoint
 {
     public static async Task HandleAsync(HttpContext context)
     {
-        var hub = context.RequestServices.GetRequiredService<ITagsStreamHub>();
+        var entry = context.GetKeyedTagsStreamEntry();
+        if (entry is null)
+        {
+            await context.WriteKeyedStreamNotFoundAsync();
+            return;
+        }
 
         // 反代/服务器不能缓冲：否则"实时推送"会变成"攒一波再发"。
         context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
@@ -22,7 +26,7 @@ internal static class StreamEndpoint
         context.Response.Headers["X-Accel-Buffering"] = "no"; // nginx
 
         var entries = ParseEntries(context.Request.Query["entries"]);
-        using var piper = hub.Subscribe(entries);
+        using var piper = entry.HostedService.Subscribe(entries);
 
         try
         {

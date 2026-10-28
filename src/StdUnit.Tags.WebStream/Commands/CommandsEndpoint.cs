@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace StdUnit.Tags.WebStream.Internal;
 
@@ -12,6 +11,13 @@ internal static class CommandsEndpoint
 {
     public static async Task WriteValueAsync(HttpContext context)
     {
+        var entry = context.GetKeyedTagsStreamEntry();
+        if (entry is null)
+        {
+            await context.WriteKeyedStreamNotFoundAsync();
+            return;
+        }
+
         var request = await ReadBodyAsync(context, TagsStreamJsonContext.Default.WriteTagValueRequest)
             .ConfigureAwait(false);
         if (request is null)
@@ -20,10 +26,8 @@ internal static class CommandsEndpoint
             return;
         }
 
-        var ctrl = context.RequestServices.GetRequiredService<ITagsProjectCtrl>();
-        var options = context.RequestServices.GetRequiredService<TagsStreamOptions>();
         var outcome = await TagsStreamCommands
-            .WriteValueAsync(ctrl, request, options.CommandTimeout)
+            .WriteValueAsync(entry.Ctrl, request, entry.Options.CommandTimeout)
             .ConfigureAwait(false);
 
         await WriteResultAsync(context, outcome).ConfigureAwait(false);
@@ -31,6 +35,13 @@ internal static class CommandsEndpoint
 
     public static async Task RescanAsync(HttpContext context)
     {
+        var entry = context.GetKeyedTagsStreamEntry();
+        if (entry is null)
+        {
+            await context.WriteKeyedStreamNotFoundAsync();
+            return;
+        }
+
         var request = await ReadBodyAsync(context, TagsStreamJsonContext.Default.RescanTagRequest)
             .ConfigureAwait(false);
         if (request is null)
@@ -39,9 +50,7 @@ internal static class CommandsEndpoint
             return;
         }
 
-        var ctrl = context.RequestServices.GetRequiredService<ITagsProjectCtrl>();
-        var options = context.RequestServices.GetRequiredService<TagsStreamOptions>();
-        var outcome = await TagsStreamCommands.RescanAsync(ctrl, request, options.CommandTimeout).ConfigureAwait(false);
+        var outcome = await TagsStreamCommands.RescanAsync(entry.Ctrl, request, entry.Options.CommandTimeout).ConfigureAwait(false);
 
         await WriteResultAsync(context, outcome).ConfigureAwait(false);
     }

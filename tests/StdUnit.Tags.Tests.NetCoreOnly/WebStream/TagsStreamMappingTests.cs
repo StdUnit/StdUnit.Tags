@@ -48,15 +48,24 @@ public class TagsStreamMappingTests
             builder.MapTagsStream(prefix);
 
             var normalized = prefix.TrimEnd('/');
+            var expected = new[]
+            {
+                // 不具名流
+                $"{normalized}/rescan",
+                $"{normalized}/stream",
+                $"{normalized}/tree",
+                $"{normalized}/ui",
+                $"{normalized}/value",
+                // 具名流（同一套形状，多一段 {keyed}）
+                $"{normalized}/{{keyed}}/rescan",
+                $"{normalized}/{{keyed}}/stream",
+                $"{normalized}/{{keyed}}/tree",
+                $"{normalized}/{{keyed}}/ui",
+                $"{normalized}/{{keyed}}/value",
+            };
+
             Assert.Equal(
-                new[]
-                {
-                    $"{normalized}/rescan",
-                    $"{normalized}/stream",
-                    $"{normalized}/tree",
-                    $"{normalized}/ui",
-                    $"{normalized}/value",
-                },
+                expected.OrderBy(p => p, System.StringComparer.Ordinal),
                 Patterns(builder));
         }
         finally
@@ -70,8 +79,11 @@ public class TagsStreamMappingTests
     [InlineData("/stdunit.tags/ui", "", "/stdunit.tags/")]
     [InlineData("/monitor/ui", "", "/monitor/")]
     [InlineData("/ui", "", "/")]
+    // 具名流：{prefix}/{key}/ui → base 自动落到 {prefix}/{key}/
+    [InlineData("/monitor/dev/ui", "", "/monitor/dev/")]
     // 末尾多一个 '/' 也不能当成目录
     [InlineData("/monitor/ui/", "", "/monitor/")]
+    [InlineData("/monitor/dev/ui/", "", "/monitor/dev/")]
     // PathBase（UsePathBase / 反向代理前缀）必须原样带上
     [InlineData("/stdunit.tags/ui", "/app", "/app/stdunit.tags/")]
     public async Task UiPage_BaseHrefComesFromTheRequestPath(string path, string pathBase, string expectedBase)
@@ -114,15 +126,22 @@ public class TagsStreamMappingTests
             // 挂到父级路由组下：路由自动带上前缀，监控页的 <base> 由请求路径算出，不需要额外配置。
             builder.MapGroup("/monitor").MapTagsStream();
 
+            var expected = new[]
+            {
+                "/monitor/stdunit.tags/rescan",
+                "/monitor/stdunit.tags/stream",
+                "/monitor/stdunit.tags/tree",
+                "/monitor/stdunit.tags/ui",
+                "/monitor/stdunit.tags/value",
+                "/monitor/stdunit.tags/{keyed}/rescan",
+                "/monitor/stdunit.tags/{keyed}/stream",
+                "/monitor/stdunit.tags/{keyed}/tree",
+                "/monitor/stdunit.tags/{keyed}/ui",
+                "/monitor/stdunit.tags/{keyed}/value",
+            };
+
             Assert.Equal(
-                new[]
-                {
-                    "/monitor/stdunit.tags/rescan",
-                    "/monitor/stdunit.tags/stream",
-                    "/monitor/stdunit.tags/tree",
-                    "/monitor/stdunit.tags/ui",
-                    "/monitor/stdunit.tags/value",
-                },
+                expected.OrderBy(p => p, System.StringComparer.Ordinal),
                 Patterns(builder));
         }
         finally
@@ -141,7 +160,7 @@ public class TagsStreamMappingTests
             builder.MapTagsStream().RequireAuthorization();
 
             var endpoints = builder.DataSources.SelectMany(ds => ds.Endpoints).OfType<RouteEndpoint>().ToArray();
-            Assert.Equal(5, endpoints.Length);
+            Assert.Equal(10, endpoints.Length);
             Assert.All(endpoints, e => Assert.Contains(e.Metadata, m => m is IAuthorizeData));
 
             // 不传 prefix 时必须落在默认前缀下（= EndpointConstants.DefaultPrefix）。
@@ -165,7 +184,7 @@ public class TagsStreamMappingTests
             builder.MapTagsStream("/internal/tags").RequireAuthorization("ops");
 
             var endpoints = builder.DataSources.SelectMany(ds => ds.Endpoints).OfType<RouteEndpoint>().ToArray();
-            Assert.Equal(5, endpoints.Length);
+            Assert.Equal(10, endpoints.Length);
             Assert.All(endpoints, e => Assert.Contains(
                 e.Metadata.OfType<IAuthorizeData>(),
                 m => m.Policy == "ops"));

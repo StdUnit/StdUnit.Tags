@@ -18,11 +18,11 @@ namespace StdUnit.Tags.WebStream;
 /// 任何一环满了都只丢帧并触发重同步，不会反压到轮询。
 /// </para>
 /// </summary>
-internal sealed class TagsStreamHub : ITagsStreamHub, IHostedService, IDisposable
+internal sealed class TagsStreamHostedService : ITagsStreamHub, IHostedService, IDisposable
 {
     private readonly ITagsProjectCtrl _ctrl;
     private readonly TagsStreamOptions _options;
-    private readonly ILogger<TagsStreamHub>? _logger;
+    private readonly ILogger<TagsStreamHostedService>? _logger;
 
     /// <summary>订阅者集合与状态发布。<c>_transitionGate → _gate</c> 是唯一允许的加锁顺序。</summary>
     private readonly object _gate = new();
@@ -46,12 +46,14 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IHostedService, IDisposabl
     private Task? _heartbeatTask;
 
     /// <summary>
-    /// c'tor
+    /// c'tor <br/>
+    /// 有意保持 internal；
+    /// 不应该让DI容器自动构建本类的实例
     /// </summary>
     /// <param name="ctrl">测点项目控制器（需由 <c>AddTagsProjectServices</c> 注册）</param>
     /// <param name="options">配置</param>
     /// <param name="logger">日志</param>
-    public TagsStreamHub(ITagsProjectCtrl ctrl, TagsStreamOptions options, ILogger<TagsStreamHub>? logger = null)
+    internal TagsStreamHostedService(ITagsProjectCtrl ctrl, TagsStreamOptions options, ILogger<TagsStreamHostedService>? logger = null)
     {
         this._ctrl = ctrl ?? throw new ArgumentNullException(nameof(ctrl));
         this._options = options ?? throw new ArgumentNullException(nameof(options));

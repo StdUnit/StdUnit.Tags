@@ -12,7 +12,7 @@ using Xunit;
 namespace StdUnit.Tags.Tests.NetCoreOnly.WebStream;
 
 /// <summary>
-/// <see cref="TagsStreamHub"/> 的端到端行为：状态（Replay 1）、全量基线、增量、按入口过滤、迟到订阅者。<br/>
+/// <see cref="TagsStreamHostedService"/> 的端到端行为：状态（Replay 1）、全量基线、增量、按入口过滤、迟到订阅者。<br/>
 /// 用真实的 <c>TagsProject</c> + 真实 <c>TagGrpRunner</c>（假驱动），只把 <see cref="ITagsProjectCtrl"/> 换成可控的假实现，
 /// 以便精确决定"什么时候启动/停止"。
 /// </summary>
@@ -56,7 +56,7 @@ public class TagsStreamHubTests : IDisposable
     {
         using var project = CreateSingleEntryProject(this._scope);
         var ctrl = new FakeProjectCtrl();
-        using var hub = new TagsStreamHub(ctrl, FastOptions());
+        using var hub = new TagsStreamHostedService(ctrl, FastOptions());
         await hub.StartAsync(default);
 
         using var output = new RecordingStream();
@@ -104,7 +104,7 @@ public class TagsStreamHubTests : IDisposable
             StreamTestContext.EntryGroup("g2", "fake2", StreamTestContext.Tag("a"))));
 
         var ctrl = new FakeProjectCtrl();
-        using var hub = new TagsStreamHub(ctrl, FastOptions());
+        using var hub = new TagsStreamHostedService(ctrl, FastOptions());
         await hub.StartAsync(default);
 
         using var output = new RecordingStream();
@@ -137,7 +137,7 @@ public class TagsStreamHubTests : IDisposable
     {
         using var project = CreateSingleEntryProject(this._scope);
         var ctrl = new FakeProjectCtrl();
-        using var hub = new TagsStreamHub(ctrl, FastOptions());
+        using var hub = new TagsStreamHostedService(ctrl, FastOptions());
         await hub.StartAsync(default);
 
         // 先启动（不跑轮询），再订阅：订阅者应立即拿到状态 + 全量基线。

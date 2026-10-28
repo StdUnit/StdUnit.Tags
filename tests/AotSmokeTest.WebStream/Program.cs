@@ -48,6 +48,10 @@ try
         o.HeartbeatInterval = TimeSpan.FromSeconds(30);
     });
 
+    // 第二路具名流：验证多流的路由/页面在 AOT 下也成立（这一路的项目不启动，只检查结构与 404）。
+    builder.Services.AddKeyedTagsProjectCtrl("dev");
+    builder.Services.AddKeyedTagsStream("dev");
+
     app = builder.Build();
     app.MapTagsStream();
     await app.StartAsync();
@@ -96,6 +100,30 @@ try
         Require(!html.Contains("%%", StringComparison.Ordinal), "监控页不应残留未替换的占位符");
         Console.WriteLine("[+] 监控页可访问且基路径已注入");
     }
+
+    // ①c 多流：具名流的页面基路径落在它自己的目录下；未知 key 返回 404。
+    using (var ui = await http.GetAsync($"{baseUrl}/stdunit.tags/dev/ui", cts.Token))
+    {
+        Require(ui.IsSuccessStatusCode, $"具名流的监控页应返回 2xx，实际 {(int)ui.StatusCode}");
+        var html = await ui.Content.ReadAsStringAsync(cts.Token);
+        Require(
+            html.Contains("<base href=\"/stdunit.tags/dev/\" />", StringComparison.Ordinal),
+            "具名流的监控页基路径应带上它自己的 key");
+    }
+
+    using (var treeOfDev = await http.GetAsync($"{baseUrl}/stdunit.tags/dev/tree", cts.Token))
+    {
+        Require(treeOfDev.IsSuccessStatusCode, $"具名流的结构树应返回 2xx，实际 {(int)treeOfDev.StatusCode}");
+        var json = await treeOfDev.Content.ReadAsStringAsync(cts.Token);
+        Require(json.Contains("\"isStarted\":false", StringComparison.Ordinal), "未启动的具名流应返回空结构树");
+    }
+
+    using (var unknown = await http.GetAsync($"{baseUrl}/stdunit.tags/nope/tree", cts.Token))
+    {
+        Require((int)unknown.StatusCode == 404, $"未知 key 应返回 404，实际 {(int)unknown.StatusCode}");
+    }
+
+    Console.WriteLine("[+] 多流路由正常（具名页面基路径 / 具名结构树 / 未知 key 404）");
 
     // ② SSE：订阅 → 全量基线 → 改值 → 增量。
     using var response = await http.GetAsync(
