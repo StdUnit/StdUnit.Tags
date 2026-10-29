@@ -197,7 +197,8 @@
 
   /** 设计器里的全部状态；字段值都是字符串（空串 = 省略，交给运行期默认值）。 */
   const state = {
-    tab: 'channels', selected: 0,
+    tab: 'channels', 
+    selected: 0,
     channels: [], tree: [], logicets: [],
     // 导入时认不出的东西（未知扩展元素/属性）：原样保留，导出时再吐出去，避免"打开再保存就丢配置"。
     extraXml: [], projectAttrs: {}, importIssues: []
@@ -253,10 +254,37 @@
 
   function newChannel() {
     const d = cat.drivers[0];
-    return { name: uniqueName('ch', new Set(channelNames())), driver: d ? d.name : '', values: {}, groups: {}, extras: [], extraAttrs: {} };
+    return { name: uniqueName('ch', new Set(channelNames())), driver: d ? d.name : '', values: {}, groups: {}, extras: [], extraAttrs: [] };
   }
 
-  const newNode = el => ({ el, attrs: {}, children: [], extras: [], extraAttrs: {}, collapsed: false });
+  const newNode = el => ({ el, attrs: {}, children: [], extras: [], extraAttrs: [], collapsed: false });
+
+  /**
+   * 非核心属性统一存成 <c>[{name, value}]</c>：既装"驱动声明的额外属性"（如 S7 的 maxlen），
+   * 也装"导入进来但没人认识的自定义属性"。顺带兼容旧版本存的 <c>{name: value}</c> 对象形式。
+   */
+  function extraAttrsOf(owner) {
+    if (!Array.isArray(owner.extraAttrs)) {
+      const obj = owner.extraAttrs || {};
+      owner.extraAttrs = Object.entries(obj).map(([name, value]) => ({ name, value }));
+    }
+    return owner.extraAttrs;
+  }
+
+  /** 按名字取/设一条非核心属性；值为空即删除（避免导出空属性）。 */
+  function setExtraAttr(owner, name, value) {
+    const list = extraAttrsOf(owner);
+    const index = list.findIndex(a => a.name === name);
+    if (value === '' || value == null) {
+      if (index >= 0) list.splice(index, 1);
+    } else if (index >= 0) {
+      list[index].value = value;
+    } else {
+      list.push({ name, value });
+    }
+  }
+
+  const getExtraAttr = (owner, name) => extraAttrsOf(owner).find(a => a.name === name)?.value ?? '';
 
   /* ───────────────────────── 导入（尽力解析） ───────────────────────── */
 
@@ -286,7 +314,7 @@
 
     for (const a of [...el.attributes]) {
       if (a.name === 'name' || a.name === 'driver' || a.name === 'xmlns' || a.name.startsWith('xmlns:')) continue;
-      ch.extraAttrs[a.name] = a.value;
+      extraAttrsOf(ch).push({ name: a.name, value: a.value });
     }
 
     for (const child of [...el.children]) {
@@ -309,7 +337,7 @@
     for (const a of [...el.attributes]) {
       if (a.name === 'xmlns' || a.name.startsWith('xmlns:')) continue;
       if (known.has(a.name)) node.attrs[a.name] = a.value;
-      else node.extraAttrs[a.name] = a.value;   // 如 SimpleFiles 测点的 autoCreateFile
+      else extraAttrsOf(node).push({ name: a.name, value: a.value });   // 如 SimpleFiles 测点的 autoCreateFile
     }
 
     for (const child of [...el.children]) {
@@ -522,10 +550,16 @@
       out.push(driverFields(drv.fields || [], ch.values, ch.groups, 0));
     }
 
-    const extras = (ch.extras || []).length + Object.keys(ch.extraAttrs || {}).length;
+    const extras = (ch.extras || []).length + extraAttrsOf(ch).length;
     if (extras > 0) {
       out.push(h('p', { class: 'muted', text: '该通道包含 ' + extras + ' 项导入时无法识别的配置，导出时会原样写回。' }));
     }
+
+    out.push(h('div', { class: 'row section' },
+      h('span', { class: 'label-title', text: '自定义属性' }),
+      h('span', { class: 'muted', text: '通道没有驱动专属属性声明，这里可加任意扩展属性' })));
+    out.push(customAttrRows(ch, new Set()));
+    out.push(addCustomAttrRow(ch));
 
     return out;
   }
@@ -544,7 +578,7 @@
       wrap.append(h('p', { class: 'muted', text: '还没有测点组：至少需要一个 isEntry="true" 的入口组，项目才能轮询。' }));
     }
 
-    state.tree.forEach((n, i) => wrap.append(nodeCard(n, state.tree, i)));
+    state.tree.forEach((n, i) => wrap.append(nodeCard(n, state.tree, i, '')));
 
     wrap.append(h('div', { class: 'card' },
       h('div', { class: 'row section' },
@@ -574,10 +608,31 @@
     render();
   }
 
-  function nodeCard(node, siblings, index) {
+  /** 声明的作用域：只在有效驱动命中 `<c>appliesToDrivers</c>` 时显示；已写值的例外（避免"看不见却被导出"）。 */
+  function attrAppliesToDriver(field, driverName, value) {
+    const drivers = field.appliesToDrivers;
+    if (!drivers || drivers.length === 0) return true;
+    if (!driverName) return true;                              // 驱动未知：先都显示，免得藏掉合法配置
+    if (drivers.includes(driverName)) return true;
+    return value !== undefined && value !== null && value !== '';   // 已经写了值就保留可见
+  }
+
+  function nodeCard(node, siblings, index, inheritedChannel) {
     const schema = nodeOf(node.el);
     const badge = h('span', { class: 'badge', text: node.attrs.name || '(未命名)' });
     const collapsed = node.collapsed === true;
+
+    // 有效通道/驱动：Tag/TagCbnt 自己不写 driver，要沿 channel 冒泡到 <Channel driver="…">。
+    const ownChannel = node.attrs.channel || inheritedChannel || '';
+    const channel = state.channels.find(c => c.name === ownChannel);
+    const driver = channel ? driverOf(channel.driver) : null;
+
+    // 驱动的额外属性（XSD 1.0 表达不了，由驱动 schema 用 appinfo 声明）。
+    const declared = node.el === 'Tag'
+      ? (driver?.tagAttributes || [])
+      : node.el === 'TagCbnt'
+        ? (driver?.cbntAttributes || [])
+        : [];
 
     // 折叠开关放在右列最前面：左列的标题文字位置不变（和下面字段的 label 列严格对齐）。
     const toggle = h('button', {
@@ -603,12 +658,28 @@
 
     const fields = h('div', { class: 'fields' });
     for (const a of schema.attributes) {
+      if (!attrAppliesToDriver(a, driver ? driver.name : '', node.attrs[a.name])) continue;
+
       if (a.name === 'channel') {
-        const select = h('select', { onchange: e => { node.attrs.channel = e.target.value; } },
+        // 换通道可能换驱动 → 重新渲染（子节点的"驱动专属属性"要跟着变）。
+        const select = h('select', { onchange: e => { node.attrs.channel = e.target.value; render(); } },
           h('option', { value: '' }, '（继承）'),
           ...channelNames().map(n => h('option', { value: n }, n)));
         select.value = node.attrs.channel || '';
         fields.append(fieldRow(a, node.attrs.channel || '', v => { node.attrs.channel = v; }, select));
+        continue;
+      }
+
+      if (a.name === 'type' && node.el === 'Tag') {
+        // type 决定哪些驱动专属属性可见（如 S7 maxlen 只对 STR）：失焦时刷新一次，输入时不打断。
+        const input = h('input', {
+          type: 'text',
+          placeholder: a.placeholder ?? '',
+          value: node.attrs.type ?? '',
+          oninput: e => { node.attrs.type = e.target.value; },
+          onchange: () => render()
+        });
+        fields.append(fieldRow(a, node.attrs.type ?? '', v => { node.attrs.type = v; }, input));
         continue;
       }
 
@@ -619,15 +690,39 @@
     }
     card.append(fields);
 
-    const extras = (node.extras || []).length + Object.keys(node.extraAttrs || {}).length;
+    const extras = (node.extras || []).length + extraAttrsOf(node).length;
     if (extras > 0) {
       card.append(h('p', { class: 'muted', text: '有 ' + extras + ' 项导入时无法识别的配置，导出时会原样写回。' }));
+    }
+
+    // 驱动声明的额外属性 + 剩余的"自定义/未声明"属性。
+    // 顺序：小节标题 → 声明属性（有 label/枚举/范围）→ 未声明属性（名字可编辑）→ 添加按钮。
+    if (node.el === 'Tag' || node.el === 'TagCbnt') {
+      const declaredNames = new Set(declared.map(f => f.name));
+      const hasExtras = extraAttrsOf(node).length > 0;
+      const hint = driver
+        ? (driver.displayName || driver.name)
+        : (ownChannel
+          ? '通道 "' + ownChannel + '" 的驱动未注册，无法确定可用属性'
+          : '未指定通道：无法确定驱动，额外属性请用自定义属性');
+
+      if (declared.length > 0 || hasExtras) {
+        card.append(h('div', { class: 'row section' },
+          h('span', { class: 'label-title', text: node.el === 'Tag' ? '驱动专属测点属性' : '驱动专属组合属性' }),
+          h('span', { class: 'badge', text: hint })));
+
+        const extraFields = h('div', { class: 'fields' });
+        extraFields.append(...declaredAttrRows(declared, node, node), customAttrRows(node, declaredNames));
+        if (extraFields.childElementCount > 0) card.append(extraFields);
+      }
+
+      card.append(addCustomAttrRow(node));
     }
 
     const childKinds = schema.children || [];
     if (node.children.length > 0 || childKinds.length > 0) {
       const box = h('div', { class: 'children' });
-      node.children.forEach((c, i) => box.append(nodeCard(c, node.children, i)));
+      node.children.forEach((c, i) => box.append(nodeCard(c, node.children, i, ownChannel)));
       if (childKinds.length > 0) {
         box.append(h('div', { class: 'bar' },
           ...childKinds.map(k => h('button', {
@@ -670,6 +765,57 @@
     const walk = nodes => { for (const node of nodes) { n += (node.extras || []).length; walk(node.children); } };
     walk(state.tree);
     return n;
+  }
+
+  /* ───────────────────────── 非核心属性（驱动声明 + 自定义） ───────────────────────── */
+
+  /** 声明的属性只在测点 <c>type</c> 命中时才显示（如 S7 的 maxlen 只对 STR）；它只是 UI 提示。 */
+  function attrApplies(field, node) {
+    const types = field.appliesToTypes;
+    if (!types || types.length === 0) return true;
+    const type = node && node.attrs ? node.attrs.type : null;
+    if (!type) return true;      // 还没填 type：先显示，避免"填了类型才冒出来"让人困惑
+    return types.includes(type);
+  }
+
+  /** 驱动声明的额外属性（Tag/TagCbnt）：值存在 extraAttrs 里，导出时按普通属性写回。 */
+  function declaredAttrRows(fields, owner, node) {
+    const rows = [];
+    for (const f of fields) {
+      if (attrApplies(f, node)) {
+        rows.push(fieldRow(f, getExtraAttr(owner, f.name), v => setExtraAttr(owner, f.name, v)));
+      }
+    }
+    return rows;
+  }
+
+  /** 剩余的非核心属性 = 声明之外的"自定义/未声明"属性；名字和值都可编辑。 */
+  function customAttrRows(owner, declaredNames) {
+    const box = h('div', { class: 'fields' });
+    for (const entry of extraAttrsOf(owner)) {
+      if (declaredNames.has(entry.name)) continue;
+      box.append(h('div', { class: 'row' },
+        h('input', {
+          type: 'text', value: entry.name, placeholder: '属性名（未声明）', spellcheck: 'false',
+          oninput: e => { entry.name = e.target.value; }
+        }),
+        h('div', { class: 'row-inline' },
+          h('input', {
+            type: 'text', value: entry.value, placeholder: '值',
+            oninput: e => { entry.value = e.target.value; }
+          }),
+          h('button', { class: 'mini', onclick: () => { const i = extraAttrsOf(owner).indexOf(entry); extraAttrsOf(owner).splice(i, 1); render(); } }, '删除'))));
+    }
+    return box;
+  }
+
+  function addCustomAttrRow(owner) {
+    return h('div', { class: 'bar' },
+      h('button', {
+        class: 'mini',
+        onclick: () => { extraAttrsOf(owner).push({ name: '', value: '' }); render(); }
+      }, '＋ 自定义属性'),
+      h('span', { class: 'muted', text: '未声明的属性不会被 schema 拒绝，导出时原样写回' }));
   }
 
   /* ───────────────────────── 导入页 ───────────────────────── */
@@ -771,8 +917,9 @@
     const known = schema.attributes
       .filter(a => node.attrs[a.name] !== undefined && node.attrs[a.name] !== '')
       .map(a => ' ' + a.name + '="' + esc(node.attrs[a.name]) + '"');
-    const extras = Object.entries(node.extraAttrs || {})
-      .map(([k, v]) => ' ' + k + '="' + esc(v) + '"');
+    const extras = extraAttrsOf(node)
+      .filter(a => a.name)
+      .map(a => ' ' + a.name + '="' + esc(a.value) + '"');
 
     const attrs = known.concat(extras).join('');
     const kids = node.children.flatMap(c => nodeXml(c, depth + 1));
@@ -833,8 +980,9 @@
       const drv = driverOf(ch.driver);
       const body = drv ? fieldsXml(drv.fields || [], ch.values, ch.groups, drv.prefix, 2) : [];
       const raw = (ch.extras || []).map(x => '    ' + rawXml(x));
-      const extraAttrs = Object.entries(ch.extraAttrs || {})
-        .map(([k, v]) => ' ' + k + '="' + esc(v) + '"')
+      const extraAttrs = extraAttrsOf(ch)
+        .filter(a => a.name)
+        .map(a => ' ' + a.name + '="' + esc(a.value) + '"')
         .join('');
 
       const head = '  <Channel name="' + esc(ch.name) + '" driver="' + esc(ch.driver) + '"' + extraAttrs;

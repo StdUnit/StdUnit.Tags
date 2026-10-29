@@ -1,5 +1,6 @@
 using StdUnit.Tags;
 using StdUnit.Tags.SimpleFiles;
+using StdUnit.Tags.S7;
 using StdUnit.Tags.WebUi;
 
 namespace WebMonitor.Tags;
@@ -10,10 +11,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddTagsProjectServices(builder =>
         {
-            // 本示例只用 SimpleFiles（数据是磁盘上的文本文件），不依赖任何硬件/网络。
-            // 用 Support 而不是 Channel+DirectTagBuilder：它同时注册 SimpleFilesSchemaProvider，
-            // 设计器元数据（/stdunit.tags/catalog）里的驱动列表就来自这些 schema provider。
             builder.AddSimpleFilesSupport();
+            builder.AddS7Support();
 
             // WebUi：不具名的观测流（端点 /stdunit.tags/*）+ 一路具名流（/stdunit.tags/line-b/*，各有一套监控页）。
             builder.AddTagsStream(o =>

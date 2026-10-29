@@ -39,9 +39,14 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- 设计器元数据：driver@name 必须与 ModbusTcpNames.DriverName 完全一致（即 Channel/@driver 的取值）。 -->
+  <!-- 设计器元数据：driver@name 必须与 ModbusTcpNames.DriverName 完全一致（即 Channel/@driver 的取值）。
+       tagAttribute：驱动额外认的测点属性（运行期在 TagDescriptor.Extras）。
+       注意：interpret 只对 Tag 有效——写在 TagCbnt 上会被 ModbusInterpret.RejectOnCbnt 拒绝。 -->
   <xs:annotation><xs:appinfo>
     <driver name="ModbusTcp" displayName="Modbus TCP" prefix="mb"/>
+    <tagAttribute name="interpret" kind="string" type="string"
+                  label="字节排布" order="10" group="高级" placeholder="CDAB / BADC …"
+                  help="每个字符代表一个字节、左侧为最高字节；必须与 endian 一致。省略即恒等排布"/>
   </xs:appinfo></xs:annotation>
 
   <xs:element name="IpAddr" type="IpAddrType">

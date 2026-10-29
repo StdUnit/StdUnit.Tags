@@ -97,6 +97,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 
 - `StdUnit.Tags.SchemaGenerator` 是源生成器，把各项目的 XSD 编译成 DLL 内字符串常量（AOT / trim 友好）。
 - 新增驱动包时，需一并提供 `Schemas/{driver}.xsd`，并以 `buildTransitive` 方式注入到消费方项目树（照抄 `StdUnit.Tags.Core.csproj` + `Schemas/StdUnit.Tags.Core.targets` 的模式），并在 schema 里用 `xs:annotation/xs:appinfo` 声明 `<driver name="…">`（必须与 `XxxNames.DriverName` 一致；`WebUi` 的 `/catalog` 设计器元数据靠它把 driver 值绑到命名空间——XSD 1.0 表达不了这层关系，靠命名约定也不行），再实现 `ITagsProjectSchemaProvider` 注册为 Singleton。
+如果驱动会从 `TagDescriptor.Extras` / `TagCbntDescriptor.Extras` 里读**自己的属性**（如 S7 的 `maxlen`、SimpleFiles 的 `autoCreateFile`、ModbusTcp 的 `interpret`），还要在同一个 `appinfo` 里用 `<tagAttribute>` / `<cbntAttribute>` 声明；核心 schema 因 `xs:anyAttribute` 放行这些属性，但 XSD 1.0 无法给既有类型追加属性，所以"有哪些、什么类型、什么文案"只能由驱动声明（仅供设计器，不参与校验）。详见 `Schemas/README.md`。
 - 测试分两个项目（xUnit），且**主测试项目多目标 `net8.0;net472`**：
   - `tests/StdUnit.Tags.Tests`：主体测试，跑在两个 TFM 上；
   - `tests/StdUnit.Tags.Tests.NetCoreOnly`：**仅 net8.0**，专门存放无法面向 net472 的测试（如依赖 `AssemblyLoadContext`，或将来涉及 Blazor / ASP.NET Core 的测试）。目前为空项，作占位预留。

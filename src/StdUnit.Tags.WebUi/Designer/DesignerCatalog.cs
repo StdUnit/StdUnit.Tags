@@ -148,7 +148,9 @@ internal sealed class DesignerCatalog
                 ns,
                 driver.Prefix ?? DerivePrefix(ns),
                 // OrderBy 是稳定排序：未声明 order 的字段保持 schema 里的声明顺序。
-                fields.OrderBy(f => f.Field.Order ?? int.MaxValue).Select(f => f.Field).ToArray()));
+                fields.OrderBy(f => f.Field.Order ?? int.MaxValue).Select(f => f.Field).ToArray(),
+                driver.TagAttributes,
+                driver.CbntAttributes));
         }
 
         return drivers.OrderBy(d => d.Name, StringComparer.Ordinal).ToArray();
@@ -245,7 +247,8 @@ internal sealed class DesignerCatalog
             Group: ui?.Group,
             Placeholder: ui?.Placeholder,
             Help: ui?.Help,
-            Children: null);
+            Children: null,
+            AppliesToDrivers: ui?.AppliesToDrivers);
     }
 
     /// <summary>
@@ -449,11 +452,15 @@ internal sealed class DesignerCatalog
 
     /// <summary>
     /// <c>xs:annotation/xs:appinfo</c> 里的设计器提示，按"文档中的位置"索引。<br/>
-    /// 内容形状（appinfo 里的元素不带命名空间）：<br/>
+    /// 内容形状（appinfo 里的元素不带命名空间；多个参数与 <c>xs:schema</c> 上有没有默认 <c>xmlns</c> 无关，按本地名匹配）：<br/>
     /// <code>
     /// &lt;xs:schema …&gt;
     ///   &lt;xs:annotation&gt;&lt;xs:appinfo&gt;
     ///     &lt;driver name="S7" displayName="Siemens S7" prefix="s7"/&gt;
+    ///     &lt;!-- 驱动额外认的测点/组合属性：XSD 1.0 表达不了，只能在这里"声明" --&gt;
+    ///     &lt;tagAttribute name="maxlen" kind="number" min="1" max="255" label="字符串最大长度"
+    ///                   appliesToTypes="STR" required="true"/&gt;
+    ///     &lt;cbntAttribute name="…" …/&gt;
     ///   &lt;/xs:appinfo&gt;&lt;/xs:annotation&gt;
     ///   …
     ///   &lt;xs:complexType name="TagGrpType"&gt;
@@ -565,7 +572,103 @@ internal sealed class DesignerCatalog
             return new DriverAnnotation(
                 name!,
                 (string?)driver!.Attribute("displayName") ?? (string?)driver.Attribute("label"),
-                (string?)driver.Attribute("prefix"));
+                (string?)driver.Attribute("prefix"),
+                ParseAttributeDeclarations(schema, "tagAttribute"),
+                ParseAttributeDeclarations(schema, "cbntAttribute"));
+        }
+
+        /// <summary>
+        /// 解析 <c>&lt;tagAttribute&gt;</c> / <c>&lt;cbntAttribute&gt;</c> 声明（驱动额外认的属性）。
+        /// 这些属性运行期落在 <c>TagDescriptor.Extras</c> / <c>TagCbntDescriptor.Extras</c>，
+        /// schema 只能靠 <c>xs:anyAttribute</c> 放行，所以"有哪些、什么类型、什么文案"只能在这里声明。
+        /// </summary>
+        private static IReadOnlyList<DesignerFieldDto> ParseAttributeDeclarations(XElement schema, string localName)
+        {
+            var result = new List<(int Sort, DesignerFieldDto Field)>();
+            foreach (var element in AppinfoChildren(schema, localName))
+            {
+                var field = ParseAttributeDeclaration(element);
+                if (field is not null)
+                {
+                    // OrderBy 是稳定排序：没写 order 的保持 schema 里的声明顺序。
+                    result.Add((field.Order ?? int.MaxValue, field));
+                }
+            }
+
+            return result.OrderBy(r => r.Sort).Select(r => r.Field).ToArray();
+        }
+
+        private static DesignerFieldDto? ParseAttributeDeclaration(XElement element)
+        {
+            var name = (string?)element.Attribute("name");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            var type = (string?)element.Attribute("type");
+            var enumValues = SplitList((string?)element.Attribute("enumValues"));
+            var kind = (string?)element.Attribute("kind")
+                ?? (enumValues is not null
+                    ? DesignerFieldKind.Enum
+                    : InferKind(type));
+
+            return new DesignerFieldDto(
+                Name: name!,
+                Type: type,
+                Kind: kind,
+                Required: bool.TryParse((string?)element.Attribute("required"), out var required) && required,
+                Default: (string?)element.Attribute("default"),
+                EnumValues: enumValues,
+                Min: ParseDecimal((string?)element.Attribute("min")),
+                Max: ParseDecimal((string?)element.Attribute("max")),
+                MinLength: int.TryParse((string?)element.Attribute("minLength"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var minLength)
+                    ? minLength
+                    : null,
+                Label: (string?)element.Attribute("label"),
+                Order: int.TryParse((string?)element.Attribute("order"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var order)
+                    ? order
+                    : null,
+                Group: (string?)element.Attribute("group"),
+                Placeholder: (string?)element.Attribute("placeholder"),
+                Help: (string?)element.Attribute("help") ?? (string?)element.Attribute("description"),
+                Children: null,
+                AppliesToTypes: SplitList((string?)element.Attribute("appliesToTypes")));
+        }
+
+        /// <summary>逗号分隔的列表（去空白、去空项）；空则返回 <c>null</c>。</summary>
+        private static IReadOnlyList<string>? SplitList(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            var items = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return items.Length == 0 ? null : items;
+        }
+
+        /// <summary>没写 <c>kind</c> 时按 <c>type</c> 猜一个渲染类别（纯提示，猜错最多是控件类型不理想）。</summary>
+        private static string InferKind(string? type)
+        {
+            var text = type ?? string.Empty;
+            if (text.Contains("boolean", StringComparison.OrdinalIgnoreCase))
+            {
+                return DesignerFieldKind.Bool;
+            }
+
+            if (text.Contains("int", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("short", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("byte", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("decimal", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("double", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("float", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("number", StringComparison.OrdinalIgnoreCase))
+            {
+                return DesignerFieldKind.Number;
+            }
+
+            return DesignerFieldKind.String;
         }
 
         private static UiInfo? ParseUi(XElement owner)
@@ -583,7 +686,8 @@ internal sealed class DesignerCatalog
                     : null,
                 (string?)ui.Attribute("group"),
                 (string?)ui.Attribute("placeholder"),
-                (string?)ui.Attribute("help") ?? (string?)ui.Attribute("description"));
+                (string?)ui.Attribute("help") ?? (string?)ui.Attribute("description"),
+                SplitList((string?)ui.Attribute("appliesToDrivers")));
         }
 
         /// <summary>
@@ -593,13 +697,29 @@ internal sealed class DesignerCatalog
         /// <c>xmlns="tags:{driver}"</c>，于是 <c>&lt;driver&gt;</c>/<c>&lt;ui&gt;</c> 落进了目标命名空间。
         /// </summary>
         private static XElement? AppinfoChild(XElement owner, string localName) =>
+            AppinfoChildren(owner, localName).FirstOrDefault();
+
+        /// <summary>同上，取<b>全部</b>同名提示元素（如多个 <c>&lt;tagAttribute&gt;</c>）。</summary>
+        private static IEnumerable<XElement> AppinfoChildren(XElement owner, string localName) =>
             owner.Element(Xs + "annotation")?
                  .Element(Xs + "appinfo")?
                  .Elements()
-                 .FirstOrDefault(e => e.Name.LocalName == localName);
+                 .Where(e => e.Name.LocalName == localName)
+            ?? Enumerable.Empty<XElement>();
     }
 
-    private sealed record DriverAnnotation(string Name, string? DisplayName, string? Prefix);
+    private sealed record DriverAnnotation(
+        string Name,
+        string? DisplayName,
+        string? Prefix,
+        IReadOnlyList<DesignerFieldDto> TagAttributes,
+        IReadOnlyList<DesignerFieldDto> CbntAttributes);
 
-    private sealed record UiInfo(string? Label, int? Order, string? Group, string? Placeholder, string? Help);
+    private sealed record UiInfo(
+        string? Label,
+        int? Order,
+        string? Group,
+        string? Placeholder,
+        string? Help,
+        IReadOnlyList<string>? AppliesToDrivers = null);
 }

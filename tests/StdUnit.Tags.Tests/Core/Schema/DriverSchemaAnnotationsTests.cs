@@ -75,6 +75,34 @@ public class DriverSchemaAnnotationsTests
         Assert.Empty(errors);
     }
 
+    /// <summary>
+    /// 驱动"额外认的测点属性"（<c>&lt;tagAttribute&gt;</c>）声明必须覆盖运行期真正从
+    /// <c>TagDescriptor.Extras</c> 里读的那些键——这条断言就是为了防止声明与解析代码漂移。
+    /// </summary>
+    [Theory]
+    [InlineData("S7", "maxlen")]
+    [InlineData("SimpleFiles", "autoCreateFile")]
+    [InlineData("ModbusTcp", "interpret")]
+    public void DriverSchema_DeclaresItsExtraTagAttributes(string driverName, string expectedAttribute)
+    {
+        var provider = Drivers.Select(d => (ITagsProjectSchemaProvider)d[2]).Single(p =>
+        {
+            var content = p.GetSchemaContents().Single().Content;
+            return DeclaredDriverName(content) == driverName;
+        });
+
+        var root = XDocument.Parse(provider.GetSchemaContents().Single().Content).Root!;
+        var declared = root.Element(Xs + "annotation")?
+                           .Element(Xs + "appinfo")?
+                           .Elements()
+                           .Where(e => e.Name.LocalName == "tagAttribute")
+                           .Select(e => (string?)e.Attribute("name"))
+                           .Where(n => n is not null)
+                           .ToArray();
+
+        Assert.Contains(expectedAttribute, declared!);
+    }
+
     [Fact]
     public void AllDriverSchemas_CompileTogetherWithTheCoreSchema()
     {

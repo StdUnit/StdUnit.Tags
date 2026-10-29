@@ -76,6 +76,15 @@ public sealed record DesignerNodeDto(
 /// <param name="Placeholder">输入框占位符（<c>ui@placeholder</c>）。</param>
 /// <param name="Help">帮助文本（<c>ui@help</c> / <c>ui@description</c>）。</param>
 /// <param name="Children">嵌套子元素（<see cref="DesignerFieldKind.Group"/> 时非空，如 OpcUa 的 <c>ServerOpt</c>）。</param>
+/// <param name="AppliesToTypes">
+/// 仅对驱动声明的 <c>Tag</c> 属性有意义：只在测点 <c>type</c> 命中这些值时才显示（如 S7 的 <c>maxlen</c> 只对 <c>STR</c>）。
+/// <c>null</c>/空表示不限。它只是<b>UI 提示</b>，不参与校验。
+/// </param>
+/// <param name="AppliesToDrivers">
+/// 仅对该属性有意义：只有节点所在通道的驱动命中这些值时才显示（如 <c>TagCbnt</c> 的 <c>area</c>/<c>slave</c>
+/// 只对 ModbusTcp / HjzkIoBox / ZLanTcp）。<c>null</c>/空表示不限。同样只是<b>UI 提示</b>：
+/// 已经写了值的属性即使不适用也会显示，避免"看不见却被导出"。
+/// </param>
 public sealed record DesignerFieldDto(
     string Name,
     string? Type,
@@ -91,7 +100,9 @@ public sealed record DesignerFieldDto(
     string? Group,
     string? Placeholder,
     string? Help,
-    IReadOnlyList<DesignerFieldDto>? Children);
+    IReadOnlyList<DesignerFieldDto>? Children,
+    IReadOnlyList<string>? AppliesToTypes = null,
+    IReadOnlyList<string>? AppliesToDrivers = null);
 
 /// <summary>
 /// 一个驱动通道的定义：<c>&lt;Channel driver="Name"&gt;</c> 下允许的专属子元素。<br/>
@@ -107,12 +118,21 @@ public sealed record DesignerFieldDto(
 /// <param name="Namespace">驱动字段所属的 XML 命名空间（<c>tags:s7</c>），导出时据此声明 <c>xmlns</c>。</param>
 /// <param name="Prefix">导出时建议的前缀（<c>&lt;driver prefix="s7"/&gt;</c>，缺省取命名空间后缀）。</param>
 /// <param name="Fields">该驱动的专属子元素；按 <c>order</c> 再按声明顺序。</param>
+/// <param name="TagAttributes">
+/// 该驱动<b>额外</b>认的 <c>Tag</c> 属性（如 S7 的 <c>maxlen</c>、SimpleFiles 的 <c>autoCreateFile</c>）。
+/// 它们不在核心 schema 里——XSD 1.0 不允许跨命名空间给既有类型追加属性，所以由驱动在 xsd 的
+/// <c>xs:appinfo</c> 里<b>声明</b>（<c>&lt;tagAttribute&gt;</c>）。运行期这些属性落在
+/// <c>TagDescriptor.Extras</c>，<b>不会</b>被 schema 校验拒绝。
+/// </param>
+/// <param name="CbntAttributes">该驱动额外认的 <c>TagCbnt</c> 属性（<c>&lt;cbntAttribute&gt;</c>），语义同上。</param>
 public sealed record DesignerDriverDto(
     string Name,
     string? DisplayName,
     string Namespace,
     string Prefix,
-    IReadOnlyList<DesignerFieldDto> Fields);
+    IReadOnlyList<DesignerFieldDto> Fields,
+    IReadOnlyList<DesignerFieldDto> TagAttributes,
+    IReadOnlyList<DesignerFieldDto> CbntAttributes);
 
 /// <summary>
 /// <see cref="DesignerFieldDto.Kind"/> 的取值（前端渲染依据）。

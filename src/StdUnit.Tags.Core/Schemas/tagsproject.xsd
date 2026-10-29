@@ -155,10 +155,12 @@
       <xs:annotation><xs:appinfo><ui label="访问模式" order="7" group="基础"/></xs:appinfo></xs:annotation>
     </xs:attribute>
     <xs:attribute name="area"      type="xs:string">        <!-- DI / DO / ...（Modbus/Hjzk 位空间用） -->
-      <xs:annotation><xs:appinfo><ui label="位空间" order="3" group="基础" placeholder="DI / DO"/></xs:appinfo></xs:annotation>
+      <xs:annotation><xs:appinfo><ui label="位空间" order="3" group="基础" placeholder="DI / DO"
+                                     appliesToDrivers="ModbusTcp,HjzkIoBox,ZLanTcp"/></xs:appinfo></xs:annotation>
     </xs:attribute>
     <xs:attribute name="slave"     type="xs:unsignedByte">  <!-- Modbus/Hjzk 从站号 -->
-      <xs:annotation><xs:appinfo><ui label="从站号" order="4" group="基础"/></xs:appinfo></xs:annotation>
+      <xs:annotation><xs:appinfo><ui label="从站号" order="4" group="基础"
+                                     appliesToDrivers="ModbusTcp,HjzkIoBox,ZLanTcp"/></xs:appinfo></xs:annotation>
     </xs:attribute>
     <xs:anyAttribute processContents="lax"/>
   </xs:complexType>

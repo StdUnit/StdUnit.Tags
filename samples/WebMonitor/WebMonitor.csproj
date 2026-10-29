@@ -11,14 +11,17 @@
          产物是真·原生可执行文件，不依赖 .NET 运行时。 -->
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
+	  <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
+
 
   <!-- 与 `dotnet new tags.web` 生成的模板同构：仓库内用 ProjectReference，
        消费 nuget 包时对应的就是 StdUnit.Tags / StdUnit.Tags.SimpleFiles / StdUnit.Tags.WebUi。 -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
-    <ProjectReference Include="..\..\src\StdUnit.Tags.SimpleFiles\StdUnit.Tags.SimpleFiles.csproj" />
     <ProjectReference Include="..\..\src\StdUnit.Tags.WebUi\StdUnit.Tags.WebUi.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.SimpleFiles\StdUnit.Tags.SimpleFiles.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.S7\StdUnit.Tags.S7.csproj" />
   </ItemGroup>
 
   <ItemGroup>

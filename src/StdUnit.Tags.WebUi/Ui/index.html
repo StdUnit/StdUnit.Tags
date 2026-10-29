@@ -150,7 +150,9 @@
       // 根的 parent 是 null；它自己的 path 是 ''。若直接用 parent 作键，根会和"根的孩子们"
       // 落进同一个桶，递归时会自己渲染自己（栈溢出）。
       const key = n.parent == null ? '\u0000root' : n.parent;
-      if (!map.has(key)) map.set(key, []);
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
       map.get(key).push(n);
     }
     return map;
@@ -221,7 +223,8 @@
   function flash(text, isError) {
     msgEl.textContent = text;
     msgEl.className = 'muted' + (isError ? ' err' : '');
-    if (flashTimer) clearTimeout(flashTimer);
+    if (flashTimer) 
+      clearTimeout(flashTimer);
     flashTimer = setTimeout(() => {
       msgEl.textContent = '';
       msgEl.className = 'muted';
@@ -310,6 +313,7 @@
     const details = document.createElement('details');
     details.open = n.kind === 'grp';
 
+    // summary: TagName、StartAddress、Channel e.t.c
     const summary = document.createElement('summary');
     const name = document.createElement('span');
     name.textContent = n.name;
@@ -317,8 +321,10 @@
     meta.className = 'k';
     meta.textContent = label(n);
     summary.append(name, meta);
+
     details.appendChild(summary);
 
+    // render children recursively
     for (const child of byParent.get(n.path) ?? []) {
       renderNode(child, byParent, details);
     }
@@ -344,11 +350,20 @@
     }
 
     const byParent = childrenByParent(tree.nodes);
-    for (const n of tree.nodes) if (n.entryKey) entryCount++;
+    for (const n of tree.nodes) 
+    {
+      if (n.entryKey) 
+      {
+        entryCount++;
+      }
+    }
 
     // 根节点（__main__）只是个挂载点，直接渲染它的孩子（契约：根在最前）。
     const root = tree.nodes[0];
-    for (const n of (root ? byParent.get(root.path) ?? [] : [])) renderNode(n, byParent, treeEl);
+    for (const n of (root ? byParent.get(root.path) ?? [] : [])) 
+    {
+      renderNode(n, byParent, treeEl);
+    }
     updateMeta();
     applyFilter();
   }
@@ -403,7 +418,8 @@
   async function loadTree() {
     const resp = await fetch(TREE_URL, { cache: 'no-store' });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    renderTree(await resp.json());
+    var tree = await resp.json();
+    renderTree(tree);
   }
 
   function connect() {

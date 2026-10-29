@@ -1,12 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 不具名观测流观测的项目：一个 SimpleFiles 入口，每秒刷新一次。
      autoCreateFile：文件不存在时自动创建并写入默认值，所以首次运行不需要准备数据文件。 -->
-<Project>
+<Project xmlns:s7="tags:s7">
 	<Channel name="file-main" driver="SimpleFiles">
 		<BaseDir>.</BaseDir>
 	</Channel>
 
+	<Channel name="s7-1" driver="S7">
+		<s7:IpAddr>172.16.10.20</s7:IpAddr>
+		<s7:Rack>0</s7:Rack>
+		<s7:Slot>1</s7:Slot>
+		<s7:ConnectionType>3</s7:ConnectionType>
+  </Channel>
+
 	<TagGrp name="main" isEntry="true" isEnabled="true" scanInterval="5" channel="file-main">
+
+		<TagGrp name="通用状态" channel="s7-1">
+			<TagCbnt name="PLC" address="DB200.100" access="RO">
+				<Tag name="心跳请求" address="$$100.0" type="BIT" access="RO"></Tag>
+				<Tag name="状态码" address="$$102.0" type="INT16" access="RW" endian="BigEndian"></Tag>
+			</TagCbnt>
+			<TagCbnt name="MST" address="DB201.100" access="R1W">
+				<Tag name="心跳响应" address="$$100.0" type="BIT" access="R1W"></Tag>
+				<Tag name="扫描周期" address="$$102.0" type="FLOAT" access="R1W"></Tag>
+			</TagCbnt>
+
+		</TagGrp>
+
 		<Tag name="counter" address="counter.txt" type="INT32" access="RW" autoCreateFile="true" />
 		<Tag name="level" address="level.txt" type="INT32" access="RW" autoCreateFile="true" />
 		<!-- additional Tag elements can be added here -->

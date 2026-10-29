@@ -19,9 +19,17 @@
 
   <!-- 设计器元数据：driver@name 必须与 S7Names.DriverName 完全一致（它就是 Channel/@driver 的取值）。
        核心 schema 无法把 driver 属性值和命名空间绑起来（XSD 1.0 不能按属性值切换内容模型），
-       所以绑定声明由驱动 schema 自己持有；见 WebUi 的 /catalog 端点。 -->
+       所以绑定声明由驱动 schema 自己持有；见 WebUi 的 /catalog 端点。
+
+       tagAttribute：驱动"额外认"的测点属性。它们不在核心 TagType 里（XSD 1.0 不允许跨命名空间
+       给既有类型追加属性），运行期落在 TagDescriptor.Extras；schema 因 xs:anyAttribute 放行，
+       所以这里只是**给设计器看的声明**，不参与校验。 -->
   <xs:annotation><xs:appinfo>
     <driver name="S7" displayName="Siemens S7" prefix="s7"/>
+    <tagAttribute name="maxlen" kind="number" type="positiveInteger" min="1" max="255"
+                  label="字符串最大长度" order="10" group="STR"
+                  appliesToTypes="STR" required="true" placeholder="1~255"
+                  help="S7 STR 的原始值总长 = 2 + maxlen（前 2 字节存实际长度）"/>
   </xs:appinfo></xs:annotation>
 
   <!--

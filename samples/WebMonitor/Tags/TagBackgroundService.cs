@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using StdUnit.Tags;
+using WebMonitor.Tags.Logicets;
 
 namespace WebMonitor.Tags;
 
@@ -31,8 +32,8 @@ internal sealed class TagBackgroundService : BackgroundService
         var mainDir = Path.Combine(tagsRoot, "main");
         var lineBDir = Path.Combine(tagsRoot, "line-b");
 
-        var main = this._ctrl.StartPollAsync(mainDir, LoadProjectXml(mainDir), this.Hook);
-        var lineB = this._lineBCtrl.StartPollAsync(lineBDir, LoadProjectXml(lineBDir), this.Hook);
+        var main = this._ctrl.StartPollAsync(mainDir, LoadProjectXml(mainDir), this.Hook1);
+        var lineB = this._lineBCtrl.StartPollAsync(lineBDir, LoadProjectXml(lineBDir), this.Hook2);
         var simulator = this.SimulateAsync(stoppingToken);
 
         try
@@ -70,7 +71,7 @@ internal sealed class TagBackgroundService : BackgroundService
         return root;
     }
 
-    private Task Hook(ITagsProject project, IServiceProvider services, CancellationToken ct)    {
+    private Task Hook1(ITagsProject project, IServiceProvider services, CancellationToken ct)    {
         project.RunnerStarted += (grp, ch) =>
         {
             this._logger.LogInformation("Tags处理开始,grp={grpName}", grp.TagName());
@@ -81,6 +82,27 @@ internal sealed class TagBackgroundService : BackgroundService
             this._logger.LogError(ex, "Tags处理异常,grp={grpName}", grp.TagName());
             return Task.CompletedTask;
         };
+
+        project.Logicets.Add(new HeartBeatLogicet(
+            project,
+            services.GetRequiredService<ILogger<HeartBeatLogicet>>()
+        ));
+        return Task.CompletedTask;
+    }
+
+    private Task Hook2(ITagsProject project, IServiceProvider services, CancellationToken ct)
+    {
+        project.RunnerStarted += (grp, ch) =>
+        {
+            this._logger.LogInformation("Tags处理开始,grp={grpName}", grp.TagName());
+            return Task.CompletedTask;
+        };
+        project.RunnerCrashed += (grp, ch, ex) =>
+        {
+            this._logger.LogError(ex, "Tags处理异常,grp={grpName}", grp.TagName());
+            return Task.CompletedTask;
+        };
+
         return Task.CompletedTask;
     }
 

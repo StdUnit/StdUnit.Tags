@@ -44,6 +44,11 @@ public class DesignerCatalogTests
                    xmlns="tags:fake" targetNamespace="tags:fake" elementFormDefault="qualified">
           <xs:annotation><xs:appinfo>
             <driver name="Fake" displayName="假驱动" prefix="fk"/>
+            <tagAttribute name="secret" kind="string" label="密钥" order="20" group="安全"
+                          appliesToTypes="STR, JSON" help="假驱动专属的测点属性"/>
+            <tagAttribute name="retries" type="positiveInteger" label="重试" order="10"
+                          min="1" max="9" required="true"/>
+            <cbntAttribute name="slot" kind="number" type="unsignedByte" label="槽位" order="1"/>
           </xs:appinfo></xs:annotation>
 
           <xs:simpleType name="ModeType">
@@ -205,6 +210,25 @@ public class DesignerCatalogTests
     }
 
     [Fact]
+    public void Catalog_ExposesDriverScopedAttributes()
+    {
+        var catalog = Build();
+
+        var cbnt = Node(catalog, "TagCbnt");
+        var slave = Field(cbnt.Attributes, "slave");
+        var area = Field(cbnt.Attributes, "area");
+
+        // 核心 schema 里只有 ModbusTcp / HjzkIoBox / ZLanTcp 会读这两个属性。
+        Assert.Equal(new[] { "ModbusTcp", "HjzkIoBox", "ZLanTcp" }, slave.AppliesToDrivers!);
+        Assert.Equal(slave.AppliesToDrivers, area.AppliesToDrivers);
+
+        // 通用属性不带作用域（任何驱动下都显示）。
+        Assert.Null(Field(cbnt.Attributes, "name").AppliesToDrivers);
+        Assert.Null(Field(Node(catalog, "Tag").Attributes, "address").AppliesToDrivers);
+        Assert.Null(Field(Node(catalog, "TagGrp").Attributes, "isEntry").AppliesToDrivers);
+    }
+
+    [Fact]
     public void Catalog_BindsDriverFromSchemaAppInfo()
     {
         var catalog = Build(("fake.xsd", FakeDriverSchema));
@@ -214,6 +238,46 @@ public class DesignerCatalogTests
         Assert.Equal("假驱动", driver.DisplayName);
         Assert.Equal("tags:fake", driver.Namespace);
         Assert.Equal("fk", driver.Prefix);
+    }
+
+    /// <summary>
+    /// 驱动额外认的 <c>Tag</c>/<c>TagCbnt</c> 属性（XSD 1.0 表达不了）来自 schema 的
+    /// <c>&lt;tagAttribute&gt;</c> / <c>&lt;cbntAttribute&gt;</c> 声明：它们<b>不</b>混进节点的属性列表，
+    /// 而是单独给设计器用（按有效驱动 + 测点 type 过滤显示）。
+    /// </summary>
+    [Fact]
+    public void Catalog_ParsesDriverDeclaredTagAndCbntAttributes()
+    {
+        var catalog = Build(("fake.xsd", FakeDriverSchema));
+        var driver = Assert.Single(catalog.Drivers);
+
+        // order 只影响排序；retries(10) 在 secret(20) 之前。
+        Assert.Equal(new[] { "retries", "secret" }, driver.TagAttributes.Select(a => a.Name).ToArray());
+
+        var secret = driver.TagAttributes.Single(a => a.Name == "secret");
+        Assert.Equal(DesignerFieldKind.String, secret.Kind);
+        Assert.Equal("密钥", secret.Label);
+        Assert.Equal("安全", secret.Group);
+        Assert.Equal(new[] { "STR", "JSON" }, secret.AppliesToTypes!);
+        Assert.False(secret.Required);
+
+        // 没写 kind 时按 type 推断成数字。
+        var retries = driver.TagAttributes.Single(a => a.Name == "retries");
+        Assert.Equal(DesignerFieldKind.Number, retries.Kind);
+        Assert.Equal(1, retries.Min);
+        Assert.Equal(9, retries.Max);
+        Assert.True(retries.Required);
+        Assert.Null(retries.AppliesToTypes);
+
+        var slot = Assert.Single(driver.CbntAttributes);
+        Assert.Equal("slot", slot.Name);
+        Assert.Equal(DesignerFieldKind.Number, slot.Kind);   // 显式 kind
+        Assert.Equal("unsignedByte", slot.Type);
+
+        // 这些属性不在核心 schema 里：节点定义不该被它们污染。
+        var tag = Node(catalog, "Tag");
+        Assert.DoesNotContain(tag.Attributes, a => a.Name == "secret" || a.Name == "retries");
+        Assert.DoesNotContain(Node(catalog, "TagCbnt").Attributes, a => a.Name == "slot");
     }
 
     [Fact]
