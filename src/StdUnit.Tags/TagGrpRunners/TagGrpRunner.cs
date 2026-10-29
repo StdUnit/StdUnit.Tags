@@ -55,8 +55,9 @@ internal class TagGrpRunner : ITagGrpRunner
             // 本次启动需要确保连接的全部通道（含主通道，主通道排在最前）。
             // 用空集合初始化，保证即使“解析通道”阶段抛异常，清理路径也不会空引用。
             IReadOnlyList<ITagChannel> channels = Array.Empty<ITagChannel>();
-            // 本次启动是否失败？如果入口被禁用，不会被视为失败，即禁用会复位失败计数器
-            var failed = false;
+            // 本轮是否"异常收场"（崩溃或被取消）？两者都要断开连接，但只有崩溃算失败。
+            // 为 false 表示本轮正常走完（含"入口被禁用"），会复位失败计数器。
+            var aborted = false;
             try
             {
                 if (!entry.IsEnabled)
@@ -69,7 +70,7 @@ internal class TagGrpRunner : ITagGrpRunner
                 channels = entry.CollectChannels();
                 if (RunnerStarted is not null)
                 {
-                    await RunnerStarted(entry, channel);
+                    await RunnerStarted(entry, channel, ct);
                 }
 
                 // 开始轮询
@@ -113,36 +114,43 @@ internal class TagGrpRunner : ITagGrpRunner
                     }
                 }
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // 取消不是崩溃：不发 RunnerCrashed、不计入连续失败、也不按重试策略退避。
+                // 判据是"令牌确实已取消"而不是只看异常类型——驱动因自身原因抛的 OCE（如设备超时）仍是崩溃。
+                // 连接照样要断开（清理在 finally 里统一做，与崩溃路径同构）。
+                aborted = true;
+            }
             catch (Exception ex)
             {
-                failed = true;
+                aborted = true;
                 _consecutiveFailures++;
 
-                try
+                if (RunnerCrashed is not null)
                 {
-                    if (RunnerCrashed is not null)
+                    try
                     {
-                        try
-                        {
-                            await RunnerCrashed(entry, channel, ex);
-                        }
-                        catch (Exception handlingError)
-                        {
-                            this._logger.LogCritical(
-                                handlingError,
-                                "测点分组(分组={grp},通道={channel})错误处理又抛出了错误，这破坏了错误处理不能再抛出异常的假设",
-                                entry.TagName(),
-                                channel?.ChannelName() ?? "null");
-                            throw;
-                        }
+                        await RunnerCrashed(entry, channel, ex, ct);
+                    }
+                    catch (Exception handlingError)
+                    {
+                        this._logger.LogCritical(
+                            handlingError,
+                            "测点分组(分组={grp},通道={channel})错误处理又抛出了错误，这破坏了错误处理不能再抛出异常的假设",
+                            entry.TagName(),
+                            channel?.ChannelName() ?? "null");
+                        throw;
                     }
                 }
-                finally
+            }
+            finally
+            {
+                if (aborted)
                 {
                     try
                     {
                         // 注意：这里必须使用 CancellationToken.None 而非 ct。
-                        // 本 catch 块的触发原因可能是 轮询循环中的 Task.Delay(ct) 抛 OCE。
+                        // 本路径的触发原因可能是 轮询循环中的 Task.Delay(ct) 抛 OCE。
                         // 若沿用已取消的 ct，通道内部（如 S7 的 ExecuteOneByOneAsync 中 _rw.WaitAsync(ct)）会立即抛
                         // OperationCanceledException，导致 DisconnectAsync 根本没执行——连接资源泄漏，
                         // 下次 StartAsync 时旧连接可能仍处于异常状态。
@@ -169,21 +177,27 @@ internal class TagGrpRunner : ITagGrpRunner
                             entry.TagName());
                     }
                 }
-            }
-            finally
-            {
-                // 成功迭代则重置连续失败计数器；失败则使用策略等待
-                if (!failed)
+                else
                 {
+                    // 成功迭代则重置连续失败计数器
                     _consecutiveFailures = 0;
                 }
 
+                // 退避值仍按既有契约每轮取一次（策略的调用次数是可观测行为），
+                // 但已取消就不再真的等待：那只会被立刻打断，还多产出一条 OCE。
                 var delay = _consecutiveFailures > 0
                     ? _retryStrategy.GetDelay(_consecutiveFailures)
                     : TimeSpan.FromMilliseconds(entry.SearchScanInterval() ?? 0);
-                await Task.Delay(delay, ct);
+                if (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(delay, ct);
+                }
             }
         }
+
+        // 取消不是崩溃，但对外仍表现为"任务被取消"：停止后 StartAsync 返回的 Task 处于 Canceled 状态
+        // 是既有契约（TagsProjectCtrl.StartPollAsync 与各示例据此区分"被停止"），不能悄悄降级成正常返回。
+        ct.ThrowIfCancellationRequested();
     }
 
     /// <summary>

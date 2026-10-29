@@ -15,6 +15,8 @@
 | StdUnit.Tags.RxExtensions  | Rx.NET 扩展 | [![codecov](https://codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_rx )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_rx ) | 
 | StdUnit.Tags.R3Extensions  | R3 扩展 | [![codecov](https://codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_r3 )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_r3 ) | 
 | StdUnit.Tags.McpServer | McpServer 扩展 | [![codecov](https://codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_mcpserver )](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_mcpserver ) | 
+| StdUnit.Tags.WebUi | Web监控和设计器 | [![codecov](https://codecov.io/gh/StdUnit/StdUnit.Tags/graph/badge.svg?component=stdunit_tags_webui)](https://app.codecov.io/gh/StdUnit/StdUnit.Tags/components?components%5B0%5D=stdunit_tags_webui ) | 
+
 
 
 

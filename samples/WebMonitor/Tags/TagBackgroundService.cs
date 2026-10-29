@@ -72,12 +72,12 @@ internal sealed class TagBackgroundService : BackgroundService
     }
 
     private Task Hook1(ITagsProject project, IServiceProvider services, CancellationToken ct)    {
-        project.RunnerStarted += (grp, ch) =>
+        project.RunnerStarted += (grp, ch, ct) =>
         {
             this._logger.LogInformation("Tags处理开始,grp={grpName}", grp.TagName());
             return Task.CompletedTask;
         };
-        project.RunnerCrashed += (grp, ch, ex) =>
+        project.RunnerCrashed += (grp, ch, ex, ct) =>
         {
             this._logger.LogError(ex, "Tags处理异常,grp={grpName}", grp.TagName());
             return Task.CompletedTask;
@@ -92,12 +92,12 @@ internal sealed class TagBackgroundService : BackgroundService
 
     private Task Hook2(ITagsProject project, IServiceProvider services, CancellationToken ct)
     {
-        project.RunnerStarted += (grp, ch) =>
+        project.RunnerStarted += (grp, ch, ct) =>
         {
             this._logger.LogInformation("Tags处理开始,grp={grpName}", grp.TagName());
             return Task.CompletedTask;
         };
-        project.RunnerCrashed += (grp, ch, ex) =>
+        project.RunnerCrashed += (grp, ch, ex, ct) =>
         {
             this._logger.LogError(ex, "Tags处理异常,grp={grpName}", grp.TagName());
             return Task.CompletedTask;

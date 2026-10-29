@@ -25,6 +25,8 @@ internal static class TagsProject_Extensions
         {
             composite.AddDirectTagBuilder((channel, descriptor) =>
                 channel is FakedChannel ? new FakedTagBuilder(descriptor) : null);
+            composite.AddTagsCbntBuilder((channel, descriptor) =>
+                channel is FakedChannel ? new FakedTagCbntBuilder().WithCbntDescriptor(descriptor) : null);
         });
         return builder;
     }

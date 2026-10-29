@@ -9,6 +9,12 @@ namespace StdUnit.Tags.WebUi.Internal;
 /// </summary>
 internal sealed class SseFramesPiper : IDisposable
 {
+    /// <summary>
+    /// 队列里的"唤醒信号"占位帧（真实帧永远非空）。<see cref="MarkResync"/> 只置标志不足以唤醒
+    /// 已阻塞在 <see cref="ChannelReader{T}.WaitToReadAsync"/> 上的写循环，所以顺手塞一个空帧。
+    /// </summary>
+    private static readonly ReadOnlyMemory<byte> WakeUpSignal = ReadOnlyMemory<byte>.Empty;
+
     private readonly ITagsStreamHub _hub;
     private readonly Channel<ReadOnlyMemory<byte>> _queue;
     private readonly IReadOnlySet<string>? _entries;
@@ -39,7 +45,19 @@ internal sealed class SseFramesPiper : IDisposable
         }
     }
 
-    public void MarkResync() => Interlocked.Exchange(ref this._needsResync, 1);
+    /// <summary>
+    /// 标记需要重同步，并<b>唤醒</b>可能正阻塞在 <see cref="ChannelReader{T}.WaitToReadAsync"/> 上的写循环。<br/>
+    /// 只置标志是不够的：写循环"刚读完队列里的最后一帧"与"标志置位"之间总有窗口，错过这一次唤醒，
+    /// 重同步就要等到下一次心跳/增量才会被处理（订阅者表现为迟迟收不到基线）。
+    /// </summary>
+    public void MarkResync()
+    {
+        if (Interlocked.Exchange(ref this._needsResync, 1) == 0)
+        {
+            // 队列满时 TryWrite 失败没关系：那说明写循环并不空闲，它回到循环顶部仍会看到标志。
+            this._queue.Writer.TryWrite(WakeUpSignal);
+        }
+    }
 
     /// <summary>
     /// 写循环：把队列里的帧写进响应体。<br/>
@@ -67,6 +85,12 @@ internal sealed class SseFramesPiper : IDisposable
 
             while (this._queue.Reader.TryRead(out var frame))
             {
+                if (frame.IsEmpty)
+                {
+                    // 唤醒信号：真正的工作在循环顶部的标志位上做。
+                    continue;
+                }
+
                 await WriteFrameAsync(body, frame, ct).ConfigureAwait(false);
             }
         }

@@ -56,11 +56,13 @@ public interface ITagsProject : IDisposable
 
     /// <summary>
     /// 轮询开始，会透传给<see cref="ITagGrpRunner.RunnerStarted"/>。<br/>
+    /// 回调拿到的是项目的生命周期取消令牌（<see cref="ITagsProjectCtrl.StopAsync"/> 时取消）。
     /// </summary>
     event RunnerStarted? RunnerStarted;
 
     /// <summary>
     /// 轮询崩溃，会透传给<see cref="ITagGrpRunner.RunnerCrashed"/>。<br/>
+    /// <b>取消不是崩溃</b>：项目停止导致的取消<b>不会</b>触发本事件。<br/>
     /// 通常来说，在该委托正常结束后，项目会自行重启轮询循环。<br/>
     /// 但需要注意的是，这个自行重启是指<b>事件委托没有再向外抛出异常</b>的情况：<br/>
     /// 在<see cref="RunnerCrashed"/>中外抛异常会被视作对应入口需要<b>停机</b>！

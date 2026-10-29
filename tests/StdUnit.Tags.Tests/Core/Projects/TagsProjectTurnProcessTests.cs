@@ -475,7 +475,7 @@ public class TagsProjectTurnProcessTests : IDisposable
             (entry, channel, _) => throw new InvalidOperationException("observer boom"));
 
         var crashed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
-        proj.RunnerCrashed += (entry, channel, ex) =>
+        proj.RunnerCrashed += (entry, channel, ex, ct) =>
         {
             crashed.TrySetResult(ex);
             return Task.CompletedTask;

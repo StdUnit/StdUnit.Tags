@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using StdUnit.Tags.Tests.Fakes;
+using StdUnit.Tags.WebUi;
+using StdUnit.Tags.WebUi.Internal;
 using Xunit;
 
 namespace StdUnit.Tags.Tests.NetCoreOnly.WebUi;
@@ -113,6 +116,30 @@ internal static class StreamTestContext
         project.Tags.Descendant(path).AsTag();
 
     public static string Text(ReadOnlyMemory<byte> frame) => System.Text.Encoding.UTF8.GetString(frame.ToArray());
+}
+
+/// <summary>只关心"重同步帧被要求构建了几次"的假 hub。</summary>
+internal sealed class SyncCountingHub : ITagsStreamHub
+{
+    private int _syncCalls;
+
+    public int SyncCalls => Volatile.Read(ref this._syncCalls);
+
+    public long Epoch => 1;
+
+    public TreeDto GetTree() => new(this.Epoch, false, string.Empty, Array.Empty<TagNodeDto>());
+
+    public SseFramesPiper Subscribe(IReadOnlySet<string>? entries) => throw new NotSupportedException();
+
+    public void RemovePiper(SseFramesPiper piper)
+    {
+    }
+
+    public IReadOnlyList<ReadOnlyMemory<byte>> BuildSyncFrames(SseFramesPiper piper)
+    {
+        Interlocked.Increment(ref this._syncCalls);
+        return new[] { SseFrames.Ping };
+    }
 }
 
 /// <summary>可控的假控制器：只用于决定"何时启动/停止"。</summary>

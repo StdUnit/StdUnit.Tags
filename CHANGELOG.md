@@ -2,6 +2,56 @@
 
 本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
+## 2.0.0-beta5(尚未发布)
+
+> 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
+
+主题：**取消令牌贯穿全部运行期回调**（并把"取消"从"崩溃"里摘出来），以及**新包 `StdUnit.Tags.WebUi`**（SSE 值流 + 结构树 + 设计器）。
+
+### 破坏性变更
+
+- **`TurnProcess` 增加取消令牌**：签名由 `Task TurnProcess(ITagGrp grp, ITagChannel? channel)`
+  变为 `Task TurnProcess(ITagGrp grp, ITagChannel? channel, CancellationToken ct)`（与 beta4 的 `ILogicet.ProcessAsync` 一致）。
+  - 订阅 `ITagGrpRunner.TurnProcess` 的 lambda / 方法组要补参数；二进制层面同样是破坏性的，**旧版本编译出的程序集需要重编**。
+  - 这里新增的`ct` 代表**项目生命周期令牌**（`ITagsProjectCtrl.StopAsync()` 时取消）；回调里发起的异步操作应把它透传下去。
+- **`ITagsProject` 新增成员 `SetTurnProcessHandler(string entry, TurnProcess? handler)`**：
+  这是**公开接口新增成员**——自定义实现 `ITagsProject` 的代码（多为测试替身）必须补上实现；只调库、不实现该接口的代码不受影响。
+- **`RunnerStarted` / `RunnerCrashed` 增加取消令牌**：
+  - `RunnerStarted`：`(ITagGrp grp, ITagChannel? channel)` → `(ITagGrp grp, ITagChannel? channel, CancellationToken ct)`；
+  - `RunnerCrashed`：`(ITagGrp grp, ITagChannel? channel, Exception ex)` → `(ITagGrp grp, ITagChannel? channel, Exception ex, CancellationToken ct)`。
+  - 订阅方的 lambda / 方法组需要补参数；用旧版本编译出的订阅代码需要重编。**`ct` 同样是项目生命周期令牌**。
+  - `RunnerCrashed` 的 `ct` 进入时通常是**未取消**的（取消不再是崩溃，见下）；但回调执行期间项目可能被停止，
+    令牌随时可能取消——"必须完成"的清理/上报请改用 `CancellationToken.None`。
+- 示例（`samples/NixMonitor`、`samples/WebMonitor`、`samples/WpfDemo`）已按新签名更新。
+
+### 行为变更
+
+- **取消不再被当作崩溃**：项目停止引起的取消不再触发 `RunnerCrashed`、不计入连续失败、也不按重试策略退避
+  （该入口子树里的全部通道仍会被断开，`StartAsync` 仍以 `OperationCanceledException` 结束）。
+  此前每次正常停机都会上报一条 `TaskCanceledException` 崩溃，在监控里表现为"停机即故障"。
+  - 判据是**令牌确实已取消**而不是只看异常类型：驱动因自身原因（如设备超时）抛的 `OperationCanceledException` 仍是崩溃。
+  - 同理，回调（`ILogicet.ProcessAsync` / `TurnProcess`）在**令牌未取消**时抛 `OperationCanceledException` 依旧是失败；
+    停机取消时才不再计入失败。
+- 取消时不再空等退避延迟（`ITagGrpRunnerRetryStrategy` 仍按既有契约每轮被询问一次，只是不再真的等待）。
+- `SetTurnProcessHandler` **运行前、运行中都可以设置/替换/清除**，运行期改动从下一轮开始生效（回调表写时复制，
+  轮询线程零锁）。每个入口只有一个回调，重复设置是替换——需要多个观察者请自行组合成一个 `TurnProcess`。
+
+### 新增
+
+- **新包 `StdUnit.Tags.WebUi`**（仅 `net8.0`，ASP.NET Core；不依赖 Blazor / SignalR，可在 NativeAOT 宿主下运行）：
+  - 监控：结构树走一次性 `GET /stdunit.tags/tree`，值按"入口 + 轮次"以 SSE（`GET /stdunit.tags/stream`）推送，内置极简监控页 `GET /stdunit.tags/ui`。
+  - 设计器：把核心 + 各驱动 schema 内省成元数据（`GET /stdunit.tags/catalog`），设计器页 `GET /stdunit.tags/designer` 据此渲染表单、
+    导入既有项目 XML 并导出（未知驱动/元素/属性原样保留）。
+  - 写命令：`POST /stdunit.tags/value`（改测点值）、`POST /stdunit.tags/rescan`（标记未扫描）。
+  - 注册：`services.AddTagsStream()` / `app.MapTagsStream()`；多项目场景用 `AddKeyedTagsStream(key)` 注册具名流（路径形如 `/stdunit.tags/{key}/stream`）。
+    只允许改**路由前缀**（`app.MapTagsStream("/internal/tags")`），相对路径是线协议的一部分。
+  - **不内置任何鉴权**，暴露到非受信网络前请自行加策略（如 `app.MapTagsStream().RequireAuthorization()`）。
+- **`AddKeyedTagsProjectCtrl(key)`**（`StdUnit.Tags`，`IServiceCollection` 与 `TagsProjectServiceBuilder` 上各一个）：
+  以指定 key 注册 `ITagsProjectCtrl`；配合 `AddKeyedTagsStream(key)` 可以在一个宿主里同时监控多个项目。
+- **驱动 XSD 增加设计器元数据**：核心与各驱动 schema 用 `xs:annotation/xs:appinfo` 声明 `<driver name=… displayName=… prefix=…>`，
+  以及驱动自有属性（`<tagAttribute>` / `<cbntAttribute>`）。**只供设计器/内省使用，不参与校验**——现有 XML 的校验行为不变。
+- 新示例 `samples/WebMonitor`（Web 监控 + 设计器演示）与 AOT 冒烟测试 `tests/AotSmokeTest.WebUi`（CI 的 `aot-smoke` job 覆盖）。
+
 ## 2.0.0-beta4
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。

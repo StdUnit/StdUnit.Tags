@@ -32,13 +32,5 @@
     <ProjectReference Include="..\..\src\StdUnit.Tags.WebUi\StdUnit.Tags.WebUi.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- 直接复用主测试项目的纯内存假驱动/夹具助手（链接源码，避免重复实现） -->
-    <Compile Include="..\StdUnit.Tags.Tests\Fakes\FakedChannel.cs" Link="Fakes\FakedChannel.cs" />
-    <Compile Include="..\StdUnit.Tags.Tests\Fakes\FakedChannelFactory.cs" Link="Fakes\FakedChannelFactory.cs" />
-    <Compile Include="..\StdUnit.Tags.Tests\Fakes\FakedTag.cs" Link="Fakes\FakedTag.cs" />
-    <Compile Include="..\StdUnit.Tags.Tests\Fakes\TagsProject_Extensions.cs" Link="Fakes\TagsProject_Extensions.cs" />
-  </ItemGroup>
-
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

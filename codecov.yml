@@ -70,6 +70,10 @@ component_management:
       name: "SimpleFiles"
       paths:
         - "src/StdUnit.Tags.SimpleFiles/**"
+    - component_id: stdunit_tags_webui
+      name: "WebUI"
+      paths:
+        - "src/StdUnit.Tags.WebUI/**"
 
 ignore:
   - "**/*.md"

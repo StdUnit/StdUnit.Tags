@@ -28,8 +28,7 @@ public class TagGrpRunnerTests
 
     /// <summary>
     /// 调用 StartAsync 并在取消时吞掉 OperationCanceledException。
-    /// TagGrpRunner 的外层 finally 中有 Task.Delay(ScanInterval, ct)，
-    /// 取消后会抛出 OCE，这是其当前设计。
+    /// 取消后 StartAsync 以 OCE 结束是其对外契约（停止 = 任务取消），只是不再伪造一次崩溃事件。
     /// </summary>
     private async Task RunUntilCancelled(TagGrpRunner runner, ITagGrp entry, CancellationToken ct)
     {
@@ -55,12 +54,12 @@ public class TagGrpRunnerTests
         var turnStartedCalled = false;
         var turnProcessCalled = false;
 
-        runner.RunnerStarted += (grp, ch) =>
+        runner.RunnerStarted += (grp, ch, ct) =>
         {
             turnStartedCalled = true;
             return Task.CompletedTask;
         };
-        runner.TurnProcess += (grp, ch, _) =>
+        runner.TurnProcess += (grp, ch, ct) =>
         {
             turnProcessCalled = true;
             cts.Cancel();
@@ -106,11 +105,15 @@ public class TagGrpRunnerTests
         using var cts = new CancellationTokenSource();
         ITagGrp? capturedEntry = null;
         ITagChannel? capturedChannel = null;
+        CancellationToken capturedCt = default;
+        var ctCancelledAtCapture = true;
 
-        runner.RunnerStarted += (grp, ch) =>
+        runner.RunnerStarted += (grp, ch, ct) =>
         {
             capturedEntry = grp;
             capturedChannel = ch;
+            capturedCt = ct;
+            ctCancelledAtCapture = ct.IsCancellationRequested;
             cts.Cancel();
             return Task.CompletedTask;
         };
@@ -121,6 +124,65 @@ public class TagGrpRunnerTests
         // Assert
         Assert.Same(entry, capturedEntry);
         Assert.Same(entry.Channel, capturedChannel);
+        Assert.Equal(cts.Token, capturedCt);
+        Assert.False(ctCancelledAtCapture, "启动回调拿到的应是尚可用的生命周期令牌");
+    }
+
+    [Fact]
+    public async Task StartAsync_TurnCrashedEvent_ReceivesLifecycleToken()
+    {
+        // 崩溃回调拿到的必须是 StartAsync 的同一个生命周期令牌，且真故障时它尚未取消
+        // （取消不是崩溃，不会走到这个回调里来）。
+        var (runner, entry, _, _) = CreateRunner();
+        entry.Descriptor!.ScanInterval = 20;
+        entry.IsEnabled = true;
+        entry.ReadAsyncThrows = new InvalidOperationException("模拟读取异常");
+
+        using var cts = new CancellationTokenSource();
+        CancellationToken capturedCt = default;
+        var ctCancelledAtCapture = true;
+
+        runner.RunnerCrashed += (grp, ch, ex, ct) =>
+        {
+            capturedCt = ct;
+            ctCancelledAtCapture = ct.IsCancellationRequested;
+            cts.Cancel();
+            return Task.CompletedTask;
+        };
+
+        // Act
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
+
+        // Assert
+        Assert.Equal(cts.Token, capturedCt);
+        Assert.False(ctCancelledAtCapture, "真故障时生命周期令牌尚未取消，回调可直接沿用它做上报");
+    }
+
+    [Fact]
+    public async Task StartAsync_Cancellation_DoesNotFireRunnerCrashed()
+    {
+        // 回归测试：取消不是崩溃——StopAsync 期间不应伪造一次 RunnerCrashed（旧实现会把
+        // 轮询里的 Task.Delay(ct) 抛出的 OCE 当成崩溃上报，导致监控里每次停机都多一条失败）。
+        var (runner, entry, _, _) = CreateRunner();
+        entry.Descriptor!.ScanInterval = 10;
+        entry.IsEnabled = true;
+
+        using var cts = new CancellationTokenSource();
+        entry.OnRead = () => cts.Cancel();
+
+        var crashCount = 0;
+        runner.RunnerCrashed += (grp, ch, ex, ct) =>
+        {
+            crashCount++;
+            return Task.CompletedTask;
+        };
+
+        // Act
+        await RunUntilCancelled(runner, entry, cts.Token).WaitAsync(TimeSpan.FromSeconds(15));
+
+        // Assert
+        Assert.True(entry.ReadAsyncCallCount >= 1);
+        Assert.Equal(0, crashCount);
     }
 
     [Fact]
@@ -203,7 +265,7 @@ public class TagGrpRunnerTests
         Exception? capturedEx = null;
         var crashedFired = false;
 
-        runner.RunnerCrashed += (grp, ch, ex) =>
+        runner.RunnerCrashed += (grp, ch, ex, ct) =>
         {
             crashedFired = true;
             capturedEx = ex;
@@ -234,7 +296,7 @@ public class TagGrpRunnerTests
         // 而一旦截止期先到期，外层 finally 的 Task.Delay(delay, ct) 会把结果变成 TaskCanceledException，
         // 掩盖真实断言（曾因此在负载高时偶发失败）。兜底改用 WaitAsync —— 超时抛 TimeoutException，
         // 不参与 runner 的取消语义。
-        runner.RunnerCrashed += (grp, ch, ex) =>
+        runner.RunnerCrashed += (grp, ch, ex, ct) =>
             throw new InvalidOperationException("错误处理也抛异常");
 
         // Act & Assert
@@ -611,7 +673,7 @@ public class TagGrpRunnerTests
         using var cts = new CancellationTokenSource();
         var crashCount = 0;
 
-        runner.RunnerCrashed += (_, _, _) =>
+        runner.RunnerCrashed += (_, _, _, ct) =>
         {
             crashCount++;
 
@@ -687,7 +749,7 @@ public class TagGrpRunnerTests
             }
         };
 
-        runner.RunnerCrashed += (_, _, _) =>
+        runner.RunnerCrashed += (_, _, _, ct) =>
         {
             totalCrashes++;
 
