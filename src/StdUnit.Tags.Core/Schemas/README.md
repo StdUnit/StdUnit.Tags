@@ -142,3 +142,66 @@ services.AddTagsProjectServices(b =>
 ```
 
 > 注：运行时校验（步骤 1）与编辑器注入（步骤 2）相互独立。没有硬性要求全部完成。
+
+### 3. 设计器元数据：让 schema 自己声明驱动名（可选，但推荐）
+
+`StdUnit.Tags.WebUi` 的 `GET {prefix}/catalog` 会把**所有注册了 `ITagsProjectSchemaProvider` 的 schema**
+内省成设计器元数据（通道/测点设计器据此渲染表单、导出 XML）。它需要知道"哪个 schema 属于哪个 `driver`"——
+这件事 **XSD 1.0 表达不了**（不能按属性值切换内容模型），而且靠命名约定也不行
+（`HjzkIoBox` ↔ `tags:hjzk`、`ZLanTcp` ↔ `tags:zlan` 就对不上）。所以由 schema 自己声明：
+
+```xml
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="tags:mydriver" elementFormDefault="qualified">
+  <xs:annotation><xs:appinfo>
+    <driver name="MyDriver" displayName="我的驱动" prefix="md"/>
+
+    <!-- 驱动额外认的“测点属性”：核心 schema 里没有，XSD 1.0 也加不进去 -->
+    <tagAttribute name="maxlen" kind="number" type="positiveInteger" min="1" max="255"
+                  label="字符串最大长度" order="10" group="STR" required="true"
+                  appliesToTypes="STR" help="仅 STR 测点需要"/>
+    <!-- 组合属性（TagCbnt）用 cbntAttribute，参数与 tagAttribute 相同 -->
+    <cbntAttribute name="slot" kind="number" label="槽位" order="1"/>
+  </xs:appinfo></xs:annotation>
+
+  <xs:element name="Host" type="xs:string">
+    <xs:annotation><xs:appinfo>
+      <ui label="主机" order="1" group="连接" placeholder="localhost" help="省略时用 localhost"/>
+    </xs:appinfo></xs:annotation>
+  </xs:element>
+</xs:schema>
+```
+
+- `<driver name>` **必须与运行时 `XxxNames.DriverName`（即 XML 里的 `driver="…"`）完全一致**；
+  `prefix` 缺省取命名空间后缀（`tags:mydriver` → `mydriver`）。
+- `<ui>` 只影响 UI：`label` / `order` / `group` / `placeholder` / `help` / `appliesToDrivers`。
+  其中 `appliesToDrivers`（逗号分隔的驱动名）用来给**核心 schema 里“只有部分驱动认”的属性**划作用域——
+  典型例子是 `TagCbnt` 的 `area`/`slave`（只有 ModbusTcp / HjzkIoBox / ZLanTcp 读）。XSD 1.0 只能给类型
+  *加* 属性、不能按驱动 *删* 属性，所以用这个提示让设计器按有效驱动过滤（已写了值的属性仍会显示，避免
+  “看不见却被导出”）。XSD 会忽略 `appinfo` 里的自定义元素，对校验零影响；**不写也能用**（设计器退化为按属性名显示）。
+- 这两种元素都按**本地名**匹配，跟 `xs:schema` 上有没有默认 `xmlns` 无关。
+- 没声明 `<driver>` 的 schema 仍然参与校验，只是不出现在设计器的驱动列表里。
+
+#### 为什么需要 `<tagAttribute>` / `<cbntAttribute>`
+
+`Tag` / `TagCbnt` / `TagGrp` 在核心 schema 里都带 `<xs:anyAttribute processContents="lax"/>`：
+**任何属性都是合法的**。可运行期真正认哪些键，取决于驱动——它们从
+`TagDescriptor.Extras` / `TagCbntDescriptor.Extras` 里读（如 S7 的 `maxlen`、SimpleFiles 的
+`autoCreateFile`、ModbusTcp 的 `interpret`）。XSD 1.0 **不允许**跨命名空间给既有类型追加属性，
+所以这批属性永远进不了核心 schema 的类型定义；只能由驱动"声明"一次，供设计器渲染与提示：
+
+| 属性 | 含义 |
+|---|---|
+| `name` | 属性名（必须与运行期 `Extras` 的键一致） |
+| `kind` | 控件类型：`string` / `bool` / `number` / `enum`（缺省按 `type` 推断） |
+| `type` | 仅作文档/推断用（如 `positiveInteger`） |
+| `label` / `order` / `group` / `placeholder` / `help` | 与 `<ui>` 同义 |
+| `required` | 仅提示（设计器不会因此拒绝导出） |
+| `min` / `max` / `minLength` / `enumValues` | 数值/长度/枚举提示（`enumValues` 逗号分隔） |
+| `appliesToTypes` | 逗号分隔的测点 `type` 列表；只有命中时才显示（如 S7 的 `maxlen` 只对 `STR`） |
+
+**这些声明不参与校验**：写错的属性名依旧是"合法 XML"，只是设计器不会给出提示。若需要"属性拼写查错"，
+请在加载期做 **advisory** 诊断（既不拒绝，也不静默），当前库没有内置。
+
+未声明的属性不会丢：设计器把它们归为"自定义属性"，导入/导出都原样保留。
+

@@ -38,7 +38,7 @@ public interface ILogicet
     /// 项目的<b>生命周期</b>令牌：项目停止（<see cref="ITagsProjectCtrl.StopAsync"/>）时取消。<br/>
     /// 它<b>不是</b>"单轮超时"令牌——框架不会为某一轮单独取消，同一入口每一轮拿到的都是同一个令牌。<br/>
     /// 建议用 <c>if (ct.IsCancellationRequested) return;</c> 提前结束本轮；<b>不要</b>在这里抛
-    /// <see cref="OperationCanceledException"/>，它会被运行器当成一次失败（触发 <see cref="ITagsProject.RunnerCrashed"/> 并按策略断开重连）。<br/>
+    /// <see cref="OperationCanceledException"/>，令牌没取消时抛它会被运行器当成一次失败（触发 <see cref="ITagsProject.RunnerCrashed"/> 并按策略断开重连）。<br/>
     /// 不要缓存它、也不要每轮 <c>Register</c>；它也不能让本方法变成"可以慢慢跑"——本方法仍必须尽快返回。
     /// </param>
     /// <returns></returns>

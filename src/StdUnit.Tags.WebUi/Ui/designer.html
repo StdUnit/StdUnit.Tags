@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<!-- 服务端按"本次请求的路径"填成页面所在目录（如 /stdunit.tags/）。下面 JS 里的相对路径都用它解析。 -->
+<base href="%%BASE%%" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>测点项目设计器 · StdUnit.Tags</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg:#fff; --panel:#f6f8fa; --fg:#1f2328; --muted:#5b6572; --line:#d8dee4;
+    --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --err:#cf222e;
+    --radius:10px;
+    /* 标签列宽统一成一个固定值：不管行在 .form、.fields 还是嵌套组里，label/值都落在同一条竖线上。 */
+    --label-w:220px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --panel:#161b22; --fg:#e6edf3; --muted:#9198a1; --line:#30363d; --accent:#58a6ff; --ok:#3fb950; --warn:#d29922; --err:#f85149; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; min-height:100%;
+    font:16px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background:var(--bg); color:var(--fg);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── 顶栏 ── */
+  header {
+    position:sticky; top:0; z-index:2;
+    display:flex; gap:16px; align-items:center; flex-wrap:wrap;
+    padding:14px 28px; border-bottom:1px solid var(--line); background:var(--bg);
+  }
+  h1 { font-size:19px; font-weight:600; margin:0 8px 0 0; white-space:nowrap; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+  .tab {
+    font:inherit; font-size:15.5px; padding:8px 18px;
+    border:1px solid transparent; border-radius:999px;
+    background:transparent; color:var(--muted); cursor:pointer;
+    transition:background .12s, color .12s, border-color .12s;
+  }
+  .tab:hover { background:var(--panel); color:var(--fg); }
+  .tab.active { border-color:var(--accent); color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, transparent); }
+  .link { margin-left:auto; font-size:15px; color:var(--accent); text-decoration:none; white-space:nowrap; padding:7px 12px; border-radius:8px; }
+  .link:hover { background:var(--panel); }
+
+  /* ── 主体 ── */
+  main { padding:28px; max-width:1440px; margin:0 auto; display:grid; gap:24px; }
+
+  .split { display:grid; grid-template-columns:minmax(210px,300px) 1fr; gap:24px; align-items:start; }
+  .list { display:flex; flex-direction:column; gap:10px; }
+  .item {
+    display:flex; gap:12px; justify-content:space-between; align-items:center; text-align:left;
+    font:inherit; font-size:15.5px; padding:12px 14px;
+    border:1px solid var(--line); border-radius:8px; background:var(--panel); color:inherit; cursor:pointer;
+    transition:border-color .12s, background .12s;
+  }
+  .item:hover { border-color:var(--accent); }
+  .item.active { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, transparent); }
+  .item-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .badge {
+    font-size:12px; color:var(--muted); white-space:nowrap;
+    border:1px solid var(--line); border-radius:999px; padding:1px 9px; background:var(--bg);
+  }
+
+  .form, .card {
+    border:1px solid var(--line); border-radius:var(--radius);
+    padding:22px; display:grid; gap:18px; background:var(--panel);
+  }
+  .card-head { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .card-head strong { font-size:16px; font-weight:600; }
+  .children { margin-left:16px; padding-left:20px; border-left:2px solid var(--line); display:grid; gap:18px; }
+
+  .fields { display:grid; gap:18px; }
+  .row { display:grid; grid-template-columns:var(--label-w) minmax(0,1fr); gap:8px 20px; align-items:center; }
+  .row-inline { display:flex; gap:12px; align-items:center; }
+  .row-inline > input { flex:1; }
+  .row-inline > button { flex:0 0 auto; }
+  .row-label { font-size:15px; font-weight:500; color:var(--fg); overflow-wrap:break-word; }
+  .row.req .row-label::after { content:" *"; color:var(--err); }
+  .hint { grid-column:2; font-size:13.5px; line-height:1.55; color:var(--muted); }
+
+  input, select, textarea {
+    font:inherit; font-size:16px; width:100%; min-width:0;
+    padding:10px 13px; border:1px solid var(--line); border-radius:9px;
+    background:var(--bg); color:inherit;
+  }
+  input:hover, select:hover { border-color:color-mix(in srgb, var(--fg) 30%, var(--line)); }
+  input:focus-visible, select:focus-visible, textarea:focus-visible,
+  button:focus-visible, a:focus-visible {
+    outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent);
+  }
+
+  button.mini {
+    font:inherit; font-size:14px; padding:6px 13px;
+    border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); cursor:pointer;
+    transition:border-color .12s, color .12s, background .12s;
+  }
+  button.mini:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  button.mini:disabled { opacity:.45; cursor:default; }
+  button.add {
+    font:inherit; font-size:15.5px; font-weight:500; padding:10px 18px;
+    border:1px solid var(--accent); border-radius:9px; background:transparent; color:var(--accent); cursor:pointer;
+    transition:background .12s;
+  }
+  button.add:hover { background:color-mix(in srgb, var(--accent) 12%, transparent); }
+
+  .bar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+
+  /* 纵向堆叠容器：页内的 bar / card / 提示块之间统一留白（之前它们只是普通块级兄弟，挤在一起）。 */
+  .stack { display:grid; gap:20px; }
+
+  .muted { color:var(--muted); }
+  .warn { color:var(--warn); }
+  .err { color:var(--err); }
+  .issues {
+    border:1px solid var(--warn); border-radius:var(--radius); padding:14px 18px; font-size:15px;
+    color:var(--warn); background:color-mix(in srgb, var(--warn) 8%, transparent);
+  }
+  .issues ul { margin:8px 0 0 20px; padding:0; }
+  .issues li { margin:3px 0; }
+
+  pre.xml {
+    margin:0; padding:18px; border:1px solid var(--line); border-radius:var(--radius);
+    background:var(--panel); overflow:auto; max-height:62vh;
+    font-family:ui-monospace, Consolas, monospace; font-size:14px; line-height:1.7; tab-size:2;
+  }
+  /* 嵌套组（如 OpcUa 的 ServerOpt）：只加一条分隔线 + 小标题，
+     不给左侧/内侧加 padding——这样组内字段的 label 列和值列跟外层严格对齐。 */
+  .group { display:grid; gap:18px; padding-top:16px; border-top:1px solid var(--line); }
+  .group-title { font-size:14.5px; font-weight:600; color:var(--muted); }
+
+  /* 小节行（如"驱动专属字段"）：和普通字段共用同一套两列网格——
+     label 落在左列、徽标/按钮落在右列起点，整页只有一条竖线。 */
+  .row.section { margin-top:6px; padding-top:18px; border-top:1px solid var(--line); }
+  .row.section > .label-title { font-size:15px; font-weight:600; color:var(--fg); }
+  .row.section > .badge, .row.section > .mini { justify-self:start; }
+
+  /* 卡片标题行（TagGrp / TagCbnt / Tag）：同上，标题占左列、徽标与操作按钮占右列。 */
+  .row.card-title > .label-title { font-size:15.5px; font-weight:600; }
+  .row.card-title > .bar { justify-self:start; }
+
+  /* 折叠开关（▾/▸）：放在右列最前面，左列的标题文字位置不受影响。 */
+  .toggle {
+    font:inherit; font-size:13px; line-height:1; padding:5px 8px;
+    border:1px solid var(--line); border-radius:6px; background:var(--bg);
+    color:var(--muted); cursor:pointer;
+  }
+  .toggle:hover { border-color:var(--accent); color:var(--accent); }
+  .child-count { font-size:13px; color:var(--muted); }
+  textarea.raw {
+    font-family:ui-monospace, Consolas, monospace; font-size:14px; line-height:1.65;
+    resize:vertical; min-height:240px;
+  }
+
+  /* 窄屏：表单变单列，标签在控件上方 */
+  @media (max-width: 900px) {
+    :root { --label-w: 150px; }
+    header { padding:12px 18px; }
+    main { padding:18px; gap:18px; }
+    .split { grid-template-columns:1fr; gap:18px; }
+    .row { grid-template-columns:1fr; gap:6px; }
+    .hint { grid-column:1; }
+    .form, .card { padding:16px; }
+    .children { margin-left:8px; padding-left:14px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>测点项目设计器</h1>
+  <nav class="tabs">
+    <button class="tab active" data-tab="channels">通道</button>
+    <button class="tab" data-tab="tags">测点</button>
+    <button class="tab" data-tab="import">导入</button>
+    <button class="tab" data-tab="export">导出</button>
+  </nav>
+  <a id="monitor" class="link" href="#">监控页 →</a>
+</header>
+<main id="main"><p class="muted">加载中…</p></main>
+<script>
+(() => {
+  'use strict';
+
+  // 相对路径由服务端注入（与 C# 的 EndpointConstants 同源）；真正的 URL 用 <base> 解析。
+  const CATALOG_URL = new URL('%%CATALOG_URL%%', document.baseURI).href;
+  const MONITOR_URL = new URL('%%MONITOR_URL%%', document.baseURI).href;
+  const STORAGE_KEY = 'stdunit.tags.designer.v1';
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+
+  /** catalog：{ root, nodes[], drivers[], tagTypes[] } */
+  let cat = null;
+  const nodeOf = name => (name === cat.root.name ? cat.root : cat.nodes.find(n => n.name === name));
+  const driverOf = name => cat.drivers.find(d => d.name === name) || null;
+
+  /** 设计器里的全部状态；字段值都是字符串（空串 = 省略，交给运行期默认值）。 */
+  const state = {
+    tab: 'channels', 
+    selected: 0,
+    channels: [], tree: [], logicets: [],
+    // 导入时认不出的东西（未知扩展元素/属性）：原样保留，导出时再吐出去，避免"打开再保存就丢配置"。
+    extraXml: [], projectAttrs: {}, importIssues: []
+  };
+
+  /* ───────────────────────── 小工具 ───────────────────────── */
+
+  function h(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    if (props) {
+      for (const [k, v] of Object.entries(props)) {
+        if (v == null || v === false) continue;
+        if (k === 'text') e.textContent = v;
+        else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+        else e.setAttribute(k, v === true ? '' : v);
+      }
+    }
+    for (const kid of kids.flat()) {
+      if (kid == null || kid === false) continue;
+      e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    }
+    return e;
+  }
+
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const xmlSerializer = new XMLSerializer();
+
+  /**
+   * 把"认不出的东西"原样序列化（导入时保留、导出时吐回去）。<br/>
+   * 先去掉纯空白文本节点，免得把源文件的缩进一起搬过来；XMLSerializer 会为被序列化的子树
+   * 补上必要的 xmlns 声明，所以搬到新文档里仍然合法。
+   */
+  function serializeRaw(el) {
+    const clone = el.cloneNode(true);
+    const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+    const blanks = [];
+    while (walker.nextNode()) {
+      const t = walker.currentNode;
+      if (!t.nodeValue || !t.nodeValue.trim()) blanks.push(t);
+    }
+    blanks.forEach(t => t.parentNode.removeChild(t));
+    return xmlSerializer.serializeToString(clone);
+  }
+
+  function uniqueName(base, taken) {
+    let i = 1;
+    while (taken.has(base + i)) i++;
+    return base + i;
+  }
+
+  const channelNames = () => state.channels.map(c => c.name);
+
+  function newChannel() {
+    const d = cat.drivers[0];
+    return { name: uniqueName('ch', new Set(channelNames())), driver: d ? d.name : '', values: {}, groups: {}, extras: [], extraAttrs: [] };
+  }
+
+  const newNode = el => ({ el, attrs: {}, children: [], extras: [], extraAttrs: [], collapsed: false });
+
+  /**
+   * 非核心属性统一存成 <c>[{name, value}]</c>：既装"驱动声明的额外属性"（如 S7 的 maxlen），
+   * 也装"导入进来但没人认识的自定义属性"。顺带兼容旧版本存的 <c>{name: value}</c> 对象形式。
+   */
+  function extraAttrsOf(owner) {
+    if (!Array.isArray(owner.extraAttrs)) {
+      const obj = owner.extraAttrs || {};
+      owner.extraAttrs = Object.entries(obj).map(([name, value]) => ({ name, value }));
+    }
+    return owner.extraAttrs;
+  }
+
+  /** 按名字取/设一条非核心属性；值为空即删除（避免导出空属性）。 */
+  function setExtraAttr(owner, name, value) {
+    const list = extraAttrsOf(owner);
+    const index = list.findIndex(a => a.name === name);
+    if (value === '' || value == null) {
+      if (index >= 0) list.splice(index, 1);
+    } else if (index >= 0) {
+      list[index].value = value;
+    } else {
+      list.push({ name, value });
+    }
+  }
+
+  const getExtraAttr = (owner, name) => extraAttrsOf(owner).find(a => a.name === name)?.value ?? '';
+
+  /* ───────────────────────── 导入（尽力解析） ───────────────────────── */
+
+  /** 在驱动字段里按本地名找对应字段；命名空间对不上就当未知（避免把别的驱动的同名字段认错）。 */
+  function matchField(fields, el) {
+    const f = (fields || []).find(x => x.name === el.localName);
+    if (!f) return null;
+    // 驱动 schema 有命名空间时，元素最好也在里面；源 XML 里没写前缀（无命名空间）时放行。
+    return f;
+  }
+
+  function readGroup(el, field) {
+    const values = {};
+    for (const child of [...el.children]) {
+      const f = matchField(field.children, child);
+      if (!f) continue;
+      if (f.kind === 'group') values[f.name] = readGroup(child, f);
+      else values[f.name] = child.textContent;
+    }
+    return values;
+  }
+
+  function readChannel(el) {
+    const driver = el.getAttribute('driver') || '';
+    const drv = driverOf(driver);
+    const ch = { name: el.getAttribute('name') || '', driver, values: {}, groups: {}, extras: [], extraAttrs: {} };
+
+    for (const a of [...el.attributes]) {
+      if (a.name === 'name' || a.name === 'driver' || a.name === 'xmlns' || a.name.startsWith('xmlns:')) continue;
+      extraAttrsOf(ch).push({ name: a.name, value: a.value });
+    }
+
+    for (const child of [...el.children]) {
+      const f = drv ? matchField(drv.fields, child) : null;
+      if (!f) { ch.extras.push(serializeRaw(child)); continue; }
+      if (f.kind === 'group') ch.groups[f.name] = readGroup(child, f);
+      else ch.values[f.name] = child.textContent;
+    }
+
+    return ch;
+  }
+
+  function readNode(el, issues) {
+    const node = newNode(el.localName);
+    const schema = nodeOf(el.localName);
+    const known = new Set((schema ? schema.attributes : []).map(a => a.name));
+
+    if (!schema) issues.push('未知元素 <' + el.localName + '>：按 TagGrp 处理');
+
+    for (const a of [...el.attributes]) {
+      if (a.name === 'xmlns' || a.name.startsWith('xmlns:')) continue;
+      if (known.has(a.name)) node.attrs[a.name] = a.value;
+      else extraAttrsOf(node).push({ name: a.name, value: a.value });   // 如 SimpleFiles 测点的 autoCreateFile
+    }
+
+    for (const child of [...el.children]) {
+      const name = child.localName;
+      if (name === 'TagGrp' || name === 'TagCbnt' || name === 'Tag') {
+        node.children.push(readNode(child, issues));
+      } else {
+        node.extras.push(serializeRaw(child));
+        issues.push('<' + (node.attrs.name || el.localName) + '> 下的未知元素 <' + name + '> 已原样保留');
+      }
+    }
+
+    return node;
+  }
+
+  /** 解析整份项目 XML；认不出的顶层元素/属性/子元素都原样保留，不做丢弃。 */
+  function parseProjectXml(text) {
+    const doc = new DOMParser().parseFromString(text, 'text/xml');
+    const error = doc.querySelector('parsererror');
+    if (error) {
+      const detail = (error.textContent || '').trim().split('\n').filter(Boolean)[0] || '未知错误';
+      throw new Error('XML 解析失败：' + detail);
+    }
+
+    const root = doc.documentElement;
+    if (!root) throw new Error('XML 没有根元素');
+
+    const issues = [];
+    const channels = [];
+    const tree = [];
+    const logicets = [];
+    const extras = [];
+    const projectAttrs = {};
+
+    for (const a of [...root.attributes]) {
+      if (a.name === 'xmlns' || a.name.startsWith('xmlns:')) continue;
+      projectAttrs[a.name] = a.value;
+    }
+
+    for (const el of [...root.children]) {
+      switch (el.localName) {
+        case 'Channel':
+          channels.push(readChannel(el));
+          break;
+        case 'TagGrp':
+          tree.push(readNode(el, issues));
+          break;
+        case 'Logicet':
+          logicets.push(el.textContent.trim());
+          break;
+        default:
+          extras.push(serializeRaw(el));
+          issues.push('顶层未知元素 <' + el.localName + '> 已原样保留');
+      }
+    }
+
+    if (channels.length === 0) issues.push('没有解析到任何 <Channel>');
+    if (tree.length === 0) issues.push('没有解析到任何 <TagGrp>');
+
+    for (const ch of channels) {
+      if (!driverOf(ch.driver)) {
+        issues.push('通道 ' + (ch.name || '(未命名)') + ' 的驱动 "' + ch.driver + '" 未注册：其字段已原样保留');
+      }
+    }
+
+    return { channels, tree, logicets, extras, projectAttrs, issues };
+  }
+
+  /* ───────────────────────── 字段控件（schema 驱动） ───────────────────────── */
+
+  function controlFor(field, value, onChange) {
+    const placeholder = field.placeholder ?? field.default ?? '';
+    let c;
+    if (field.kind === 'bool') {
+      c = h('select', { onchange: e => onChange(e.target.value) },
+        h('option', { value: '' }, '（默认）'),
+        h('option', { value: 'true' }, 'true'),
+        h('option', { value: 'false' }, 'false'));
+    } else if (field.kind === 'enum') {
+      c = h('select', { onchange: e => onChange(e.target.value) },
+        h('option', { value: '' }, '（默认）'),
+        ...(field.enumValues || []).map(v => h('option', { value: v }, v)));
+    } else if (field.kind === 'number') {
+      c = h('input', { type: 'number', placeholder, min: field.min, max: field.max, oninput: e => onChange(e.target.value) });
+    } else {
+      c = h('input', { type: 'text', placeholder, oninput: e => onChange(e.target.value) });
+    }
+
+    if (c.tagName === 'SELECT') c.value = value || '';
+    else c.value = value ?? '';
+    return c;
+  }
+
+  function fieldRow(field, value, onChange, control) {
+    const ctl = control || controlFor(field, value, onChange);
+    const bits = [];
+    if (field.default != null) bits.push('默认 ' + field.default);
+    if (field.min != null || field.max != null) bits.push('范围 ' + (field.min ?? '-∞') + ' ~ ' + (field.max ?? '+∞'));
+    if (field.minLength != null) bits.push('至少 ' + field.minLength + ' 字符');
+    if (field.help) bits.push(field.help);
+
+    return h('label', { class: 'row' + (field.required ? ' req' : '') },
+      h('span', { class: 'row-label', text: field.label || field.name }),
+      ctl,
+      bits.length ? h('span', { class: 'hint', text: bits.join(' · ') }) : null);
+  }
+
+  /** 驱动字段：顶层都是元素；kind=group 的递归成"小标题 + 一组同列宽的子字段"。 */
+  function driverFields(fields, values, groups, depth) {
+    const box = h('div', { class: 'fields' });
+    if (depth > 0) box.append(h('div', { class: 'hint', text: '（可省略：空的子元素不会导出）' }));
+
+    for (const f of fields) {
+      if (f.kind === 'group') {
+        const g = groups[f.name] || (groups[f.name] = {});
+        box.append(h('div', { class: 'group' },
+          h('div', { class: 'group-title', text: f.label || f.name }),
+          f.help ? h('div', { class: 'hint', text: f.help }) : null,
+          driverFields(f.children || [], g, g, depth + 1)));
+      } else {
+        const v = values[f.name] ?? '';
+        box.append(fieldRow(f, v, v2 => { values[f.name] = v2; }));
+      }
+    }
+    return box;
+  }
+
+  /* ───────────────────────── 通道页 ───────────────────────── */
+
+  function renderChannelsTab() {
+    const wrap = h('div', { class: 'split' });
+    const list = h('div', { class: 'list' });
+    const labels = [];
+
+    state.channels.forEach((c, i) => {
+      const nameEl = h('span', { class: 'item-name', text: c.name || '(未命名)' });
+      labels[i] = nameEl;
+      list.append(h('button', {
+        class: 'item' + (i === state.selected ? ' active' : ''),
+        onclick: () => { state.selected = i; render(); }
+      }, nameEl, h('span', { class: 'badge', text: c.driver || '未选驱动' })));
+    });
+
+    list.append(h('button', {
+      class: 'add',
+      onclick: () => { state.channels.push(newChannel()); state.selected = state.channels.length - 1; render(); }
+    }, '+ 新增通道'));
+    wrap.append(list);
+
+    const form = h('div', { class: 'form' });
+    const ch = state.channels[state.selected];
+    if (!ch) {
+      form.append(h('p', { class: 'muted', text: '还没有通道：先在左侧新增一个。' }));
+    } else {
+      form.append(...channelForm(ch, v => {
+        ch.name = v;
+        const el = labels[state.selected];
+        if (el) el.textContent = v || '(未命名)';
+      }), h('div', { class: 'bar' },
+        h('button', { class: 'mini', onclick: () => {
+          const copy = JSON.parse(JSON.stringify(ch));
+          copy.name = uniqueName(ch.name.replace(/\d+$/, ''), new Set(channelNames()));
+          state.channels.splice(state.selected + 1, 0, copy);
+          state.selected++;
+          render();
+        } }, '复制通道'),
+        h('button', { class: 'mini', onclick: () => {
+          state.channels.splice(state.selected, 1);
+          state.selected = Math.max(0, state.selected - 1);
+          render();
+        } }, '删除通道')));
+    }
+
+    wrap.append(form);
+    return wrap;
+  }
+
+  function channelForm(ch, onRename) {
+    const out = [];
+    const channelSchema = nodeOf('Channel');
+
+    for (const a of channelSchema.attributes) {
+      if (a.name === 'name') {
+        out.push(fieldRow(a, ch.name, onRename));
+      } else if (a.name === 'driver') {
+        const select = h('select', {
+          onchange: e => {
+            ch.driver = e.target.value;
+            ch.values = {};
+            ch.groups = {};
+            render();
+          }
+        },
+          ...(cat.drivers.length === 0 ? [h('option', { value: '' }, '（没有可用驱动）')] : []),
+          ...cat.drivers.map(d => h('option', { value: d.name }, d.displayName || d.name)));
+        select.value = ch.driver || '';
+        out.push(fieldRow(a, ch.driver, null, select));
+      }
+    }
+
+    const drv = driverOf(ch.driver);
+    if (!drv) {
+      out.push(h('p', { class: 'warn' }, cat.drivers.length === 0
+        ? '目录里没有任何驱动：宿主需要用 AddXxxSupport() 注册驱动（它会一并注册 ITagsProjectSchemaProvider）。'
+        : '驱动 "' + (ch.driver || '') + '" 不在目录里（schema 未注册？导出的 XML 仍会带上 driver 属性）。'));
+    } else {
+      out.push(h('div', { class: 'row section' },
+        h('span', { class: 'label-title', text: '驱动专属字段' }),
+        h('span', { class: 'badge', text: (drv.displayName || drv.name) + ' · ' + drv.namespace })));
+      out.push(driverFields(drv.fields || [], ch.values, ch.groups, 0));
+    }
+
+    const extras = (ch.extras || []).length + extraAttrsOf(ch).length;
+    if (extras > 0) {
+      out.push(h('p', { class: 'muted', text: '该通道包含 ' + extras + ' 项导入时无法识别的配置，导出时会原样写回。' }));
+    }
+
+    out.push(h('div', { class: 'row section' },
+      h('span', { class: 'label-title', text: '自定义属性' }),
+      h('span', { class: 'muted', text: '通道没有驱动专属属性声明，这里可加任意扩展属性' })));
+    out.push(customAttrRows(ch, new Set()));
+    out.push(addCustomAttrRow(ch));
+
+    return out;
+  }
+
+  /* ───────────────────────── 测点页 ───────────────────────── */
+
+  function renderTagsTab() {
+    const wrap = h('div', { class: 'stack' });
+    wrap.append(h('div', { class: 'bar' },
+      h('button', { class: 'add', onclick: () => { state.tree.push(newNode('TagGrp')); render(); } }, '+ 新增测点组'),
+      h('button', { class: 'mini', onclick: () => setCollapsedAll(true) }, '全部折叠'),
+      h('button', { class: 'mini', onclick: () => setCollapsedAll(false) }, '全部展开'),
+      h('span', { class: 'muted', text: '顶层只能放 TagGrp；能不能嵌套由 schema 的 children 决定。' })));
+
+    if (state.tree.length === 0) {
+      wrap.append(h('p', { class: 'muted', text: '还没有测点组：至少需要一个 isEntry="true" 的入口组，项目才能轮询。' }));
+    }
+
+    state.tree.forEach((n, i) => wrap.append(nodeCard(n, state.tree, i, '')));
+
+    wrap.append(h('div', { class: 'card' },
+      h('div', { class: 'row section' },
+        h('span', { class: 'label-title', text: '逻辑组件（Logicet）' }),
+        h('button', { class: 'mini', onclick: () => { state.logicets.push(''); render(); } }, '+ 添加')),
+      ...state.logicets.map((p, i) => h('div', { class: 'row' },
+        h('span', { class: 'row-label', text: '路径 ' + (i + 1) }),
+        h('div', { class: 'row-inline' },
+          h('input', {
+            type: 'text', value: p, placeholder: '插件 DLL 路径（相对项目根目录或绝对路径）',
+            oninput: e => { state.logicets[i] = e.target.value; }
+          }),
+          h('button', { class: 'mini', onclick: () => { state.logicets.splice(i, 1); render(); } }, '删除'))))));
+
+    return wrap;
+  }
+
+  /** 全部折叠 / 展开（只处理有内容的节点；叶子的字段也一起收起来，便于在长树里定位）。 */
+  function setCollapsedAll(collapsed) {
+    const walk = nodes => {
+      for (const n of nodes) {
+        n.collapsed = collapsed;
+        walk(n.children);
+      }
+    };
+    walk(state.tree);
+    render();
+  }
+
+  /** 声明的作用域：只在有效驱动命中 `<c>appliesToDrivers</c>` 时显示；已写值的例外（避免"看不见却被导出"）。 */
+  function attrAppliesToDriver(field, driverName, value) {
+    const drivers = field.appliesToDrivers;
+    if (!drivers || drivers.length === 0) return true;
+    if (!driverName) return true;                              // 驱动未知：先都显示，免得藏掉合法配置
+    if (drivers.includes(driverName)) return true;
+    return value !== undefined && value !== null && value !== '';   // 已经写了值就保留可见
+  }
+
+  function nodeCard(node, siblings, index, inheritedChannel) {
+    const schema = nodeOf(node.el);
+    const badge = h('span', { class: 'badge', text: node.attrs.name || '(未命名)' });
+    const collapsed = node.collapsed === true;
+
+    // 有效通道/驱动：Tag/TagCbnt 自己不写 driver，要沿 channel 冒泡到 <Channel driver="…">。
+    const ownChannel = node.attrs.channel || inheritedChannel || '';
+    const channel = state.channels.find(c => c.name === ownChannel);
+    const driver = channel ? driverOf(channel.driver) : null;
+
+    // 驱动的额外属性（XSD 1.0 表达不了，由驱动 schema 用 appinfo 声明）。
+    const declared = node.el === 'Tag'
+      ? (driver?.tagAttributes || [])
+      : node.el === 'TagCbnt'
+        ? (driver?.cbntAttributes || [])
+        : [];
+
+    // 折叠开关放在右列最前面：左列的标题文字位置不变（和下面字段的 label 列严格对齐）。
+    const toggle = h('button', {
+      class: 'toggle',
+      title: collapsed ? '展开（显示字段与子节点）' : '折叠（只留标题行）',
+      onclick: () => { node.collapsed = !collapsed; render(); }
+    }, collapsed ? '▸' : '▾');
+
+    const card = h('div', { class: 'card' },
+      h('div', { class: 'row card-title' },
+        h('span', { class: 'label-title', text: node.el }),
+        h('div', { class: 'bar' },
+          toggle,
+          badge,
+          collapsed && node.children.length > 0
+            ? h('span', { class: 'child-count', text: node.children.length + ' 个子节点' })
+            : null,
+          h('button', { class: 'mini', disabled: index === 0, onclick: () => { siblings.splice(index - 1, 0, siblings.splice(index, 1)[0]); render(); } }, '↑'),
+          h('button', { class: 'mini', disabled: index === siblings.length - 1, onclick: () => { siblings.splice(index + 1, 0, siblings.splice(index, 1)[0]); render(); } }, '↓'),
+          h('button', { class: 'mini', onclick: () => { siblings.splice(index, 1); render(); } }, '删除'))));
+
+    if (collapsed) return card;
+
+    const fields = h('div', { class: 'fields' });
+    for (const a of schema.attributes) {
+      if (!attrAppliesToDriver(a, driver ? driver.name : '', node.attrs[a.name])) continue;
+
+      if (a.name === 'channel') {
+        // 换通道可能换驱动 → 重新渲染（子节点的"驱动专属属性"要跟着变）。
+        const select = h('select', { onchange: e => { node.attrs.channel = e.target.value; render(); } },
+          h('option', { value: '' }, '（继承）'),
+          ...channelNames().map(n => h('option', { value: n }, n)));
+        select.value = node.attrs.channel || '';
+        fields.append(fieldRow(a, node.attrs.channel || '', v => { node.attrs.channel = v; }, select));
+        continue;
+      }
+
+      if (a.name === 'type' && node.el === 'Tag') {
+        // type 决定哪些驱动专属属性可见（如 S7 maxlen 只对 STR）：失焦时刷新一次，输入时不打断。
+        const input = h('input', {
+          type: 'text',
+          placeholder: a.placeholder ?? '',
+          value: node.attrs.type ?? '',
+          oninput: e => { node.attrs.type = e.target.value; },
+          onchange: () => render()
+        });
+        fields.append(fieldRow(a, node.attrs.type ?? '', v => { node.attrs.type = v; }, input));
+        continue;
+      }
+
+      const onChange = a.name === 'name'
+        ? v => { node.attrs.name = v; badge.textContent = v || '(未命名)'; }
+        : v => { node.attrs[a.name] = v; };
+      fields.append(fieldRow(a, node.attrs[a.name] ?? '', onChange));
+    }
+    card.append(fields);
+
+    const extras = (node.extras || []).length + extraAttrsOf(node).length;
+    if (extras > 0) {
+      card.append(h('p', { class: 'muted', text: '有 ' + extras + ' 项导入时无法识别的配置，导出时会原样写回。' }));
+    }
+
+    // 驱动声明的额外属性 + 剩余的"自定义/未声明"属性。
+    // 顺序：小节标题 → 声明属性（有 label/枚举/范围）→ 未声明属性（名字可编辑）→ 添加按钮。
+    if (node.el === 'Tag' || node.el === 'TagCbnt') {
+      const declaredNames = new Set(declared.map(f => f.name));
+      const hasExtras = extraAttrsOf(node).length > 0;
+      const hint = driver
+        ? (driver.displayName || driver.name)
+        : (ownChannel
+          ? '通道 "' + ownChannel + '" 的驱动未注册，无法确定可用属性'
+          : '未指定通道：无法确定驱动，额外属性请用自定义属性');
+
+      if (declared.length > 0 || hasExtras) {
+        card.append(h('div', { class: 'row section' },
+          h('span', { class: 'label-title', text: node.el === 'Tag' ? '驱动专属测点属性' : '驱动专属组合属性' }),
+          h('span', { class: 'badge', text: hint })));
+
+        const extraFields = h('div', { class: 'fields' });
+        extraFields.append(...declaredAttrRows(declared, node, node), customAttrRows(node, declaredNames));
+        if (extraFields.childElementCount > 0) card.append(extraFields);
+      }
+
+      card.append(addCustomAttrRow(node));
+    }
+
+    const childKinds = schema.children || [];
+    if (node.children.length > 0 || childKinds.length > 0) {
+      const box = h('div', { class: 'children' });
+      node.children.forEach((c, i) => box.append(nodeCard(c, node.children, i, ownChannel)));
+      if (childKinds.length > 0) {
+        box.append(h('div', { class: 'bar' },
+          ...childKinds.map(k => h('button', {
+            class: 'mini',
+            onclick: () => { node.collapsed = false; node.children.push(newNode(k)); render(); }
+          }, '+ ' + k))));
+      }
+      card.append(box);
+    }
+
+    return card;
+  }
+
+  /* ───────────────────────── 导出页 ───────────────────────── */
+
+  function renderExportTab() {
+    const wrap = h('div', { class: 'stack' });
+    const issues = validate();
+
+    wrap.append(h('div', { class: 'bar' },
+      h('button', { class: 'add', onclick: copyXml }, '复制 XML'),
+      h('button', { class: 'add', onclick: downloadXml }, '下载 index.xml'),
+      h('button', { class: 'mini', onclick: () => render() }, '刷新'),
+      rawCount() > 0 ? h('span', { class: 'muted', text: '另有 ' + rawCount() + ' 段未识别的 XML 被原样保留' }) : null));
+
+    if (issues.length > 0) {
+      wrap.append(h('div', { class: 'issues' },
+        h('strong', { text: '检查出 ' + issues.length + ' 个问题：' }),
+        h('ul', null, ...issues.map(i => h('li', { text: i })))));
+    }
+
+    wrap.append(h('pre', { class: 'xml', text: buildXml() }));
+    return wrap;
+  }
+
+  /** 状态里"原样保留"的 XML 段数（导入时认不出的东西）。 */
+  function rawCount() {
+    let n = (state.extraXml || []).length;
+    for (const ch of state.channels) n += (ch.extras || []).length;
+    const walk = nodes => { for (const node of nodes) { n += (node.extras || []).length; walk(node.children); } };
+    walk(state.tree);
+    return n;
+  }
+
+  /* ───────────────────────── 非核心属性（驱动声明 + 自定义） ───────────────────────── */
+
+  /** 声明的属性只在测点 <c>type</c> 命中时才显示（如 S7 的 maxlen 只对 STR）；它只是 UI 提示。 */
+  function attrApplies(field, node) {
+    const types = field.appliesToTypes;
+    if (!types || types.length === 0) return true;
+    const type = node && node.attrs ? node.attrs.type : null;
+    if (!type) return true;      // 还没填 type：先显示，避免"填了类型才冒出来"让人困惑
+    return types.includes(type);
+  }
+
+  /** 驱动声明的额外属性（Tag/TagCbnt）：值存在 extraAttrs 里，导出时按普通属性写回。 */
+  function declaredAttrRows(fields, owner, node) {
+    const rows = [];
+    for (const f of fields) {
+      if (attrApplies(f, node)) {
+        rows.push(fieldRow(f, getExtraAttr(owner, f.name), v => setExtraAttr(owner, f.name, v)));
+      }
+    }
+    return rows;
+  }
+
+  /** 剩余的非核心属性 = 声明之外的"自定义/未声明"属性；名字和值都可编辑。 */
+  function customAttrRows(owner, declaredNames) {
+    const box = h('div', { class: 'fields' });
+    for (const entry of extraAttrsOf(owner)) {
+      if (declaredNames.has(entry.name)) continue;
+      box.append(h('div', { class: 'row' },
+        h('input', {
+          type: 'text', value: entry.name, placeholder: '属性名（未声明）', spellcheck: 'false',
+          oninput: e => { entry.name = e.target.value; }
+        }),
+        h('div', { class: 'row-inline' },
+          h('input', {
+            type: 'text', value: entry.value, placeholder: '值',
+            oninput: e => { entry.value = e.target.value; }
+          }),
+          h('button', { class: 'mini', onclick: () => { const i = extraAttrsOf(owner).indexOf(entry); extraAttrsOf(owner).splice(i, 1); render(); } }, '删除'))));
+    }
+    return box;
+  }
+
+  function addCustomAttrRow(owner) {
+    return h('div', { class: 'bar' },
+      h('button', {
+        class: 'mini',
+        onclick: () => { extraAttrsOf(owner).push({ name: '', value: '' }); render(); }
+      }, '＋ 自定义属性'),
+      h('span', { class: 'muted', text: '未声明的属性不会被 schema 拒绝，导出时原样写回' }));
+  }
+
+  /* ───────────────────────── 导入页 ───────────────────────── */
+
+  function renderImportTab() {
+    const wrap = h('div', { class: 'stack' });
+    const textarea = h('textarea', {
+      class: 'raw', rows: '14', spellcheck: 'false',
+      placeholder: '把 index.xml 粘贴到这里，或选择文件…'
+    });
+    const issues = h('div');
+
+    const applyText = text => {
+      let parsed;
+      try {
+        parsed = parseProjectXml(text);
+      } catch (e) {
+        issues.replaceChildren(h('div', { class: 'issues' }, h('strong', { text: '导入失败' }), h('div', { text: e.message })));
+        return;
+      }
+
+      const hadData = state.channels.length > 0 || state.tree.length > 0 || state.logicets.length > 0;
+      if (hadData && !confirm('导入会替换当前设计中的通道/测点/逻辑组件，继续吗？')) return;
+
+      state.channels = parsed.channels;
+      state.tree = parsed.tree;
+      state.logicets = parsed.logicets;
+      state.extraXml = parsed.extras;
+      state.projectAttrs = parsed.projectAttrs;
+      state.selected = 0;
+      state.importIssues = parsed.issues;
+
+      // 导入后默认把"第二层及以下"全部折叠：否则一棵大树的字段会把页面拖到几千像素。
+      const collapseDeep = (nodes, depth) => {
+        for (const n of nodes) {
+          if (depth >= 1) n.collapsed = true;
+          collapseDeep(n.children, depth + 1);
+        }
+      };
+      collapseDeep(state.tree, 0);
+
+      issues.replaceChildren(...(parsed.issues.length === 0
+        ? [h('p', { class: 'muted', text: '导入完成，没有发现问题。' })]
+        : [h('div', { class: 'issues' },
+            h('strong', { text: '导入完成，但有 ' + parsed.issues.length + ' 条提示（未知项已原样保留）：' }),
+            h('ul', null, ...parsed.issues.map(i => h('li', { text: i }))))]));
+      flash('已导入 ' + parsed.channels.length + ' 个通道 / ' + parsed.tree.length + ' 个测点组');
+      state.tab = 'channels';
+      render();
+    };
+
+    const file = h('input', {
+      type: 'file', accept: '.xml,application/xml,text/xml',
+      onchange: e => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => { textarea.value = String(reader.result || ''); applyText(textarea.value); };
+        reader.onerror = () => flash('读取文件失败', true);
+        reader.readAsText(f);
+      }
+    });
+
+    wrap.append(h('div', { class: 'card' },
+      h('div', { class: 'bar' },
+        h('button', { class: 'add', onclick: () => applyText(textarea.value) }, '导入'),
+        file,
+        h('span', { class: 'muted', text: '未知的驱动/元素/属性会原样保留（XML 注释会丢失）。' })),
+      textarea,
+      issues));
+
+    return wrap;
+  }
+
+  function fieldTag(field, prefix) {
+    return prefix ? prefix + ':' + field.name : field.name;
+  }
+
+  function fieldsXml(fields, values, groups, prefix, depth) {
+    const pad = '  '.repeat(depth);
+    const out = [];
+    for (const f of fields) {
+      if (f.kind === 'group') {
+        const kids = fieldsXml(f.children || [], groups[f.name] || {}, {}, prefix, depth + 1);
+        if (kids.length > 0) out.push(pad + '<' + fieldTag(f, prefix) + '>', ...kids, pad + '</' + fieldTag(f, prefix) + '>');
+      } else {
+        const v = values[f.name];
+        if (v !== undefined && v !== null && String(v) !== '') {
+          out.push(pad + '<' + fieldTag(f, prefix) + '>' + esc(v) + '</' + fieldTag(f, prefix) + '>');
+        }
+      }
+    }
+    return out;
+  }
+
+  function nodeXml(node, depth) {
+    const pad = '  '.repeat(depth);
+    const schema = nodeOf(node.el);
+    const known = schema.attributes
+      .filter(a => node.attrs[a.name] !== undefined && node.attrs[a.name] !== '')
+      .map(a => ' ' + a.name + '="' + esc(node.attrs[a.name]) + '"');
+    const extras = extraAttrsOf(node)
+      .filter(a => a.name)
+      .map(a => ' ' + a.name + '="' + esc(a.value) + '"');
+
+    const attrs = known.concat(extras).join('');
+    const kids = node.children.flatMap(c => nodeXml(c, depth + 1));
+    const raw = (node.extras || []).map(x => pad + '  ' + rawXml(x));
+
+    if (kids.length === 0 && raw.length === 0) return [pad + '<' + node.el + attrs + ' />'];
+    return [pad + '<' + node.el + attrs + '>', ...kids, ...raw, pad + '</' + node.el + '>'];
+  }
+
+  /**
+   * 导出时"原样保留"的片段要修一道：XMLSerializer 会给每个片段补上它用到的 xmlns 声明，
+   * 而 <Project> 上已经声明过驱动命名空间了——同一条声明出现两次只是噪音（不影响语义）。
+   */
+  let exportedDecls = [];
+  const rawXml = xml => exportedDecls.reduce(
+    (acc, [prefix, uri]) => acc.split(' xmlns:' + prefix + '="' + esc(uri) + '"').join(''),
+    xml);
+
+  /** 所有"原样保留"的片段（预扫一遍才知道要往 <Project> 上补哪些命名空间声明）。 */
+  function collectRaws() {
+    const out = [];
+    for (const ch of state.channels) out.push(...(ch.extras || []));
+    const walk = nodes => {
+      for (const node of nodes) {
+        out.push(...(node.extras || []));
+        walk(node.children);
+      }
+    };
+    walk(state.tree);
+    out.push(...(state.extraXml || []));
+    return out;
+  }
+
+  function buildXml() {
+    const used = [...new Set(state.channels.map(c => c.driver).filter(Boolean))]
+      .map(driverOf)
+      .filter(d => d && d.namespace);
+
+    exportedDecls = used.map(d => [d.prefix, d.namespace]);
+    const raws = collectRaws();
+
+    // 未注册驱动留下的 xmlns:pfx="..."（XMLSerializer 补在片段上）提到 <Project> 上，
+    // 让导出结果更像手写的项目文件。只处理带前缀的声明——默认命名空间（xmlns="…"）留在原处。
+    for (const raw of raws) {
+      for (const m of raw.matchAll(/ xmlns:([A-Za-z_][\w.-]*)="([^"]*)"/g)) {
+        if (!exportedDecls.some(([p]) => p === m[1])) exportedDecls.push([m[1], m[2]]);
+      }
+    }
+
+    const ns = exportedDecls.map(([p, u]) => ' xmlns:' + p + '="' + esc(u) + '"').join('');
+    const projectAttrs = Object.entries(state.projectAttrs || {})
+      .map(([k, v]) => ' ' + k + '="' + esc(v) + '"')
+      .join('');
+
+    const lines = ['<Project' + ns + projectAttrs + '>'];
+
+    for (const ch of state.channels) {
+      const drv = driverOf(ch.driver);
+      const body = drv ? fieldsXml(drv.fields || [], ch.values, ch.groups, drv.prefix, 2) : [];
+      const raw = (ch.extras || []).map(x => '    ' + rawXml(x));
+      const extraAttrs = extraAttrsOf(ch)
+        .filter(a => a.name)
+        .map(a => ' ' + a.name + '="' + esc(a.value) + '"')
+        .join('');
+
+      const head = '  <Channel name="' + esc(ch.name) + '" driver="' + esc(ch.driver) + '"' + extraAttrs;
+      if (body.length === 0 && raw.length === 0) lines.push(head + ' />');
+      else lines.push(head + '>', ...body, ...raw, '  </Channel>');
+    }
+
+    for (const node of state.tree) lines.push(...nodeXml(node, 1));
+    for (const p of state.logicets) if (p) lines.push('  <Logicet>' + esc(p) + '</Logicet>');
+    for (const raw of state.extraXml || []) lines.push('  ' + rawXml(raw));
+
+    lines.push('</Project>');
+    return lines.join('\n');
+  }
+
+  function validate() {
+    const issues = [];
+    const declared = new Set();
+
+    if (state.channels.length === 0) issues.push('没有任何通道');
+    for (const ch of state.channels) {
+      if (!ch.name) issues.push('有通道没有名称');
+      else if (declared.has(ch.name)) issues.push('通道名重复：' + ch.name);
+      else declared.add(ch.name);
+
+      if (!ch.driver) issues.push('通道 ' + (ch.name || '(未命名)') + ' 没有选驱动');
+      else if (!driverOf(ch.driver)) issues.push('通道 ' + ch.name + ' 的驱动 "' + ch.driver + '" 不在目录里');
+    }
+
+    if (state.tree.length === 0) issues.push('没有任何测点组');
+    else if (!state.tree.some(n => String(n.attrs.isEntry).toLowerCase() === 'true')) {
+      issues.push('没有入口：至少一个顶层测点组要 isEntry="true"，否则项目不会轮询');
+    }
+
+    const walk = (nodes, path) => {
+      const seen = new Set();
+      for (const node of nodes) {
+        const schema = nodeOf(node.el);
+        const name = node.attrs.name || '(未命名)';
+        const here = path + '/' + name;
+
+        if (!node.attrs.name) issues.push(path + ' 下有 ' + node.el + ' 没有 name');
+        else if (seen.has(name)) issues.push(path + ' 下名称重复：' + name);
+        else seen.add(name);
+
+        for (const a of schema.attributes) {
+          if (a.required && !node.attrs[a.name]) issues.push(here + ' 缺少必填属性 ' + a.name);
+        }
+        if (node.attrs.channel && !declared.has(node.attrs.channel)) {
+          issues.push(here + ' 引用了未声明的通道 "' + node.attrs.channel + '"');
+        }
+
+        walk(node.children, here);
+      }
+    };
+    walk(state.tree, 'Project');
+
+    return issues;
+  }
+
+  function copyXml() {
+    const text = buildXml();
+    const done = () => flash('已复制到剪贴板');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => flash('复制失败，请手动选中', true));
+    } else {
+      flash('浏览器不支持剪贴板 API，请手动选中', true);
+    }
+  }
+
+  function downloadXml() {
+    const blob = new Blob([buildXml()], { type: 'application/xml;charset=utf-8' });
+    const a = h('a', { href: URL.createObjectURL(blob), download: 'index.xml' });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  let flashTimer = null;
+  function flash(text, isError) {
+    let el = $('#flash');
+    if (!el) {
+      el = h('span', { id: 'flash' });
+      $('header').append(el);
+    }
+    el.textContent = text;
+    el.className = isError ? 'err' : 'muted';
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { el.textContent = ''; }, 2500);
+  }
+
+  /* ───────────────────────── 渲染与持久化 ───────────────────────── */
+
+  function render() {
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
+
+    const main = $('#main');
+    main.replaceChildren();
+    if (state.tab === 'channels') main.append(renderChannelsTab());
+    else if (state.tab === 'tags') main.append(renderTagsTab());
+    else if (state.tab === 'import') main.append(renderImportTab());
+    else main.append(renderExportTab());
+
+    persist();
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        channels: state.channels, tree: state.tree, logicets: state.logicets,
+        extraXml: state.extraXml, projectAttrs: state.projectAttrs, selected: state.selected
+      }));
+    } catch { /* 隐私模式/配额满：设计器照常工作，只是不记忆 */ }
+  }
+
+  function restore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved || !Array.isArray(saved.channels)) return;
+      state.channels = saved.channels;
+      state.tree = Array.isArray(saved.tree) ? saved.tree : [];
+      state.logicets = Array.isArray(saved.logicets) ? saved.logicets : [];
+      state.extraXml = Array.isArray(saved.extraXml) ? saved.extraXml : [];
+      state.projectAttrs = saved.projectAttrs && typeof saved.projectAttrs === 'object' ? saved.projectAttrs : {};
+      state.selected = Number.isInteger(saved.selected) ? saved.selected : 0;
+    } catch { /* 存的东西坏了就当没有 */ }
+  }
+
+  async function boot() {
+    $('#monitor').href = MONITOR_URL;
+    document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { state.tab = b.dataset.tab; render(); }));
+
+    let response;
+    try {
+      response = await fetch(CATALOG_URL, { headers: { accept: 'application/json' } });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      cat = await response.json();
+    } catch (e) {
+      $('#main').replaceChildren(h('p', { class: 'err' },
+        '无法加载设计器元数据（' + CATALOG_URL + '）：' + e.message,
+        h('br'),
+        '宿主需要至少注册一路观测流（AddTagsStream / AddKeyedTagsStream），并用 AddXxxSupport() 注册驱动。'));
+      return;
+    }
+
+    restore();
+    if (state.channels.length === 0 && state.tree.length === 0) {
+      state.channels.push(newChannel());
+      state.tree.push(newNode('TagGrp'));
+      state.tree[0].attrs.isEntry = 'true';
+    }
+    render();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

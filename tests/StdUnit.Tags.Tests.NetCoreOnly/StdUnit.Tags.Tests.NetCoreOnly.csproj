@@ -15,7 +15,7 @@
   另外：不要在 StdUnit.Tags.Tests 里用 #if NETFRAMEWORK 排除整个文件来回避 net8-only 依赖 ——
   那是编译期开关，解决不了"引用 net8-only 项目"的问题。
 
-  现状：暂无测试，作为占位预留。首个用例预期来自 ASP.NET Core / Blazor 方向。
+  现状：承载 StdUnit.Tags.WebUi（ASP.NET Core：监控页 + 设计器 + SSE 观测流）的测试。
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -27,10 +27,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- net8.0 专属的被测项目。当前尚无测试，故先只引用基础库；
-         将来写 Blazor / ASP.NET Core 测试时按需追加
-         StdUnit.Tags.BlazorLib.Core / StdUnit.Tags.BlazorLib。 -->
+    <!-- net8.0 专属的被测项目。 -->
     <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.WebUi\StdUnit.Tags.WebUi.csproj" />
   </ItemGroup>
 
   <Import Project="..\..\.paket\Paket.Restore.targets" />

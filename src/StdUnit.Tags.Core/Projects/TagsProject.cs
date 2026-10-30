@@ -225,9 +225,6 @@ internal class TagsProject : ITagsProject
             throw new InvalidOperationException("未配置入口测点组");
         }
 
-        // 进入运行期：此后不再接受 TurnProcess 回调注册（见 AddTurnProcessHandler）。
-        this._running = true;
-
         var tasks = new ConcurrentBag<Task>();
         Parallel.ForEach(entries, entry =>
         {
@@ -251,7 +248,7 @@ internal class TagsProject : ITagsProject
 
                 // 公共回调排在 Logicets 之后：订阅者看到的是逻辑处理完成后的值。
                 // 有意不 catch：回调抛异常等价于本轮失败（与 Logicet 抛异常同义），见 ITagsProject.SetTurnProcessHandler 的文档。
-                // 回调表在运行期只读（设置在运行前完成），因此这里不需要任何同步。
+                // 回调表是写时复制的：这里读到的那份快照本轮内不会被改（运行期设置/清除从下一轮生效），所以不需要同步。
                 if (this._entryTurnHandlers.TryGetValue(entry.TagName(), out var handler))
                 {
                     await handler(entry, ch, turnCt);
@@ -352,15 +349,14 @@ internal class TagsProject : ITagsProject
 
     #region TurnProcess handlers
     /// <summary>
-    /// 入口名 → 该入口的回调（每个入口最多一个）。<b>只在运行前写入、运行期只读</b>
-    /// （见 <see cref="SetTurnProcessHandler"/> 的"只能在运行前设置"约定），因此轮询线程读取时不需要任何同步。
+    /// 入口名 → 该入口的回调（每个入口最多一个）。<b>写时复制</b>：设置/清除时在
+    /// <see cref="_entryTurnHandlersGate"/> 下复制一份新表再整体替换，已发布的表实例永不再改，
+    /// 所以轮询线程可以直接读、不需要任何同步，运行期设置/清除自然就是"从下一轮开始生效"。
     /// </summary>
-    private readonly Dictionary<string, TurnProcess> _entryTurnHandlers = new(StringComparer.Ordinal);
+    private volatile Dictionary<string, TurnProcess> _entryTurnHandlers = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// 是否已进入运行期（<see cref="RunAsync"/> 已开始）。运行期不再接受设置。
-    /// </summary>
-    private volatile bool _running;
+    /// <summary>保护 <see cref="_entryTurnHandlers"/> 的复制作业（只在设置/清除时短暂持有）。</summary>
+    private readonly object _entryTurnHandlersGate = new();
 
     /// <inheritdoc/>
     public void SetTurnProcessHandler(string entry, TurnProcess? handler)
@@ -369,11 +365,11 @@ internal class TagsProject : ITagsProject
         {
             throw new ArgumentNullException(nameof(entry));
         }
-        if (this._running)
+        if (this._disposed)
         {
-            throw new InvalidOperationException(
-                $"TurnProcess 回调只能在项目运行之前设置（入口={entry}）：请在启动 hook 或 StartedOrStopped 的\"已启动\"事件里设置，" +
-                "运行期如需动态开关观测，请在已设置的回调内部判断。");
+            throw new ObjectDisposedException(
+                this.GetType().Name,
+                $"项目已释放，不能再设置 TurnProcess 回调（入口={entry}）：回调的作用域就是项目实例。");
         }
 
         // 与 WriteIntent 的入口校验保持一致：只允许向合法的入口设置
@@ -383,20 +379,27 @@ internal class TagsProject : ITagsProject
         }
 
         // 替换语义：需要组合多个观察者时，由调用方自己组装成一个 TurnProcess。
-        if (handler is null)
+        // 运行期也允许设置/清除（写时复制，从下一轮开始生效）。
+        lock (this._entryTurnHandlersGate)
         {
-            this._entryTurnHandlers.Remove(entry);
-        }
-        else
-        {
-            this._entryTurnHandlers[entry] = handler;
+            var updated = new Dictionary<string, TurnProcess>(this._entryTurnHandlers, StringComparer.Ordinal);
+            if (handler is null)
+            {
+                updated.Remove(entry);
+            }
+            else
+            {
+                updated[entry] = handler;
+            }
+
+            this._entryTurnHandlers = updated;
         }
     }
     #endregion
 
 
     #region
-    private bool _disposed;
+    private volatile bool _disposed;
 
     protected virtual void Dispose(bool disposing)
     {

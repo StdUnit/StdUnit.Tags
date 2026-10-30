@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<Description>测点项目的 Web 界面（自托管、AOT 友好）：监控页（结构树 + SSE 值流）与设计器（通道/测点，导出项目 XML）</Description>
+		<!-- ASP.NET Core 只有 net8.0（net472 无此框架），本包也就只面向 net8.0 -->
+		<TargetFramework>net8.0</TargetFramework>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- 内置页面（不引入 npm/前端工程）。显式 LogicalName，免得靠目录推断资源名。
+		     注意目录名是 Ui（大小写敏感：Linux CI 上 ui\index.html 会找不到文件）。 -->
+		<EmbeddedResource Include="Ui\index.html" LogicalName="StdUnit.Tags.WebUi.Ui.index.html" />
+		<EmbeddedResource Include="Ui\designer.html" LogicalName="StdUnit.Tags.WebUi.Ui.designer.html" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\StdUnit.Tags\StdUnit.Tags.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- 让 net8-only 的测试项目能直接测 internal 的索引/收集器/帧渲染 -->
+		<InternalsVisibleTo Include="StdUnit.Tags.Tests.NetCoreOnly" />
+	</ItemGroup>
+	<Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

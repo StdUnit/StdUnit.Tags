@@ -95,20 +95,38 @@
   </xs:simpleType>
 
   <!-- ═══════════ 测点（Tag） ═══════════
-       对应 TagDescriptor（XElementExtensions_TagDescriptor.ToTagDescriptor） -->
+       对应 TagDescriptor（XElementExtensions_TagDescriptor.ToTagDescriptor）
+       设计器元数据（xs:appinfo/ui）只影响 UI，校验时被忽略。 -->
   <xs:complexType name="TagType">
+    <xs:annotation><xs:appinfo><ui label="测点"/></xs:appinfo></xs:annotation>
     <xs:sequence/>
-    <xs:attribute name="name"     type="NameType" use="required"/>
+    <xs:attribute name="name"     type="NameType" use="required">
+      <xs:annotation><xs:appinfo><ui label="名称" order="1" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
     <!-- 驱动相关格式：S7 的 DB400.0、Modbus 的 40001、OpcUa 的 ns=4;s=...；
          COM 直连测点（扫码枪/称重仪）可省略 -->
-    <xs:attribute name="address"  type="xs:string"/>
+    <xs:attribute name="address"  type="xs:string">
+      <xs:annotation><xs:appinfo><ui label="地址" order="2" group="基础" placeholder="DB400.0 / 40001 / counter.txt"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
     <!-- 开放：内置 BIT/BYTE/INT16/UINT16/INT32/UINT32/INT64/UINT64/FLOAT/DOUBLE/STR/DI/DO + 插件自定义 -->
-    <xs:attribute name="type"     type="xs:string"/>
-    <xs:attribute name="endian"   type="EndianType" default="LittleEndian"/>
-    <xs:attribute name="access"   type="AccessModeType"/> <!-- 省略时向上冒泡继承 -->
-    <xs:attribute name="channel"  type="NameType"/>      <!-- 省略时向上冒泡继承 -->
-    <xs:attribute name="note"     type="xs:string"/>
-    <xs:attribute name="tagSize"  type="xs:positiveInteger"/>
+    <xs:attribute name="type"     type="xs:string">
+      <xs:annotation><xs:appinfo><ui label="类型" order="3" group="基础" placeholder="INT16" help="内置类型之外的值由驱动/插件解释"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="endian"   type="EndianType" default="LittleEndian">
+      <xs:annotation><xs:appinfo><ui label="字节序" order="6" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="access"   type="AccessModeType">
+      <xs:annotation><xs:appinfo><ui label="访问模式" order="4" group="基础" help="省略时向上冒泡继承"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="channel"  type="NameType">
+      <xs:annotation><xs:appinfo><ui label="通道" order="5" group="基础" help="省略时向上冒泡继承"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="note"     type="xs:string">
+      <xs:annotation><xs:appinfo><ui label="备注" order="7" group="高级"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="tagSize"  type="xs:positiveInteger">
+      <xs:annotation><xs:appinfo><ui label="占用大小" order="8" group="高级"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
     <!-- 驱动/插件自定义属性：S7 STR 的 maxlen、SimpleFiles 的 autoCreateFile、COM 测点的 marker 等 -->
     <xs:anyAttribute processContents="lax"/>
   </xs:complexType>
@@ -116,34 +134,64 @@
   <!-- ═══════════ 测点组合（TagCbnt） ═══════════
        对应 TagCbntDescriptor（XElementExtensions_TagCbntDescriptor.ToTagCbntDescriptor） -->
   <xs:complexType name="TagCbntType">
+    <xs:annotation><xs:appinfo><ui label="测点组合"/></xs:appinfo></xs:annotation>
     <xs:sequence>
       <xs:element name="Tag" type="TagType" minOccurs="0" maxOccurs="unbounded"/>
     </xs:sequence>
-    <xs:attribute name="name"      type="NameType" use="required"/>
+    <xs:attribute name="name"      type="NameType" use="required">
+      <xs:annotation><xs:appinfo><ui label="名称" order="1" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
     <!-- Hjzk/Modbus 位空间组合可省略 address，改用 area+slave（见 HjzkCbntBuilderBase） -->
-    <xs:attribute name="address"   type="xs:string"/>
-    <xs:attribute name="channel"   type="NameType"/>
-    <xs:attribute name="isEnabled" type="xs:boolean" default="true"/>
-    <xs:attribute name="access"    type="AccessModeType"/>
-    <xs:attribute name="area"      type="xs:string"/>        <!-- DI / DO / ...（Modbus/Hjzk 位空间用） -->
-    <xs:attribute name="slave"     type="xs:unsignedByte"/>  <!-- Modbus/Hjzk 从站号 -->
+    <xs:attribute name="address"   type="xs:string">
+      <xs:annotation><xs:appinfo><ui label="地址" order="2" group="基础" help="位空间组合可省略，改用 area + slave"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="channel"   type="NameType">
+      <xs:annotation><xs:appinfo><ui label="通道" order="5" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="isEnabled" type="xs:boolean" default="true">
+      <xs:annotation><xs:appinfo><ui label="使能" order="6" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="access"    type="AccessModeType">
+      <xs:annotation><xs:appinfo><ui label="访问模式" order="7" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="area"      type="xs:string">        <!-- DI / DO / ...（Modbus/Hjzk 位空间用） -->
+      <xs:annotation><xs:appinfo><ui label="位空间" order="3" group="基础" placeholder="DI / DO"
+                                     appliesToDrivers="ModbusTcp,HjzkIoBox,ZLanTcp"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="slave"     type="xs:unsignedByte">  <!-- Modbus/Hjzk 从站号 -->
+      <xs:annotation><xs:appinfo><ui label="从站号" order="4" group="基础"
+                                     appliesToDrivers="ModbusTcp,HjzkIoBox,ZLanTcp"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
     <xs:anyAttribute processContents="lax"/>
   </xs:complexType>
 
   <!-- ═══════════ 测点组（TagGrp） ═══════════
        对应 TagGrpDescriptor（XElementExtensions_TagGrpDescriptor.ToTagGrpDescriptor） -->
   <xs:complexType name="TagGrpType">
+    <xs:annotation><xs:appinfo><ui label="测点组"/></xs:appinfo></xs:annotation>
     <xs:choice maxOccurs="unbounded">
       <xs:element name="TagGrp"  type="TagGrpType"/>
       <xs:element name="TagCbnt" type="TagCbntType"/>
       <xs:element name="Tag"     type="TagType"/>
     </xs:choice>
-    <xs:attribute name="name"         type="NameType" use="required"/>
-    <xs:attribute name="channel"      type="NameType"/>         <!-- 省略时向上冒泡继承 -->
-    <xs:attribute name="isEntry"      type="xs:boolean" default="false"/>
-    <xs:attribute name="isEnabled"    type="xs:boolean" default="true"/>
-    <xs:attribute name="scanInterval" type="xs:nonNegativeInteger"/> <!-- 毫秒；省略时向上冒泡继承 -->
-    <xs:attribute name="access"       type="AccessModeType"/>
+    <xs:attribute name="name"         type="NameType" use="required">
+      <xs:annotation><xs:appinfo><ui label="名称" order="1" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="channel"      type="NameType">         <!-- 省略时向上冒泡继承 -->
+      <xs:annotation><xs:appinfo><ui label="通道" order="5" group="基础" help="省略时向上冒泡继承"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="isEntry"      type="xs:boolean" default="false">
+      <xs:annotation><xs:appinfo><ui label="作为入口" order="2" group="基础" help="每个入口一个轮询运行器（入口之间并行、入口内部串行）"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="isEnabled"    type="xs:boolean" default="true">
+      <xs:annotation><xs:appinfo><ui label="使能" order="3" group="基础" help="只作用于自动轮询；手动读写不受影响"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="scanInterval" type="xs:nonNegativeInteger">
+      <xs:annotation><xs:appinfo><ui label="扫描间隔" order="4" group="基础" placeholder="毫秒" help="省略时向上冒泡继承"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="access"       type="AccessModeType">
+      <xs:annotation><xs:appinfo><ui label="访问模式" order="6" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
     <xs:anyAttribute processContents="lax"/>
   </xs:complexType>
 
@@ -152,13 +200,18 @@
        驱动专属子元素在各自的驱动 schema（Schemas/Drivers/*.xsd，独立命名空间）中声明，
        这里用 <xs:any namespace="##other"> 放行。 -->
   <xs:complexType name="ChannelType">
+    <xs:annotation><xs:appinfo><ui label="通道"/></xs:appinfo></xs:annotation>
     <xs:sequence>
       <!-- 驱动专属子元素（如 <s7:IpAddr>）必须放在驱动命名空间中；
            未限定的子元素无法通过本 schema 校验（运行期仍可解析，Extras 按 LocalName 索引）。 -->
       <xs:any namespace="##other" processContents="lax" minOccurs="0" maxOccurs="unbounded"/>
     </xs:sequence>
-    <xs:attribute name="name"   type="NameType" use="required"/>
-    <xs:attribute name="driver" type="NameType" use="required"/>
+    <xs:attribute name="name"   type="NameType" use="required">
+      <xs:annotation><xs:appinfo><ui label="名称" order="1" group="基础"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="driver" type="NameType" use="required">
+      <xs:annotation><xs:appinfo><ui label="驱动" order="2" group="基础" help="必须与已注册的驱动名完全一致（如 S7 / ModbusTcp / SimpleFiles）"/></xs:appinfo></xs:annotation>
+    </xs:attribute>
     <!-- 通道级扩展属性 -->
     <xs:anyAttribute processContents="lax"/>
   </xs:complexType>
@@ -175,10 +228,13 @@
        Project 是项目描述文件的文档根元素（名字是约定，运行期不校验根元素名）。
        子元素 Channel / TagGrp / Logicet 顺序任意、数量任意。 -->
   <xs:complexType name="ProjectType">
+    <xs:annotation><xs:appinfo><ui label="测点项目"/></xs:appinfo></xs:annotation>
     <xs:choice maxOccurs="unbounded">
       <xs:element name="Channel" type="ChannelType"/>
       <xs:element name="TagGrp"  type="TagGrpType"/>
-      <xs:element name="Logicet" type="LogicetType"/>
+      <xs:element name="Logicet" type="LogicetType">
+        <xs:annotation><xs:appinfo><ui label="逻辑组件" placeholder="插件 DLL 路径" help="相对项目根目录或绝对路径"/></xs:appinfo></xs:annotation>
+      </xs:element>
     </xs:choice>
     <xs:anyAttribute processContents="lax"/>
   </xs:complexType>

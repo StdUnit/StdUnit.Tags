@@ -25,12 +25,12 @@ dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./Tes
 CI（`.github/workflows/dotnet.yml`）有**三个 job**：
 - **`build`（ubuntu-latest，权威）**：整解 `dotnet build StdUnit.Tags.sln -c Release`（含 net472 的**编译**校验——引用程序集由 SDK 隐式引入的 `Microsoft.NETFramework.ReferenceAssemblies` 提供）+ `dotnet test -f net8.0`（带覆盖率上报 codecov）。
 - **`net472-on-mono`（ubuntu-latest）**：`apt-get install -y mono-complete` 自己装 Mono，跑 `dotnet test -f net472`，让 net472 的**运行**测试也自动化、又不占 Windows runner 的排队时间。**mono ≠ .NET Framework**，它绿只说明"大概率没退化"，（权威结果仍归发版工作流 `release-nuget.yml` / `release-baget.yml`，windows-latest 全 TFM）+ 本机 Windows。当前是**硬性把关**（未设 `continue-on-error`）；万一出现 mono 专有的伪失败，可在 job 上加 `continue-on-error: true` 降级为补充信号。mono job 红时先看是不是"mono 与真框架的差异"，别急着改产品代码。
-- **`aot-smoke`（ubuntu-latest）**：两个示例各自 `dotnet publish ... -r linux-x64`（需 `clang` + `zlib1g-dev`）后**运行原生产物**：`AotSmokeTest.LogicetPlugins` 验证"无 `<Logicet>` 的正常加载 + `TryAddLogicet<T>` + AOT 下配了 `<Logicet>` 必须快速失败"，`AotSmokeTest.SimpleFiles` 验证"基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败"。改了 AOT 相关代码（`IsAotCompatible`、`[DynamicallyAccessedMembers]`、`Compat/*`、插件加载路径）时以它为准；publish 输出里的 `IL2104`/`IL3053` 来自第三方 `McMaster.NETCore.Plugins`，属已知噪声。
+- **`aot-smoke`（ubuntu-latest）**：三个示例各自 `dotnet publish ... -r linux-x64`（需 `clang` + `zlib1g-dev`）后**运行原生产物**：`AotSmokeTest.LogicetPlugins` 验证"无 `<Logicet>` 的正常加载 + `TryAddLogicet<T>` + AOT 下配了 `<Logicet>` 必须快速失败"，`AotSmokeTest.SimpleFiles` 验证"基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败"，`AotSmokeTest.WebUi` 验证"起 Kestrel + 结构树的多态 JSON 序列化（`[JsonDerivedType]` 源生成）+ SSE 从全量基线到增量"。改了 AOT 相关代码（`IsAotCompatible`、`[DynamicallyAccessedMembers]`、`Compat/*`、插件加载路径、WebUi 的 DTO/序列化）时以它为准；publish 输出里的 `IL2104`/`IL3053` 来自第三方 `McMaster.NETCore.Plugins`，属已知噪声。
 - 两条 Linux job 统一遵循 **"`ubuntu-latest` + 依赖自装"**，不钉镜像版本：本仓库自己装依赖（mono / clang+zlib），就没有理由把 job 的寿命绑在镜像标签上——`ubuntu-22.04` 已被官方公告 2026-09-17 起弃用、2027-04-17 退役（`actions/runner-images#14254`，期间还有 brownout 会直接判红），`ubuntu-latest` 也已宣布 2026-11 起为 26.04。
 - 参考实测（2026-10，本机 WSL）：mono 上的结果与 Windows 真 .NET Framework 一致。
 - 改了 `Compat/*` 或 `#if NETFRAMEWORK` 分支时，仍建议在本机 Windows 上跑一次 `-f net472`（或在 PR 里看 `net472-on-mono`）。
 `samples/WpfDemo`（net8.0-windows + WPF）**已从解决方案移除**，目录保留、需要时在本机 Windows 上单独 `dotnet build samples/WpfDemo/WpfDemo.csproj`（只要它还留在解决方案里，Linux 上的整解构建就会失败）。
-`tests/AotSmokeTest.LogicetPlugins` 与 `tests/AotSmokeTest.SimpleFiles`（都是 net8.0 控制台 + `PublishAot=true`）**在解决方案内**（整解构建顺带编译它们），但**不要**改成 net8.0-windows 或其他不可跨平台的形态——CI 的 `aot-smoke` job 要在 Linux 上 publish 并运行它们。
+`tests/AotSmokeTest.LogicetPlugins`、`tests/AotSmokeTest.SimpleFiles` 与 `tests/AotSmokeTest.WebUi`（都是 net8.0 + `PublishAot=true`）**在解决方案内**（整解构建顺带编译它们），但**不要**改成 net8.0-windows 或其他不可跨平台的形态——CI 的 `aot-smoke` job 要在 Linux 上 publish 并运行它们。
 
 - SDK 固定为 **8.0.102**（`global.json`，`rollForward: minor`）。
 - 依赖用 **Paket** 管理。**不要 `dotnet add package`**：请改 `paket.dependencies` 后运行 `dotnet paket install`（会更新 `paket.lock`）。
@@ -73,7 +73,7 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
   - ⚠ 位置敏感的坑：`PublishAot=true` 会被 SDK 写进 `runtimeconfig.json`，使 `RuntimeFeature.IsDynamicCodeSupported` 在
     **IL+JIT** 下也是 `false`；宿主据此判定"不支持动态加载"，因此 `<Logicet>` 在 AOT（以及 `PublishAot=true` 的 IL 构建）下
     **必须快速失败**（`TagsProjectNotSupportedException`），**不要**让它被 `LogicetLoader` 的通用 `catch` 吞掉——配了却静默不跑业务逻辑是硬红线。
-    `tests/AotSmokeTest.LogicetPlugins` / `tests/AotSmokeTest.SimpleFiles` 是这两条链路的端到端验证（CI 的 `aot-smoke` job）。
+    `tests/AotSmokeTest.LogicetPlugins` / `tests/AotSmokeTest.SimpleFiles` / `tests/AotSmokeTest.WebUi` 是这些链路的端到端验证（CI 的 `aot-smoke` job）。
 - net472 缺 init-only setter 时，在 `paket.references` 里加 `IsExternalInit`（已有先例：Core / StdUnit.Tags / ComScanner / OpcUaClient / SimpleFiles）。
 - **net472 的引用程序集没有可空标注**，`string.IsNullOrEmpty` 之类的 BCL 后置条件看不到，会出现 net472 专属的 CS8601/CS8603/CS8604 假阳性。改用语言级判空（`x is null || x.Length == 0`），**不要用 `NoWarn` 压掉**。
 - 不要用 `| Select-Object -First n` 过滤 `dotnet paket`/`dotnet build` 的长输出：会在第 n 行处终止上游进程。先 `Out-File` 再 grep。
@@ -96,7 +96,8 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 ```
 
 - `StdUnit.Tags.SchemaGenerator` 是源生成器，把各项目的 XSD 编译成 DLL 内字符串常量（AOT / trim 友好）。
-- 新增驱动包时，需一并提供 `Schemas/{driver}.xsd`，并以 `buildTransitive` 方式注入到消费方项目树（照抄 `StdUnit.Tags.Core.csproj` + `Schemas/StdUnit.Tags.Core.targets` 的模式），并实现 `ITagsProjectSchemaProvider` 注册为 Singleton。
+- 新增驱动包时，需一并提供 `Schemas/{driver}.xsd`，并以 `buildTransitive` 方式注入到消费方项目树（照抄 `StdUnit.Tags.Core.csproj` + `Schemas/StdUnit.Tags.Core.targets` 的模式），并在 schema 里用 `xs:annotation/xs:appinfo` 声明 `<driver name="…">`（必须与 `XxxNames.DriverName` 一致；`WebUi` 的 `/catalog` 设计器元数据靠它把 driver 值绑到命名空间——XSD 1.0 表达不了这层关系，靠命名约定也不行），再实现 `ITagsProjectSchemaProvider` 注册为 Singleton。
+如果驱动会从 `TagDescriptor.Extras` / `TagCbntDescriptor.Extras` 里读**自己的属性**（如 S7 的 `maxlen`、SimpleFiles 的 `autoCreateFile`、ModbusTcp 的 `interpret`），还要在同一个 `appinfo` 里用 `<tagAttribute>` / `<cbntAttribute>` 声明；核心 schema 因 `xs:anyAttribute` 放行这些属性，但 XSD 1.0 无法给既有类型追加属性，所以"有哪些、什么类型、什么文案"只能由驱动声明（仅供设计器，不参与校验）。详见 `Schemas/README.md`。
 - 测试分两个项目（xUnit），且**主测试项目多目标 `net8.0;net472`**：
   - `tests/StdUnit.Tags.Tests`：主体测试，跑在两个 TFM 上；
   - `tests/StdUnit.Tags.Tests.NetCoreOnly`：**仅 net8.0**，专门存放无法面向 net472 的测试（如依赖 `AssemblyLoadContext`，或将来涉及 Blazor / ASP.NET Core 的测试）。目前为空项，作占位预留。
@@ -119,6 +120,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 
 - **时间戳一律 UTC**：`ITag.Timestamp` 用 `DateTime.UtcNow` 写入，**不要用 `DateTime.Now`**（本地时间跨时区/夏令时不可比）；展示或与本地时间比较时由调用方自行转换。
 - **启停语义**：`ITagsProjectCtrl.StopAsync()` 会先**等轮询循环退出**（有界超时，默认 30s）再释放项目、断开通道、触发"已停止"事件；`StartPollAsync` 的 `finally` 是项目的**唯一常规释放点**（只有等待超时那一刻才由 `StopAsync` 兜底释放，因此"只释放一次"是硬约束）。改启停或清理路径时必须保持这个顺序，详见 `docs/设计决策与边界/`。
+- **取消不是崩溃**：`StopAsync` 引起的取消不触发 `RunnerCrashed`、不计入连续失败、不按重试策略退避（`TagGrpRunner` 用 `catch (OperationCanceledException) when (ct.IsCancellationRequested)` 单独处理），但通道照常断开、`StartAsync` 仍以 OCE 结束。判据是"令牌确实已取消"：驱动因自身原因（如设备超时）抛的 OCE 仍是崩溃。`RunnerStarted` / `RunnerCrashed` / `TurnProcess` 拿到的都是同一个生命周期令牌；**清理类异步操作一律用 `CancellationToken.None`**（见 `DisconnectAllAsync`）。
 - 公共编译设置（`ImplicitUsings` + `Nullable` + `LangVersion latest` + XML 文档文件）在 `src/Directory.Build.props`（与 `tests/Directory.Build.props`，后者不含包元数据），NuGet 包元数据（作者/授权/仓库/项目主页/标签/README）只收口在 `src/Directory.Build.props`；**新增会被发布的包时，务必在自己 csproj 里补一行 `<Description>`**（否则 nuget.org 上只会显示 SDK 占位文本 `Package Description`），并把项目名加进 `src/publish-packages.ps1` 的列表。
 - **版本号不要写进 workflow**：dev 通道（CI 的迭代产物 / 本地预演）用 `src/publish-packages.ps1 -DevBuildNumber <构建号>`，基础版本由脚本读仓库根的 `next-release-version.txt` 拼成 `<基础版本>-dev.<构建号>`；正式发布仍用 `-packageVersion <语义化版本>`。正式版发布后要改的是那个文件。README **不写**发版细节（它会被打进每个 nupkg），版本通道与发布流程都在 `docs/设计决策与边界/3. 打包与发布.md`。
 - **测试代码必须跨平台**（CI 只跑 Linux），两类路径都要当心：

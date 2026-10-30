@@ -56,11 +56,13 @@ public interface ITagsProject : IDisposable
 
     /// <summary>
     /// 轮询开始，会透传给<see cref="ITagGrpRunner.RunnerStarted"/>。<br/>
+    /// 回调拿到的是项目的生命周期取消令牌（<see cref="ITagsProjectCtrl.StopAsync"/> 时取消）。
     /// </summary>
     event RunnerStarted? RunnerStarted;
 
     /// <summary>
     /// 轮询崩溃，会透传给<see cref="ITagGrpRunner.RunnerCrashed"/>。<br/>
+    /// <b>取消不是崩溃</b>：项目停止导致的取消<b>不会</b>触发本事件。<br/>
     /// 通常来说，在该委托正常结束后，项目会自行重启轮询循环。<br/>
     /// 但需要注意的是，这个自行重启是指<b>事件委托没有再向外抛出异常</b>的情况：<br/>
     /// 在<see cref="RunnerCrashed"/>中外抛异常会被视作对应入口需要<b>停机</b>！
@@ -81,12 +83,13 @@ public interface ITagsProject : IDisposable
     /// });
     /// </code>
     /// <br/>
-    /// <b>只能在项目运行（<see cref="RunAsync"/>）之前设置</b>：入口列表在 <see cref="Initialize(string, XElement?)"/>
-    /// 之后才确定，运行期不再支持增删（与 <see cref="IntentCapacity"/>"只能在运行前设置"的约定一致）。
-    /// 典型设置点是 <see cref="ITagsProjectCtrl.StartPollAsync(string?, XElement?, Func{ITagsProject, IServiceProvider, CancellationToken, Task})"/>
-    /// 的 <c>hook</c>，或 <see cref="ITagsProjectCtrl.StartedOrStopped"/> 的"已启动"事件——两者都在轮询开始前同步执行。<br/>
-    /// 需要在运行期"动态开关观测"时，请在已设置的回调内部判断（例如先检查自己的订阅者集合是否为空再直接返回），
-    /// 而不是反复设置/清除。<br/>
+    /// <b>运行前、运行中都可以设置</b>：入口列表在 <see cref="Initialize(string, XElement?)"/> 之后固定，本方法只替换该入口的回调；
+    /// 运行期设置/清除<b>从下一轮开始生效</b>（不中断正在执行的那一轮）。常见设置点是
+    /// <see cref="ITagsProjectCtrl.StartPollAsync(string?, XElement?, Func{ITagsProject, IServiceProvider, CancellationToken, Task})"/>
+    /// 的 <c>hook</c> 或 <see cref="ITagsProjectCtrl.StartedOrStopped"/> 的"已启动"事件（两者都在轮询开始前同步执行），
+    /// 但<b>晚挂同样有效</b>——例如观测端（界面推送流）比轮询晚启动时，可以直接在项目运行中补挂。<br/>
+    /// 不要用"反复设置/清除"来做动态开关：每个入口只有一个回调，那样会与其它观察者互相覆盖；
+    /// 要动态开关就在自己的回调内部判断（例如先检查订阅者集合是否为空再直接返回）。<br/>
     /// <br/>
     /// <b>回调运行在轮询线程上，必须尽快返回</b>：不要阻塞，也不要在回调里做 IO / 序列化。
     /// 需要较重的处理时，请只把必要信息投递到自己的队列，由独立的后台循环消费。<br/>
@@ -102,7 +105,7 @@ public interface ITagsProject : IDisposable
     /// <br/>
     /// 注意：
     /// <list type="number">
-    /// <item>必须在 <see cref="Initialize(string, XElement?)"/> 之后、<see cref="RunAsync"/> 之前调用；</item>
+    /// <item>必须在 <see cref="Initialize(string, XElement?)"/> 之后调用（运行期也可以：从下一轮开始生效）；</item>
     /// <item>入口名不存在时抛 <see cref="KeyNotFoundException"/>（与 <c>WriteIntent</c> 的校验一致）；</item>
     /// <item>不需要清除：回调的作用域就是项目实例本身，项目停止后实例被释放，回调随之消失；</item>
     /// <item>只覆盖"产生了轮次"的情形：入口被禁用、项目未启动或已停止时不会产生轮次，也就不会调用；
@@ -113,7 +116,7 @@ public interface ITagsProject : IDisposable
     /// <param name="handler">回调；传 <c>null</c> 表示清除该入口已设置的回调</param>
     /// <exception cref="ArgumentNullException"><paramref name="entry"/> 为 null</exception>
     /// <exception cref="KeyNotFoundException">未找到指定的入口测点组</exception>
-    /// <exception cref="InvalidOperationException">项目已经在运行（本方法只能在 <see cref="RunAsync"/> 之前调用）</exception>
+    /// <exception cref="ObjectDisposedException">项目已释放（回调的作用域就是项目实例）</exception>
     void SetTurnProcessHandler(string entry, TurnProcess? handler);
 
 

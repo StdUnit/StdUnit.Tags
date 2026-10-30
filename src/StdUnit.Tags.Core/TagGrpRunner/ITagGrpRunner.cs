@@ -27,20 +27,34 @@ public delegate Task TurnProcess(ITagGrp grp, ITagChannel? channel, Cancellation
 /// <param name="channel">
 /// 入口的<b>主通道</b>（<see cref="ITagGrpExtensions.SearchChannel"/> 的解析结果，可能为 null）。
 /// </param>
+/// <param name="ct">
+/// 项目的生命周期取消令牌（与本轮读/写、以及 <see cref="TurnProcess"/> 用的是同一个）。<br/>
+/// 回调里发起的异步操作应把它透传下去，这样"停止项目"能及时打断，
+/// 不至于拖到 <see cref="ITagsProjectCtrl.StopAsync"/> 的等待超时。
+/// </param>
 /// <returns></returns>
-public delegate Task RunnerStarted(ITagGrp grp, ITagChannel? channel);
+public delegate Task RunnerStarted(ITagGrp grp, ITagChannel? channel, CancellationToken ct);
 
 /// <summary>
-/// <see cref="ITagGrpRunner"/>中有错误出现
+/// <see cref="ITagGrpRunner"/>中有错误出现。<br/>
+/// <b>取消不是崩溃</b>：项目停止（<see cref="ITagsProjectCtrl.StopAsync"/>）导致的取消不会触发本事件，
+/// 因此回调被调用时通常意味着<b>真实故障</b>（设备/协议错误、逻辑组件抛异常等）。
 /// </summary>
 /// <param name="grp">入口测点组</param>
 /// <param name="channel">
 /// 入口的<b>主通道</b>（<see cref="ITagGrpExtensions.SearchChannel"/> 的解析结果，可能为 null）；
 /// 清理路径断开的是入口相关的<b>全部</b>通道，不只是它。
 /// </param>
-/// <param name="ex"></param>
+/// <param name="ex">本轮导致故障的异常（通常是驱动或逻辑组件抛出的原始异常，未被包装）</param>
+/// <param name="ct">
+/// 项目的生命周期取消令牌。<br/>
+/// 进入回调时它通常<b>尚未取消</b>；但回调执行期间项目可能被停止，它随时可能被取消，
+/// 所以回调里等待的异步操作要么接受被取消，要么按"清理动作尽力完成"的原则改用
+/// <see cref="CancellationToken.None"/>。回调本身必须尽快返回，也<b>不要</b>向外抛异常
+/// （抛异常会被视作该入口需要<b>停机</b>）。
+/// </param>
 /// <returns></returns>
-public delegate Task RunnerCrashed(ITagGrp grp, ITagChannel? channel, Exception ex);
+public delegate Task RunnerCrashed(ITagGrp grp, ITagChannel? channel, Exception ex, CancellationToken ct);
 
 
 /// <summary>
@@ -73,6 +87,7 @@ public interface ITagGrpRunner
 
     /// <summary>
     /// 崩溃事件。<br/>
+    /// <b>取消不是崩溃</b>：项目停止导致的取消不会触发本事件。<br/>
     /// 注意这里不要再有异常发生，否则会视作对应的入口轮询需要停机
     /// </summary>
     event RunnerCrashed? RunnerCrashed;
@@ -84,10 +99,12 @@ public interface ITagGrpRunner
 
     /// <summary>
     /// 启动对群组的监控: loop(意图执行-> 读取输入 -> 逻辑处理 -> 刷写输出)<br/>
-    /// 一旦成功启动轮询，除非主动取消，否则不会抛出异常。
+    /// 一旦成功启动轮询，除非主动取消，否则不会抛出异常。<br/>
+    /// <b>取消不是崩溃</b>：<paramref name="ct"/> 取消时本方法以 <see cref="OperationCanceledException"/> 结束
+    /// （入口子树里的通道照常断开），但<b>不会</b>触发 <see cref="RunnerCrashed"/>。
     /// </summary>
     /// <param name="entry">入口；其子树中的通道由本运行器建立与断开连接</param>
-    /// <param name="ct"></param>
+    /// <param name="ct">项目生命周期取消令牌；取消即结束本方法</param>
     /// <returns></returns>
     Task StartAsync(ITagGrp entry, CancellationToken ct);
 }

@@ -15,6 +15,17 @@
            targetNamespace="tags:simplefiles"
            elementFormDefault="qualified">
 
-  <xs:element name="BaseDir" type="xs:string"/>
+  <!-- 设计器元数据：driver@name 必须与 SimpleFilesNames.DriverName 完全一致。
+       tagAttribute：驱动额外认的测点属性（运行期在 TagDescriptor.Extras）。 -->
+  <xs:annotation><xs:appinfo>
+    <driver name="SimpleFiles" displayName="磁盘文件（SimpleFiles）" prefix="sf"/>
+    <tagAttribute name="autoCreateFile" kind="bool" type="boolean"
+                  label="自动创建文件" order="10"
+                  help="文件不存在时自动创建并写入默认值（旧拼写 AutoCreateFile 已移除，运行期会报错）"/>
+  </xs:appinfo></xs:annotation>
+
+  <xs:element name="BaseDir" type="xs:string">
+    <xs:annotation><xs:appinfo><ui label="数据目录" order="1" group="基础" placeholder="." help="省略时使用通道所在目录"/></xs:appinfo></xs:annotation>
+  </xs:element>
 
 </xs:schema>

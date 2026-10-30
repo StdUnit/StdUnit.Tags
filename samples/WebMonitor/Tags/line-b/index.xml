@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 具名观测流（key = line-b）观测的项目：结构与 main 相同，但数据目录/通道独立。 -->
+<Project>
+	<Channel name="file-line-b" driver="SimpleFiles">
+		<BaseDir>.</BaseDir>
+	</Channel>
+
+	<TagGrp name="line-b" isEntry="true" isEnabled="true" scanInterval="5" channel="file-line-b">
+		<Tag name="counter" address="counter.txt" type="INT32" access="RW" autoCreateFile="true" />
+		<!-- additional Tag elements can be added here -->
+	</TagGrp>
+</Project>

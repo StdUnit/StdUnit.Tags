@@ -25,6 +25,11 @@
            targetNamespace="tags:com"
            elementFormDefault="qualified">
 
+  <!-- 设计器元数据：driver@name 必须与 ComScannerNames.DriverName 完全一致（"COM"）。 -->
+  <xs:annotation><xs:appinfo>
+    <driver name="COM" displayName="串口（COM）" prefix="com"/>
+  </xs:appinfo></xs:annotation>
+
   <!-- System.IO.Ports.Parity -->
   <xs:simpleType name="ParityType">
     <xs:restriction base="xs:string">
@@ -46,15 +51,35 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <xs:element name="Port" type="xs:string"/> <!-- "COM1" 形式的字符串 -->
-  <xs:element name="BaudRate" type="xs:int"/>
-  <xs:element name="Parity" type="ParityType"/>
-  <xs:element name="DataBits" type="xs:int"/>
-  <xs:element name="StopBits" type="StopBitsType"/>
-  <xs:element name="NewLine" type="xs:string"/> <!-- 支持转义序列，如 \n、\r\n -->
-  <xs:element name="ReadEntireLine" type="xs:boolean"/>
-  <xs:element name="ReadScript" type="xs:string"/>
-  <xs:element name="ReadScriptDebugInformationEnabled" type="xs:boolean"/>
-  <xs:element name="ChannelCapacity" type="xs:positiveInteger"/>
+  <xs:element name="Port" type="xs:string"> <!-- "COM1" 形式的字符串 -->
+    <xs:annotation><xs:appinfo><ui label="端口名" order="1" group="连接" placeholder="COM1"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="BaudRate" type="xs:int">
+    <xs:annotation><xs:appinfo><ui label="波特率" order="2" group="连接" placeholder="9600"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="Parity" type="ParityType">
+    <xs:annotation><xs:appinfo><ui label="校验位" order="3" group="连接" help="默认 None"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="DataBits" type="xs:int">
+    <xs:annotation><xs:appinfo><ui label="数据位" order="4" group="连接" help="默认 8"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="StopBits" type="StopBitsType">
+    <xs:annotation><xs:appinfo><ui label="停止位" order="5" group="连接" help="默认 None"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="NewLine" type="xs:string"> <!-- 支持转义序列，如 \n、\r\n -->
+    <xs:annotation><xs:appinfo><ui label="行结束符" order="6" group="高级" placeholder="\r\n" help="支持转义序列，如 \n、\r\n"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="ReadEntireLine" type="xs:boolean">
+    <xs:annotation><xs:appinfo><ui label="整行读取" order="7" group="高级" help="默认 true"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="ReadScript" type="xs:string">
+    <xs:annotation><xs:appinfo><ui label="读取脚本" order="8" group="高级"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="ReadScriptDebugInformationEnabled" type="xs:boolean">
+    <xs:annotation><xs:appinfo><ui label="脚本调试信息" order="9" group="高级"/></xs:appinfo></xs:annotation>
+  </xs:element>
+  <xs:element name="ChannelCapacity" type="xs:positiveInteger">
+    <xs:annotation><xs:appinfo><ui label="通道容量" order="10" group="高级" help="默认 1"/></xs:appinfo></xs:annotation>
+  </xs:element>
 
 </xs:schema>

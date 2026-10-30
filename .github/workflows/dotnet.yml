@@ -125,9 +125,10 @@ jobs:
   aot-smoke:
 
     # 目的：以 NativeAOT 发布成原生可执行文件，并运行。
-    # 两个测试：
+    # 三个测试：
     #   * `AotSmokeTest.LogicetPlugins`：无 <Logicet> 的正常加载 + TryAddLogicet<T> + AOT 下配了 <Logicet> 必须快速失败；
-    #   * `AotSmokeTest.SimpleFiles`：基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败。
+    #   * `AotSmokeTest.SimpleFiles`：基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败；
+    #   * `AotSmokeTest.WebUi`：起 Kestrel，结构树的**多态 JSON 序列化**（[JsonDerivedType]）+ SSE 从基线到增量的全链路。
     # 为什么在 Linux 跑：NativeAOT 在 ubuntu runner 上只需 clang + zlib1g-dev，比占 Windows runner 便宜，更重要的是不用排队；
     runs-on: ubuntu-latest
 
@@ -161,3 +162,12 @@ jobs:
       run: |
         dotnet publish tests/AotSmokeTest.SimpleFiles/AotSmokeTest.SimpleFiles.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
         ./aot-smoke-out/AotSmokeTest.SimpleFiles
+
+    - name: Smoke test (WebUi, NativeAOT)
+      run: |
+        dotnet publish tests/AotSmokeTest.WebUi/AotSmokeTest.WebUi.csproj -c Release -r linux-x64 -o ./aot-smoke-out --nologo
+        ./aot-smoke-out/AotSmokeTest.WebUi
+
+    # 示例（常驻服务，不在这里运行）也要保证 AOT 可发布：只 publish，防止它悄悄退化成需要 JIT。
+    - name: Publish sample (WebMonitor, NativeAOT)
+      run: dotnet publish samples/WebMonitor/WebMonitor.csproj -c Release -r linux-x64 -o ./aot-sample-out --nologo

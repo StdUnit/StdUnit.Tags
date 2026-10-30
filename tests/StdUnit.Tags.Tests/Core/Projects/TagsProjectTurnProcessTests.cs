@@ -16,7 +16,8 @@ namespace StdUnit.Tags.Tests.Core.Projects;
 /// - 按入口设置，某入口每一轮触发一次，且<b>只</b>触发该入口的回调；<br/>
 /// - 排在 Logicets <b>之后</b>（回调看到的是逻辑处理完成后的值）；<br/>
 /// - 每个入口最多一个回调：重复设置是替换，多个观察者由调用方自己组合（顺序显式）；<br/>
-/// - 只能在项目运行<b>之前</b>设置（运行后抛 <see cref="InvalidOperationException"/>），传 <c>null</c> 表示清除；<br/>
+/// - 运行前/运行中都能设置：运行期设置与清除都<b>从下一轮开始生效</b>，传 <c>null</c> 表示清除；<br/>
+/// - 项目已释放后设置抛 <see cref="ObjectDisposedException"/>；<br/>
 /// - 回调抛出的异常不被吞掉（走 <see cref="ITagsProject.RunnerCrashed"/> 的恢复路径）；<br/>
 /// - 入口被禁用时不会产生轮次，因此不会触发；<br/>
 /// - 未知入口 / null 入口按契约抛异常。
@@ -358,7 +359,7 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task SetTurnProcessHandler_AfterRunStarted_Throws()
+    public async Task SetTurnProcessHandler_AfterRunStarted_TakesEffectFromNextRound()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
@@ -366,10 +367,99 @@ public class TagsProjectTurnProcessTests : IDisposable
         using var cts = new CancellationTokenSource();
         var run = proj.RunAsync(cts.Token);
 
-        // 运行期不再接受注册：入口列表在运行前就已固定，动态开关观测应在回调内部判断。
-        var ex = Assert.Throws<InvalidOperationException>(
+        // 运行期挂载：下一轮开始生效（回调表是写时复制的，选中快照不会被并发改坏）。
+        var count = new int[1];
+        var twoTurns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        {
+            if (Interlocked.Increment(ref count[0]) >= 2)
+            {
+                twoTurns.TrySetResult(true);
+            }
+            return Task.CompletedTask;
+        });
+
+        await WaitOrFailAsync(twoTurns.Task, "运行期设置的回调从下一轮开始触发");
+        Assert.True(Volatile.Read(ref count[0]) >= 2);
+
+        await StopAsync(cts, run);
+    }
+
+    [Fact]
+    public async Task SetTurnProcessHandler_ClearedWhileRunning_StopsFiringFromNextRound()
+    {
+        using var scope = _root.CreateScope();
+        using var proj = CreateSingleEntryProject(scope);
+
+        var count = new int[1];
+        var firstTurn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        {
+            Interlocked.Increment(ref count[0]);
+            firstTurn.TrySetResult(true);
+            return Task.CompletedTask;
+        });
+
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+        await WaitOrFailAsync(firstTurn.Task, "回调先触发一次");
+
+        // 运行期清除：等在途轮次用掉旧快照后取基线，之后的轮次都不应再进来。
+        proj.SetTurnProcessHandler("g1", null);
+        await Task.Delay(ScanIntervalMs * 3);
+        var baseline = Volatile.Read(ref count[0]);
+
+        await Task.Delay(ScanIntervalMs * 10);
+        Assert.Equal(baseline, Volatile.Read(ref count[0]));
+
+        await StopAsync(cts, run);
+    }
+
+    [Fact]
+    public async Task SetTurnProcessHandler_OnDisposedProject_Throws()
+    {
+        using var scope = _root.CreateScope();
+        var proj = CreateSingleEntryProject(scope);
+
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+        await StopAsync(cts, run);
+
+        proj.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(
             () => proj.SetTurnProcessHandler("g1", (entry, channel, _) => Task.CompletedTask));
-        Assert.Contains("运行之前", ex.Message);
+    }
+
+    [Fact]
+    public async Task SetTurnProcessHandler_ConcurrentSetAndClearWhileRunning_DoesNotCorrupt()
+    {
+        using var scope = _root.CreateScope();
+        using var proj = CreateSingleEntryProject(scope);
+
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+
+        using var stopMutating = new CancellationTokenSource();
+        var mutator = Task.Run(() =>
+        {
+            var i = 0;
+            while (!stopMutating.IsCancellationRequested)
+            {
+                proj.SetTurnProcessHandler("g1", (entry, channel, _) => Task.CompletedTask);
+                if ((i++ % 2) == 0)
+                {
+                    proj.SetTurnProcessHandler("g1", null);
+                }
+            }
+        });
+
+        await Task.Delay(ScanIntervalMs * 20);
+        stopMutating.Cancel();
+        await mutator;
+
+        // 并发设置/清除不应让轮询崩掉（快照替换 + 轮询线程只读）。
+        Assert.False(run.IsFaulted, run.Exception?.ToString());
 
         await StopAsync(cts, run);
     }
@@ -385,7 +475,7 @@ public class TagsProjectTurnProcessTests : IDisposable
             (entry, channel, _) => throw new InvalidOperationException("observer boom"));
 
         var crashed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
-        proj.RunnerCrashed += (entry, channel, ex) =>
+        proj.RunnerCrashed += (entry, channel, ex, ct) =>
         {
             crashed.TrySetResult(ex);
             return Task.CompletedTask;
