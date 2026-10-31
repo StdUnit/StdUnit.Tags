@@ -10,7 +10,7 @@ using Xunit;
 namespace StdUnit.Tags.Tests.NetCoreOnly.WebUi;
 
 /// <summary>
-/// <see cref="TagsStreamHostedService"/> 的端到端行为：状态（Replay 1）、全量基线、增量、按入口过滤、迟到订阅者。<br/>
+/// <see cref="TagsStreamHub"/> 的端到端行为：状态（Replay 1）、全量基线、增量、按入口过滤、迟到订阅者。<br/>
 /// 用真实的 <c>TagsProject</c> + 真实 <c>TagGrpRunner</c>（假驱动），只把 <see cref="ITagsProjectCtrl"/> 换成可控的假实现，
 /// 以便精确决定"什么时候启动/停止"。
 /// </summary>
@@ -54,8 +54,8 @@ public class TagsStreamHubTests : IDisposable
     {
         using var project = CreateSingleEntryProject(this._scope);
         var ctrl = new FakeProjectCtrl();
-        using var hub = new TagsStreamHostedService(ctrl, FastOptions());
-        await hub.StartAsync(default);
+        using var hub = new TagsStreamHub(ctrl, FastOptions());
+        hub.Start();
 
         using var output = new RecordingStream();
         using var piperCts = new CancellationTokenSource();
@@ -102,8 +102,8 @@ public class TagsStreamHubTests : IDisposable
             StreamTestContext.EntryGroup("g2", "fake2", StreamTestContext.Tag("a"))));
 
         var ctrl = new FakeProjectCtrl();
-        using var hub = new TagsStreamHostedService(ctrl, FastOptions());
-        await hub.StartAsync(default);
+        using var hub = new TagsStreamHub(ctrl, FastOptions());
+        hub.Start();
 
         using var output = new RecordingStream();
         using var piperCts = new CancellationTokenSource();
@@ -135,8 +135,8 @@ public class TagsStreamHubTests : IDisposable
     {
         using var project = CreateSingleEntryProject(this._scope);
         var ctrl = new FakeProjectCtrl();
-        using var hub = new TagsStreamHostedService(ctrl, FastOptions());
-        await hub.StartAsync(default);
+        using var hub = new TagsStreamHub(ctrl, FastOptions());
+        hub.Start();
 
         // 先启动（不跑轮询），再订阅：订阅者应立即拿到状态 + 全量基线。
         ctrl.RaiseStarted(project);
@@ -164,8 +164,8 @@ public class TagsStreamHubTests : IDisposable
         using var runCts = new CancellationTokenSource();
         var run = project.RunAsync(runCts.Token);
 
-        using var hub = new TagsStreamHostedService(ctrl, FastOptions());
-        await hub.StartAsync(default);
+        using var hub = new TagsStreamHub(ctrl, FastOptions());
+        hub.Start();
         Assert.True(hub.GetTree().IsStarted);
 
         using var output = new RecordingStream();

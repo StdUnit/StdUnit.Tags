@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using StdUnit.Tags.WebUi.Internal;
 
 namespace StdUnit.Tags.WebUi;
@@ -39,6 +40,7 @@ public static class TagsStreamExtensions_Endpoints
     /// <b>设计器元数据</b>：<c>GET {prefix}/catalog</c> 把核心 + 驱动 schema 内省成 JSON，
     /// <c>GET {prefix}/designer</c> 就是用它渲染的设计器页面。两者都与具体观测流无关，
     /// 只有这一份、没有具名版本；只读，不涉及项目数据。
+    /// <br/>
     /// </summary>
     /// <param name="endpoints">端点构建器</param>
     /// <param name="prefix">
@@ -48,6 +50,11 @@ public static class TagsStreamExtensions_Endpoints
     /// <returns>路由组：可继续 <c>RequireAuthorization()</c> / <c>WithTags()</c> 等整组配置。</returns>
     public static RouteGroupBuilder MapTagsStream(this IEndpointRouteBuilder endpoints, string prefix = EndpointConstants.DefaultPrefix)
     {
+        // 观测流的**唯一启动点**：映射端点必然早于任何请求，也早于 StartPollAsync，
+        // 所以 hub 不需要注册成 IHostedService，也不依赖 Generic Host 的启动顺序。
+        // 只 map 不 AddTagsStream 时是 no-op（端点会在运行时回 404）。
+        endpoints.ServiceProvider.GetService<TagsStreamRegistry>()?.StartAll();
+
         var group = endpoints.MapGroup(prefix.Length == 0 ? "/" : prefix);
 
         // 不具名流：{prefix}/tree|stream|value|rescan|ui

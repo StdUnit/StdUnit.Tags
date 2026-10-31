@@ -1,5 +1,4 @@
 using System.Threading.Channels;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StdUnit.Tags.WebUi.Internal;
 
@@ -10,19 +9,25 @@ namespace StdUnit.Tags.WebUi;
 /// - 跟踪 <see cref="ITagsProjectCtrl"/> 的启停，维护每次启动的 <c>epoch</c> 与结构索引；<br/>
 /// - 为每个入口用 <see cref="ITagsProject.SetTurnProcessHandler"/> 挂一个"轮次完成"回调，做值 diff；<br/>
 /// - 把结果序列化成 SSE 帧，扇出给各订阅者（每帧只序列化一次）。<br/>
-/// 同时是 <see cref="IHostedService"/>（随宿主启停）与订阅者集合的持有者：订阅相关的成员只出现在内部的
+/// 同时是订阅者集合的持有者：订阅相关的成员只出现在内部的
 /// <see cref="ITagsStreamHub"/> 上，只服务同一程序集里的端点与 <see cref="SseFramesPiper"/>。
+/// <para>
+/// <b>启动时机</b>：由 <c>MapTagsStream()</c>（<see cref="TagsStreamRegistry.StartAll"/>）启动——
+/// 映射端点必然发生在任何请求之前，也早于 <c>StartPollAsync</c>，因此<b>不依赖 Generic Host 的
+/// <c>IHostedService</c> 机制</b>；启动后运行期的状态迁移一律以 <see cref="ITagsProjectCtrl.StartedOrStopped"/> 为准
+/// （见 <see cref="OnStartedOrStopped"/>）。
+/// </para>
 /// <para>
 /// <b>线程模型</b>：轮次回调在<b>轮询线程</b>上执行，只做 O(改动的点) 的字典写入 + 一次 <c>TryWrite</c>，
 /// 不做序列化、不做 IO、不阻塞；序列化与扇出在单独的发送循环里，每个订阅者另有自己的写循环与有界队列。
 /// 任何一环满了都只丢帧并触发重同步，不会反压到轮询。
 /// </para>
 /// </summary>
-internal sealed class TagsStreamHostedService : ITagsStreamHub, IHostedService, IDisposable
+internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
 {
     private readonly ITagsProjectCtrl _ctrl;
     private readonly TagsStreamOptions _options;
-    private readonly ILogger<TagsStreamHostedService>? _logger;
+    private readonly ILogger<TagsStreamHub>? _logger;
 
     /// <summary>订阅者集合与状态发布。<c>_transitionGate → _gate</c> 是唯一允许的加锁顺序。</summary>
     private readonly object _gate = new();
@@ -53,7 +58,7 @@ internal sealed class TagsStreamHostedService : ITagsStreamHub, IHostedService, 
     /// <param name="ctrl">测点项目控制器（需由 <c>AddTagsProjectServices</c> 注册）</param>
     /// <param name="options">配置</param>
     /// <param name="logger">日志</param>
-    internal TagsStreamHostedService(ITagsProjectCtrl ctrl, TagsStreamOptions options, ILogger<TagsStreamHostedService>? logger = null)
+    internal TagsStreamHub(ITagsProjectCtrl ctrl, TagsStreamOptions options, ILogger<TagsStreamHub>? logger = null)
     {
         this._ctrl = ctrl ?? throw new ArgumentNullException(nameof(ctrl));
         this._options = options ?? throw new ArgumentNullException(nameof(options));
@@ -87,12 +92,23 @@ internal sealed class TagsStreamHostedService : ITagsStreamHub, IHostedService, 
     /// <inheritdoc/>
     public long Epoch => this._state.Epoch;
 
-    /// <inheritdoc/>
-    public Task StartAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// 幂等启动：订阅 <see cref="ITagsProjectCtrl.StartedOrStopped"/>、拉起发送循环与心跳循环，
+    /// 并按 <see cref="ITagsProjectCtrl.Project"/> 对账（补上"启动之前项目就已经在跑"的索引与轮次回调）。<br/>
+    /// 由 <c>MapTagsStream()</c> 统一调用（<see cref="TagsStreamRegistry.StartAll"/>）；
+    /// 启动之后一直订阅到 <see cref="StopAsync"/>/<see cref="Dispose"/>——项目停止时不能退订，
+    /// 否则接不到下一次"已启动"。
+    /// <para>
+    /// <b>同步</b>：内部只有"订阅事件 + 起两个后台循环 + 一次对账"，没有 IO，全部同步完成；
+    /// 所以刻意不返回 <see cref="Task"/>——调用方（同步的 <c>MapTagsStream</c>）不必也不需要阻塞等待，
+    /// 从而不给"同步等待异步"留下死锁口子。<see cref="StopAsync"/> 不同，它要等循环真正退出。
+    /// </para>
+    /// </summary>
+    public void Start()
     {
         if (Interlocked.Exchange(ref this._started, 1) != 0)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var cts = new CancellationTokenSource();
@@ -103,10 +119,12 @@ internal sealed class TagsStreamHostedService : ITagsStreamHub, IHostedService, 
 
         // 订阅之前项目可能就已经在跑（hub 启动得晚）：先对一次账。
         this.SyncWithController();
-        return Task.CompletedTask;
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// 停止观测：退订事件、取消并等待发送/心跳循环退出。<br/>
+    /// 正常停机由 DI 容器释放单例时的 <see cref="Dispose"/> 兜底（只取消、不等待）。
+    /// </summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         this._ctrl.StartedOrStopped -= this.OnStartedOrStopped;

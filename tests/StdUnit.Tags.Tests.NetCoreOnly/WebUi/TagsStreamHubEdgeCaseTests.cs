@@ -11,7 +11,7 @@ using Xunit;
 namespace StdUnit.Tags.Tests.NetCoreOnly.WebUi;
 
 /// <summary>
-/// <see cref="TagsStreamHostedService"/> 的边界行为：参数校验、启停幂等、无订阅者时的零开销、
+/// <see cref="TagsStreamHub"/> 的边界行为：参数校验、启停幂等、无订阅者时的零开销、
 /// 心跳、按 <see cref="TagsStreamOptions.MaxValuesPerFrame"/> 拆帧、容器标志单独成帧，
 /// 以及 <see cref="SseFramesPiper"/> 队列溢出时的"丢弃 + 重同步"（绝不反压）。
 /// </summary>
@@ -47,26 +47,26 @@ public class TagsStreamHubEdgeCaseTests : IDisposable
     {
         var ok = Options();
 
-        Assert.Throws<ArgumentNullException>(() => new TagsStreamHostedService(null!, ok));
-        Assert.Throws<ArgumentNullException>(() => new TagsStreamHostedService(new FakeProjectCtrl(), null!));
+        Assert.Throws<ArgumentNullException>(() => new TagsStreamHub(null!, ok));
+        Assert.Throws<ArgumentNullException>(() => new TagsStreamHub(new FakeProjectCtrl(), null!));
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TagsStreamHostedService(new FakeProjectCtrl(), new TagsStreamOptions { ReconcileInterval = TimeSpan.Zero }));
+            new TagsStreamHub(new FakeProjectCtrl(), new TagsStreamOptions { ReconcileInterval = TimeSpan.Zero }));
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TagsStreamHostedService(new FakeProjectCtrl(), new TagsStreamOptions { HeartbeatInterval = TimeSpan.Zero }));
+            new TagsStreamHub(new FakeProjectCtrl(), new TagsStreamOptions { HeartbeatInterval = TimeSpan.Zero }));
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TagsStreamHostedService(new FakeProjectCtrl(), new TagsStreamOptions { PiperQueueCapacity = 0 }));
+            new TagsStreamHub(new FakeProjectCtrl(), new TagsStreamOptions { PiperQueueCapacity = 0 }));
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TagsStreamHostedService(new FakeProjectCtrl(), new TagsStreamOptions { PendingQueueCapacity = 0 }));
+            new TagsStreamHub(new FakeProjectCtrl(), new TagsStreamOptions { PendingQueueCapacity = 0 }));
     }
 
     [Fact]
     public async Task StartAndStop_AreIdempotent()
     {
-        using var hub = new TagsStreamHostedService(new FakeProjectCtrl(), Options());
+        using var hub = new TagsStreamHub(new FakeProjectCtrl(), Options());
 
-        await hub.StartAsync(default);
-        await hub.StartAsync(default);   // 第二次什么也不做
+        hub.Start();
+        hub.Start();   // 第二次什么也不做
         await hub.StopAsync(default);
         await hub.StopAsync(default);    // 第二次时 pump/heartbeat 已为 null
     }
@@ -82,8 +82,8 @@ public class TagsStreamHubEdgeCaseTests : IDisposable
         var ctrl = new FakeProjectCtrl();
         ctrl.RaiseStarted(project);
 
-        using var hub = new TagsStreamHostedService(ctrl, Options());
-        await hub.StartAsync(default);
+        using var hub = new TagsStreamHub(ctrl, Options());
+        hub.Start();
 
         using var runCts = new CancellationTokenSource();
         var run = project.RunAsync(runCts.Token);
@@ -116,8 +116,8 @@ public class TagsStreamHubEdgeCaseTests : IDisposable
         var options = Options();
         options.HeartbeatInterval = TimeSpan.FromMilliseconds(50);
 
-        using var hub = new TagsStreamHostedService(new FakeProjectCtrl(), options);
-        await hub.StartAsync(default);
+        using var hub = new TagsStreamHub(new FakeProjectCtrl(), options);
+        hub.Start();
 
         using var output = new RecordingStream();
         using var piperCts = new CancellationTokenSource();
@@ -157,8 +157,8 @@ public class TagsStreamHubEdgeCaseTests : IDisposable
         var ctrl = new FakeProjectCtrl();
         ctrl.RaiseStarted(project);
 
-        using var hub = new TagsStreamHostedService(ctrl, options);
-        await hub.StartAsync(default);
+        using var hub = new TagsStreamHub(ctrl, options);
+        hub.Start();
 
         using var output = new RecordingStream();
         using var piperCts = new CancellationTokenSource();
@@ -218,8 +218,8 @@ public class TagsStreamHubEdgeCaseTests : IDisposable
         var ctrl = new FakeProjectCtrl();
         ctrl.RaiseStarted(project);
 
-        using var hub = new TagsStreamHostedService(ctrl, Options());
-        await hub.StartAsync(default);
+        using var hub = new TagsStreamHub(ctrl, Options());
+        hub.Start();
 
         using var output = new RecordingStream();
         using var piperCts = new CancellationTokenSource();

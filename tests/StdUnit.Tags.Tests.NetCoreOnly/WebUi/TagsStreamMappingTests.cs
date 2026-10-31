@@ -2,11 +2,14 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using StdUnit.Tags.Tests.Fakes;
 using StdUnit.Tags.WebUi;
 using Xunit;
 
@@ -70,6 +73,50 @@ public class TagsStreamMappingTests
         {
             await app.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    /// <c>MapTagsStream</c> 是观测流的唯一启动点：映射之后（不需要宿主启动、也不需要任何请求）
+    /// hub 就已经在观测，并且能补上"映射之前项目就已经在跑"的状态。
+    /// </summary>
+    [Fact]
+    public async Task MapTagsStream_StartsEveryHub()
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+
+        var unnamed = new FakeProjectCtrl();
+        var named = new FakeProjectCtrl();
+        builder.Services.AddTagsProjectServices(b =>
+        {
+            b.AddFakedSupport();
+            b.AddFakedTagSupport();
+        });
+        builder.Services.AddSingleton<ITagsProjectCtrl>(unnamed);   // 后注册的覆盖默认实现
+        builder.Services.AddKeyedSingleton<ITagsProjectCtrl>("dev", named);
+        builder.Services.AddTagsStream();
+        builder.Services.AddKeyedTagsStream("dev");
+
+        using var app = builder.Build();
+        using var project = app.Services.GetRequiredService<ITagsProjectFactory>().Create(
+            StreamTestContext.ProjectRoot,
+            new XElement("Project",
+                StreamTestContext.Channel("fake"),
+                StreamTestContext.EntryGroup("g1", StreamTestContext.Tag("a"))));
+
+        // 项目先跑起来，之后才挂端点。
+        unnamed.RaiseStarted(project);
+        named.RaiseStarted(project);
+
+        app.MapTagsStream();   // ← 唯一启动点
+
+        var hub = app.Services.GetRequiredService<ITagsStreamHub>();
+        Assert.True(hub.GetTree().IsStarted);
+        Assert.NotEmpty(hub.GetTree().Nodes);
+
+        var devHub = app.Services.GetRequiredKeyedService<ITagsStreamHub>("dev");
+        Assert.True(devHub.GetTree().IsStarted);
+        Assert.NotEmpty(devHub.GetTree().Nodes);
     }
 
     [Theory]

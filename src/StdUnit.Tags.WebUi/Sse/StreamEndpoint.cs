@@ -26,7 +26,7 @@ internal static class StreamEndpoint
         context.Response.Headers["X-Accel-Buffering"] = "no"; // nginx
 
         var entries = ParseEntries(context.Request.Query["entries"]);
-        using var piper = entry.HostedService.Subscribe(entries);
+        using var piper = entry.Hub.Subscribe(entries);
 
         try
         {

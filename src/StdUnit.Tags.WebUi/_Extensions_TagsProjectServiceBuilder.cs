@@ -13,9 +13,9 @@ public static class TagsStreamExtensions_TagsProjectServiceBuilder
     /// 和不具名的 <see cref="ITagsProjectCtrl"/> 关联；一个容器里最多只有一路不具名的观测流。
     /// </summary>
     /// <remarks>
-    /// <b>启动顺序</b>：hub 以 <c>IHostedService</c> 注册，随宿主一起启动；它在启动时按 <c>ITagsProjectCtrl.Project</c> 对账，
+    /// <b>启动时机</b>：hub 在 <c>MapTagsStream()</c> 映射端点时启动（早于任何请求，也早于 <c>StartPollAsync</c>），
+    /// 不依赖 Generic Host 的 <c>IHostedService</c>。它在启动时按 <c>ITagsProjectCtrl.Project</c> 对账，
     /// 所以<b>晚启动也能补上</b>——即使项目已在轮询，结构树与值流都正常（轮次回调运行期也能挂，从下一轮开始生效）。
-    /// 想尽早拿到结构树，就把轮询放在宿主启动之后（例如在请求里/更晚注册的 hosted service 里 <c>StartPollAsync</c>）。
     /// </remarks>
     /// <param name="builder"></param>
     /// <param name="configure">这一路流的配置回调</param>
@@ -33,7 +33,7 @@ public static class TagsStreamExtensions_TagsProjectServiceBuilder
     /// </summary>
     /// <remarks>
     /// 时序约束同 <see cref="AddTagsStream(TagsProjectServiceBuilder, Action{TagsStreamOptions})"/>：
-    /// hub 在启动时对账，晚启动也能补上，顺序只影响"多早开始观测"。
+    /// hub 在 <c>MapTagsStream()</c> 时启动，端口映射发生在任何请求之前，所以顺序只影响"多早开始观测"。
     /// </remarks>
     /// <param name="builder"></param>
     /// <param name="projctrlKey">

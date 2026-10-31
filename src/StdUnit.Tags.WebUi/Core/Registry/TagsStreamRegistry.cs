@@ -5,7 +5,7 @@ namespace StdUnit.Tags.WebUi;
 
 /// <summary>
 /// 所有观测流的注册表：key（不具名用 <c>null</c>）→ 一路独立的 hub + 控制器 + 配置。<br/>
-/// 每个 key 恰好创建一个 hub，hosted service 与端点共用同一实例。
+/// 每个 key 恰好创建一个 hub，端点与 hub 启动点共用同一实例。
 /// </summary>
 internal sealed class TagsStreamRegistry
 {
@@ -18,7 +18,7 @@ internal sealed class TagsStreamRegistry
         foreach (var descriptor in descriptors)
         {
             var ctrl = ResolveCtrl(services, descriptor.Key);
-            var hub = new TagsStreamHostedService(ctrl, descriptor.Options, services.GetService<ILogger<TagsStreamHostedService>>());
+            var hub = new TagsStreamHub(ctrl, descriptor.Options, services.GetService<ILogger<TagsStreamHub>>());
             var entry = new TagsStreamEntry(descriptor.Key, descriptor.Options, ctrl, hub);
 
             this._entries.Add(entry);
@@ -45,6 +45,18 @@ internal sealed class TagsStreamRegistry
             : $"未注册 key = \"{key}\" 的观测流：请调用 AddKeyedTagsStream(\"{key}\")。");
 
     public IReadOnlyList<TagsStreamEntry> All => this._entries;
+
+    /// <summary>
+    /// 启动全部流的 hub（幂等）。<b>这是观测流的唯一启动点</b>，由 <c>MapTagsStream()</c> 在映射端点时调用：
+    /// 映射必然早于任何请求，也早于 <c>StartPollAsync</c>，所以不需要 Generic Host 的 <c>IHostedService</c>。
+    /// </summary>
+    public void StartAll()
+    {
+        foreach (var entry in this._entries)
+        {
+            entry.Hub.Start();
+        }
+    }
 
     private static ITagsProjectCtrl ResolveCtrl(IServiceProvider services, string? key)
     {

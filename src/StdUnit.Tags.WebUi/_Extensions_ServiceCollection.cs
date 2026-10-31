@@ -1,7 +1,6 @@
 using StdUnit.Tags;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using StdUnit.Tags.WebUi.Internal;
 
 
@@ -18,10 +17,10 @@ public static class TagsStreamExtensions_ServiceCollection
     /// 端点落在 <c>{prefix}/tree|stream|value|rescan|ui</c>。<br/>
     /// 一个容器里只能有一路不具名流；要多路请用 <see cref="AddKeyedTagsStream"/>。<br/>
     /// <br/>
-    /// <b>启动顺序</b>：hub 以 <see cref="IHostedService"/> 注册，随宿主一起启动。它在启动时按
-    /// <see cref="ITagsProjectCtrl.Project"/> 对账，所以<b>晚启动也能补上</b>：即使项目已在轮询，
-    /// 结构树与值流都正常（轮次回调运行期也能挂，从下一轮开始生效）。
-    /// 想尽早拿到结构树，就把轮询放在宿主启动之后（例如在请求里/更晚注册的 hosted service 里 <c>StartPollAsync</c>）。
+    /// <b>启动时机</b>：hub 在 <c>MapTagsStream()</c> 映射端点时启动（那必然早于任何请求，也早于 <c>StartPollAsync</c>），
+    /// <b>不依赖 Generic Host 的 <c>IHostedService</c></b>。DI 注册本来就在 <c>Build()</c> 之前完成、映射在其后，
+    /// 所以这个顺序天然满足；启动时它会按 <see cref="ITagsProjectCtrl.Project"/> 对账，
+    /// 项目已经在轮询也能补上（轮次回调运行期也能挂，从下一轮开始生效）。
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <param name="configure">这一路流的配置回调</param>
@@ -39,19 +38,12 @@ public static class TagsStreamExtensions_ServiceCollection
 
         services.AddSingleton(new TagsStreamDescriptor(key: null, options));
 
-        // 同一实例注册为 IHostedService：用工厂而不是 AddHostedService<T>()——后者会另开
-        // IHostedService → T 的描述符再 new 一个，宿主启动的 hub 与端点看到的不是同一份数据。
-        services.AddSingleton<IHostedService>(
-            sp => sp.GetRequiredService<TagsStreamRegistry>()
-                    .GetRequired(null)
-                    .HostedService
-        );
-
         // 不具名那一路按 ITagsStreamHub 解析（具名那一路是 keyed 服务）。
+        // 启动点是 MapTagsStream()：见 TagsStreamRegistry.StartAll()。
         services.TryAddSingleton<ITagsStreamHub>(
             sp => sp.GetRequiredService<TagsStreamRegistry>()
                     .GetRequired(null)
-                    .HostedService
+                    .Hub
         );
 
         return services;
@@ -60,7 +52,7 @@ public static class TagsStreamExtensions_ServiceCollection
     /// <summary>
     /// 注册一路<b>具名</b>观测流：观测由 <c>AddKeyedTagsProjectCtrl(key)</c> 注册的 <see cref="ITagsProjectCtrl"/>，
     /// 端点落在 <c>{prefix}/{key}/tree|stream|value|rescan|ui</c>（监控页各一份）。<br/>
-    /// 可与 <see cref="AddTagsStream"/> 并存；同一个 key 只能注册一路。启动顺序等约束同 <see cref="AddTagsStream"/>。
+    /// 可与 <see cref="AddTagsStream"/> 并存；同一个 key 只能注册一路。启动时机等约束同 <see cref="AddTagsStream"/>。
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <param name="projctrlKey">
@@ -78,17 +70,12 @@ public static class TagsStreamExtensions_ServiceCollection
 
         services.AddSingleton(new TagsStreamDescriptor(projctrlKey, options));
 
-        // 同一实例注册为 IHostedService / keyed ITagsStreamHub（原因见 AddTagsStream 里的注释）。
-        services.AddSingleton<IHostedService>(
-            sp => sp.GetRequiredService<TagsStreamRegistry>()
-                    .GetRequired(projctrlKey)
-                    .HostedService
-        );
+        // 同一实例注册为 keyed ITagsStreamHub（原因见 AddTagsStream 里的注释）。
         services.AddKeyedSingleton<ITagsStreamHub>(
             projctrlKey,
             (sp, _) => sp.GetRequiredService<TagsStreamRegistry>()
                         .GetRequired(projctrlKey)
-                        .HostedService
+                        .Hub
         );
 
         return services;
