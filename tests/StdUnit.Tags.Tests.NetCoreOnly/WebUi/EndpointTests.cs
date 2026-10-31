@@ -412,10 +412,10 @@ internal sealed class EndpointHost : IDisposable
         return project;
     }
 
-    public TagsStreamHostedService StartHub(string? key = null)
+    public TagsStreamHub StartHub(string? key = null)
     {
-        var hub = this.Root.GetRequiredService<TagsStreamRegistry>().GetRequired(key).HostedService;
-        hub.StartAsync(default).GetAwaiter().GetResult();
+        var hub = this.Root.GetRequiredService<TagsStreamRegistry>().GetRequired(key).Hub;
+        hub.Start();
         return hub;
     }
 

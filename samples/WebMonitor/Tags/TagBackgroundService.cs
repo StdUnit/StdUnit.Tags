@@ -7,8 +7,8 @@ namespace WebMonitor.Tags;
 
 /// <summary>
 /// 启停两路测点项目，并跑一个只用于演示的值模拟器。<br/>
-/// 与模板 <c>tags.web</c> 的 <c>TagBackgroundService</c> 同一形状：轮询必须在这里（宿主启动之后）开始，
-/// 观测流的 hub 才能先拿到"项目已启动"事件并挂上"轮次完成"回调。
+/// 与模板 <c>tags.web</c> 的 <c>TagBackgroundService</c> 同一形状：观测流的 hub 在 <c>MapTagsStream()</c> 时
+/// （Program.cs，早于本服务）就已经启动，所以这里只管轮询；哪一路先起来都不影响观测。
 /// </summary>
 internal sealed class TagBackgroundService : BackgroundService
 {

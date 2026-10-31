@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using StdUnit.Tags.Tests.Fakes;
 using StdUnit.Tags.WebUi;
 using Xunit;
@@ -11,8 +10,9 @@ using Xunit;
 namespace StdUnit.Tags.Tests.NetCoreOnly.WebUi;
 
 /// <summary>
-/// <c>AddTagsStream</c>：对外只暴露 <see cref="ITagsStreamHub"/>，且它与 hosted service 是同一个实例；
-/// 具名流用 <c>AddKeyedTagsStream(key)</c> 决定观测哪个 <see cref="ITagsProjectCtrl"/>。
+/// <c>AddTagsStream</c>：对外只暴露 <see cref="ITagsStreamHub"/>，且它就是 registry 里那一路的同一个实例；
+/// 具名流用 <c>AddKeyedTagsStream(key)</c> 决定观测哪个 <see cref="ITagsProjectCtrl"/>。<br/>
+/// 启动点是 <c>MapTagsStream()</c>（<see cref="TagsStreamRegistry.StartAll"/>）——这里直接调 registry 模拟。
 /// </summary>
 public class TagsStreamRegistrationTests
 {
@@ -51,8 +51,8 @@ public class TagsStreamRegistrationTests
         var hub = provider.GetRequiredService<ITagsStreamHub>();
         Assert.Same(hub, provider.GetRequiredService<ITagsStreamHub>());  // Singleton
 
-        // 同一个实例既是接口服务，又是随宿主启停的 IHostedService。
-        Assert.Contains(provider.GetServices<IHostedService>(), h => ReferenceEquals(h, hub));
+        // 同一个实例：接口服务 = registry 里那一路（端点与启动点共用）。
+        Assert.Same(hub, provider.GetRequiredService<TagsStreamRegistry>().GetRequired(null).Hub);
 
         Assert.Equal(0, hub.Epoch);
         var tree = hub.GetTree();
@@ -75,9 +75,10 @@ public class TagsStreamRegistrationTests
         using var project = CreateProject(provider);
 
         var hub = provider.GetRequiredKeyedService<ITagsStreamHub>("dev");
-        var hosted = Assert.Single(provider.GetServices<IHostedService>());
-        Assert.Same(hub, hosted);
-        await hosted.StartAsync(default);
+        var registry = provider.GetRequiredService<TagsStreamRegistry>();
+        var entry = registry.GetRequired("dev");
+        Assert.Same(hub, entry.Hub);
+        registry.StartAll();
         try
         {
             // 不具名的那个被启动，本 hub 不应有任何反应（它绑的是 "dev"）。
@@ -93,7 +94,7 @@ public class TagsStreamRegistrationTests
         }
         finally
         {
-            await hosted.StopAsync(default);
+            await entry.Hub.StopAsync(default);
         }
     }
 
@@ -116,15 +117,11 @@ public class TagsStreamRegistrationTests
         var devHub = provider.GetRequiredKeyedService<ITagsStreamHub>("dev");
         Assert.NotSame(defaultHub, devHub);
 
-        // 两路各一个 hosted service，且都指向各自的 hub。
-        var hosted = provider.GetServices<IHostedService>().ToArray();
-        Assert.Equal(2, hosted.Length);
-        Assert.Contains(hosted, h => ReferenceEquals(h, defaultHub));
-        Assert.Contains(hosted, h => ReferenceEquals(h, devHub));
-        foreach (var service in hosted)
-        {
-            await service.StartAsync(default);
-        }
+        // 两路各一个 hub，且接口服务指向各自的那一个。
+        var registry = provider.GetRequiredService<TagsStreamRegistry>();
+        Assert.Same(defaultHub, registry.GetRequired(null).Hub);
+        Assert.Same(devHub, registry.GetRequired("dev").Hub);
+        registry.StartAll();
 
         try
         {
@@ -139,9 +136,9 @@ public class TagsStreamRegistrationTests
         }
         finally
         {
-            foreach (var service in hosted)
+            foreach (var entry in registry.All)
             {
-                await service.StopAsync(default);
+                await entry.Hub.StopAsync(default);
             }
         }
     }
@@ -230,8 +227,9 @@ public class TagsStreamRegistrationTests
         using var project = CreateProject(provider);
 
         var hub = provider.GetRequiredService<ITagsStreamHub>();
-        var hosted = Assert.Single(provider.GetServices<IHostedService>());
-        await hosted.StartAsync(default);
+        var registry = provider.GetRequiredService<TagsStreamRegistry>();
+        var entry = registry.GetRequired(null);
+        registry.StartAll();
         try
         {
             named.RaiseStarted(project);
@@ -243,7 +241,7 @@ public class TagsStreamRegistrationTests
         }
         finally
         {
-            await hosted.StopAsync(default);
+            await entry.Hub.StopAsync(default);
         }
     }
 
@@ -268,7 +266,7 @@ public class TagsStreamRegistrationTests
 
         var hub = provider.GetRequiredService<ITagsStreamHub>();
         Assert.Same(hub, provider.GetRequiredService<ITagsStreamHub>());
-        Assert.Contains(provider.GetServices<IHostedService>(), h => ReferenceEquals(h, hub));
+        Assert.Same(hub, provider.GetRequiredService<TagsStreamRegistry>().GetRequired(null).Hub);
 
         // configure 落在这一路流自己的描述符上（不是被丢掉的临时对象）。
         var descriptor = Assert.Single(provider.GetServices<TagsStreamDescriptor>());
@@ -296,8 +294,7 @@ public class TagsStreamRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         var hub = provider.GetRequiredKeyedService<ITagsStreamHub>("dev");
-        var hosted = Assert.Single(provider.GetServices<IHostedService>());
-        Assert.Same(hub, hosted);
+        Assert.Same(hub, provider.GetRequiredService<TagsStreamRegistry>().GetRequired("dev").Hub);
 
         var descriptor = Assert.Single(provider.GetServices<TagsStreamDescriptor>());
         Assert.Equal("dev", descriptor.Key);

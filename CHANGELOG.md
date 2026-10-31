@@ -45,6 +45,8 @@
   - 写命令：`POST /stdunit.tags/value`（改测点值）、`POST /stdunit.tags/rescan`（标记未扫描）。
   - 注册：`services.AddTagsStream()` / `app.MapTagsStream()`；多项目场景用 `AddKeyedTagsStream(key)` 注册具名流（路径形如 `/stdunit.tags/{key}/stream`）。
     只允许改**路由前缀**（`app.MapTagsStream("/internal/tags")`），相对路径是线协议的一部分。
+  - 启动时机：观测流在 `app.MapTagsStream()` 映射端点时启动（每路一次、幂等），**不注册成 `IHostedService`**，
+    因此不依赖 Generic Host 的启动顺序；启动时会按 `ITagsProjectCtrl.Project` 对账，项目先跑起来也能补上（值流从下一轮生效）。
   - **不内置任何鉴权**，暴露到非受信网络前请自行加策略（如 `app.MapTagsStream().RequireAuthorization()`）。
 - **`AddKeyedTagsProjectCtrl(key)`**（`StdUnit.Tags`，`IServiceCollection` 与 `TagsProjectServiceBuilder` 上各一个）：
   以指定 key 注册 `ITagsProjectCtrl`；配合 `AddKeyedTagsStream(key)` 可以在一个宿主里同时监控多个项目。
