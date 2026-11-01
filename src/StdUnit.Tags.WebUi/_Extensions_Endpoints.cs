@@ -53,6 +53,7 @@ public static class TagsStreamExtensions_Endpoints
         // 观测流的**唯一启动点**：映射端点必然早于任何请求，也早于 StartPollAsync，
         // 所以 hub 不需要注册成 IHostedService，也不依赖 Generic Host 的启动顺序。
         // 只 map 不 AddTagsStream 时是 no-op（端点会在运行时回 404）。
+        // 停止则是另一半：TagsStreamRegistry 自己挂在 ApplicationStopping 上，并随容器释放兜底。
         endpoints.ServiceProvider.GetService<TagsStreamRegistry>()?.StartAll();
 
         var group = endpoints.MapGroup(prefix.Length == 0 ? "/" : prefix);

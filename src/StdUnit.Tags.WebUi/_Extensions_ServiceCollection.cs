@@ -20,7 +20,9 @@ public static class TagsStreamExtensions_ServiceCollection
     /// <b>启动时机</b>：hub 在 <c>MapTagsStream()</c> 映射端点时启动（那必然早于任何请求，也早于 <c>StartPollAsync</c>），
     /// <b>不依赖 Generic Host 的 <c>IHostedService</c></b>。DI 注册本来就在 <c>Build()</c> 之前完成、映射在其后，
     /// 所以这个顺序天然满足；启动时它会按 <see cref="ITagsProjectCtrl.Project"/> 对账，
-    /// 项目已经在轮询也能补上（轮次回调运行期也能挂，从下一轮开始生效）。
+    /// 项目已经在轮询也能补上（轮次回调运行期也能挂，从下一轮开始生效）。<br/>
+    /// <b>停止时机</b>：注册表挂在 <c>IHostApplicationLifetime.ApplicationStopping</c> 上（早于停服务器），
+    /// 停机时让在途 SSE 订阅者立即结束；容器释放时再兜底一次。
     /// </summary>
     /// <param name="services">服务集合</param>
     /// <param name="configure">这一路流的配置回调</param>

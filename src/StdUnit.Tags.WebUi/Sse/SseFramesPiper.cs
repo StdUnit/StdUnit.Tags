@@ -60,6 +60,12 @@ internal sealed class SseFramesPiper : IDisposable
     }
 
     /// <summary>
+    /// 结束这条流：写循环把队列里残留的帧刷完后，<see cref="ChannelReader{T}.WaitToReadAsync"/> 返回 false，
+    /// 循环正常退出、响应随即结束。<b>停机时由 hub 统一调用</b>（不摘除订阅者，摘除仍由 <see cref="Dispose"/> 负责）。
+    /// </summary>
+    public void Complete() => this._queue.Writer.TryComplete();
+
+    /// <summary>
     /// 写循环：把队列里的帧写进响应体。<br/>
     /// </summary>
     public async Task PipeFramesToStreamAsync(Stream body, CancellationToken ct)
@@ -111,7 +117,7 @@ internal sealed class SseFramesPiper : IDisposable
         }
 
         this._hub.RemovePiper(this);
-        this._queue.Writer.TryComplete();
+        this.Complete();
     }
 
 }

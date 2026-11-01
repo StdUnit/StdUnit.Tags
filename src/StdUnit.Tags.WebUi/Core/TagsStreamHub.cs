@@ -18,6 +18,18 @@ namespace StdUnit.Tags.WebUi;
 /// （见 <see cref="OnStartedOrStopped"/>）。
 /// </para>
 /// <para>
+/// <b>停止时机</b>：由 <see cref="TagsStreamRegistry"/> 在宿主的 <c>ApplicationStopping</c> 上调用
+/// <see cref="Stop"/>（早于"停 HostedService""停服务器"），容器释放时再兜底一次。<see cref="Stop"/> 会让
+/// 所有在途订阅者读到"流结束"，因此 SSE 请求立即返回、连接随即断开——不需要等服务器的关机超时。
+/// </para>
+/// <para>
+/// <b>一次性</b>：hub 与宿主同生命周期。Generic Host（含 <c>WebApplication</c>）一旦
+/// <c>StopAsync</c> 就不能再 <c>StartAsync</c>（实测两边都抛 <see cref="OperationCanceledException"/>），
+/// 所以 <see cref="Start"/> 在 <see cref="Stop"/> 之后是 no-op，而不是"再起一遍"。
+/// 运行期会反复启停的是被观测的<b>项目</b>（<see cref="ITagsProjectCtrl"/>），那条路径不需要重启 hub：
+/// 见 <see cref="OnStartedOrStopped"/> / <see cref="OnProjectStarted"/>（每次启动递增 epoch）。
+/// </para>
+/// <para>
 /// <b>线程模型</b>：轮次回调在<b>轮询线程</b>上执行，只做 O(改动的点) 的字典写入 + 一次 <c>TryWrite</c>，
 /// 不做序列化、不做 IO、不阻塞；序列化与扇出在单独的发送循环里，每个订阅者另有自己的写循环与有界队列。
 /// 任何一环满了都只丢帧并触发重同步，不会反压到轮询。
@@ -46,6 +58,7 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     private int _pipersCount;
     private int _overflow;
     private int _started;
+    private int _stopped;
     private CancellationTokenSource? _cts;
     private Task? _pumpTask;
     private Task? _heartbeatTask;
@@ -96,7 +109,7 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     /// 幂等启动：订阅 <see cref="ITagsProjectCtrl.StartedOrStopped"/>、拉起发送循环与心跳循环，
     /// 并按 <see cref="ITagsProjectCtrl.Project"/> 对账（补上"启动之前项目就已经在跑"的索引与轮次回调）。<br/>
     /// 由 <c>MapTagsStream()</c> 统一调用（<see cref="TagsStreamRegistry.StartAll"/>）；
-    /// 启动之后一直订阅到 <see cref="StopAsync"/>/<see cref="Dispose"/>——项目停止时不能退订，
+    /// 启动之后一直订阅到 <see cref="Stop"/> / <see cref="StopAsync"/> / <see cref="Dispose"/>——项目停止时不能退订，
     /// 否则接不到下一次"已启动"。
     /// <para>
     /// <b>同步</b>：内部只有"订阅事件 + 起两个后台循环 + 一次对账"，没有 IO，全部同步完成；
@@ -106,6 +119,12 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     /// </summary>
     public void Start()
     {
+        if (Volatile.Read(ref this._stopped) != 0)
+        {
+            // 宿主已经结束（先 Stop、后 Start 的极端顺序）：不要再拉起后台循环。
+            return;
+        }
+
         if (Interlocked.Exchange(ref this._started, 1) != 0)
         {
             return;
@@ -122,18 +141,59 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     }
 
     /// <summary>
-    /// 停止观测：退订事件、取消并等待发送/心跳循环退出。<br/>
-    /// 正常停机由 DI 容器释放单例时的 <see cref="Dispose"/> 兜底（只取消、不等待）。
+    /// 停止观测：退订事件、让所有在途订阅者读到"流结束"（SSE 请求随即返回）、取消发送/心跳循环。<br/>
+    /// <b>不阻塞、不等待循环退出</b>（本类可能在宿主的 <c>ApplicationStopping</c> 回调里被调用，那里不能同步等待异步）；
+    /// 需要确定性退出的调用方用 <see cref="StopAsync"/>。<b>幂等</b>，重复调用无副作用。
     /// </summary>
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public void Stop()
     {
         this._ctrl.StartedOrStopped -= this.OnStartedOrStopped;
 
+        lock (this._gate)
+        {
+            if (Interlocked.Exchange(ref this._stopped, 1) != 0)
+            {
+                return;
+            }
+
+            // 完成每个订阅者的队列：写循环把残留帧刷完后 WaitToReadAsync 返回 false → 端点返回 → 连接关闭。
+            // 这一步是"宿主停机时 SSE 能立即断开"的关键，与后台循环无关。
+            foreach (var piper in this._pipers)
+            {
+                piper.Complete();
+            }
+
+            this._pipers.Clear();
+            Interlocked.Exchange(ref this._pipersCount, 0);
+        }
+
         var cts = Interlocked.Exchange(ref this._cts, null);
-        if (cts is not null)
+        if (cts is null)
+        {
+            return;
+        }
+
+        try
         {
             cts.Cancel();
         }
+        catch (ObjectDisposedException)
+        {
+            // 已停过
+        }
+
+        // 有意不 Dispose：取消之后后台循环、以及仍在收尾的订阅者都可能继续碰到这个令牌，
+        // 释放它只会把"正常停机"变成 ObjectDisposedException；它也没有非托管资源需要释放。
+        // （<see cref="StopAsync"/> 会等循环真正退出，那时才适合释放，本类选择交给 GC 统一收。）
+    }
+
+    /// <summary>
+    /// 停止观测并<b>等待</b>发送/心跳循环真正退出（取消后两个循环都在"读到空/取消"处立刻返回，
+    /// 所以这里的等待是确定性的）。<see cref="Stop"/> 负责非阻塞的那一半，正常停机走的是它。
+    /// </summary>
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        this.Stop();
 
         var tasks = new[] { this._pumpTask, this._heartbeatTask };
         foreach (var task in tasks)
@@ -153,7 +213,6 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
             }
         }
 
-        cts?.Dispose();
         this._pumpTask = null;
         this._heartbeatTask = null;
     }
@@ -176,6 +235,14 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
 
         lock (this._gate)
         {
+            if (Volatile.Read(ref this._stopped) != 0)
+            {
+                // 已经停机：不再收编订阅者（否则它会留在集合里永远没人摘），
+                // 但仍返回一个"立刻结束"的 piper——写循环发完 retry 帧就返回，连接随即关闭。
+                piper.Complete();
+                return piper;
+            }
+
             piper.Enqueue(SseFrames.State(this._state));
 
             var index = this._index;
@@ -233,22 +300,7 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     }
 
     /// <inheritdoc/>
-    public void Dispose()
-    {
-        this._ctrl.StartedOrStopped -= this.OnStartedOrStopped;
-
-        var cts = Interlocked.Exchange(ref this._cts, null);
-        try
-        {
-            cts?.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // 已停过
-        }
-
-        cts?.Dispose();
-    }
+    public void Dispose() => this.Stop();
 
     private void OnStartedOrStopped(ITagsProjectCtrl sender, TagsProjectEventArgs args)
     {
@@ -405,7 +457,9 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     {
         try
         {
-            while (await this._pending.Reader.WaitToReadAsync(ct).ConfigureAwait(false))
+            // 先排空再等待：取消之后不再可能停在"刚读完、准备再次等待"的窗口里，
+            // 所以 StopAsync 的等待是确定性的（WaitToReadAsync 会拿着已取消的令牌立刻返回）。
+            while (true)
             {
                 while (this._pending.Reader.TryRead(out var batch))
                 {
@@ -422,6 +476,11 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
                     {
                         this._logger?.LogError(ex, "发送观测帧失败（入口={Entry}）", batch.EntryKey);
                     }
+                }
+
+                if (!await this._pending.Reader.WaitToReadAsync(ct).ConfigureAwait(false))
+                {
+                    return;
                 }
             }
         }

@@ -5,10 +5,15 @@ using Microsoft.AspNetCore.Http;
 namespace StdUnit.Tags.WebUi.Internal;
 
 /// <summary>
-/// 写命令端点：改测点值（<c>POST /stdunit.tags/value</c>）、标记未扫描（<c>POST /stdunit.tags/rescan</c>）。
+/// 写命令端点
 /// </summary>
 internal static class CommandsEndpoint
 {
+    /// <summary>
+    /// 改测点值（<c>POST /stdunit.tags/value</c>）、
+    /// </summary>
+    /// <param name="context"></param>
+    /// <returns></returns>
     public static async Task WriteValueAsync(HttpContext context)
     {
         var entry = context.GetKeyedTagsStreamEntry();
@@ -33,6 +38,11 @@ internal static class CommandsEndpoint
         await WriteResultAsync(context, outcome).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// 标记未扫描（<c>POST /stdunit.tags/rescan</c>）。
+    /// </summary>
+    /// <param name="context"></param>
+    /// <returns></returns>
     public static async Task RescanAsync(HttpContext context)
     {
         var entry = context.GetKeyedTagsStreamEntry();
