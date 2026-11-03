@@ -98,11 +98,11 @@ public class RunAsyncStartupTests
 
             public CountingRunner(CountingRunnerFactory owner) => _owner = owner;
 
-            public event RunnerStarted? RunnerStarted { add { } remove { } }
+            public RunnerStarted? RunnerStarted { get; set; }
 
-            public event RunnerCrashed? RunnerCrashed { add { } remove { } }
+            public RunnerCrashed? RunnerCrashed { get; set; }
 
-            public event TurnProcess? TurnProcess { add { } remove { } }
+            public TurnProcess? TurnProcess { get; set; }
 
             public Task StartAsync(ITagGrp entry, CancellationToken ct)
             {
@@ -139,11 +139,11 @@ public class RunAsyncStartupTests
             /// <summary>启动返回的 Task（同步抛出时为 null）。</summary>
             public Task? StartTask { get; private set; }
 
-            public event RunnerStarted? RunnerStarted { add { } remove { } }
+            public RunnerStarted? RunnerStarted { get; set; }
 
-            public event RunnerCrashed? RunnerCrashed { add { } remove { } }
+            public RunnerCrashed? RunnerCrashed { get; set; }
 
-            public event TurnProcess? TurnProcess { add { } remove { } }
+            public TurnProcess? TurnProcess { get; set; }
 
             public Task StartAsync(ITagGrp entry, CancellationToken ct)
             {

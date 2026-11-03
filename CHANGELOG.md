@@ -11,6 +11,15 @@ StdUnit.Tags.WebUi: 改动点
   
 按 `MapTagsStream()` 映射过端点的宿主无需额外代码。
 
+StdUnit.Tags / StdUnit.Tags.Core: **`ITagGrpRunner` 的三个回调由 `event` 改为单槽属性**
+  - `RunnerStarted` / `RunnerCrashed` / `TurnProcess` 由 `event` 改为 `{ get; set; }` 属性。
+    runner 实例从不对外暴露（由 `TagsProject` 通过 `ITagGrpRunnerFactory` 创建并持有），唯一的使用方就是 `ITagsProject`，
+    需要多播时由上层组合出**一个**委托再赋值。原来的 `event` 形态是**假承诺**：这些委托返回 `Task`，
+    而 C# 的多播只返回最后一个处理器的 `Task`，照 `await TurnProcess(...)` 写就是"只等待最后一个、其余无人观察"。
+  - 自定义 `ITagGrpRunner` 实现：把 `event` 声明改成属性；调用点改成"先取本地再判空"
+    （`var h = TurnProcess; if (h is not null) await h(grp, channel, ct);`）。订阅方写 `+=` 仍然可用（等价于读取 + 赋值）。
+  - 这是**公开接口形态变更**，用旧版本编译的自定义 runner 实现需要重编。
+
 StdUnit.Tags: **启动改为两阶段（事务性）**
   - `RunAsync` 先对全部入口算完逻辑组件匹配（`ILogicet.MatchEntry` / `Order`），再建 runner 并启动轮询。启动窗口内任何失败
     （`MatchEntry` / `Order` 抛异常、`IntentCapacity` 非法、runner 工厂抛异常）都不会再留下**已经跑起来但无人等待**的入口——

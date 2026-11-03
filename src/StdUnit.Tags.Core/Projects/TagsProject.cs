@@ -306,8 +306,8 @@ internal class TagsProject : ITagsProject
             _ = this._entryWriteIntentChannels.GetOrAdd(entry.TagName(), _ => this.CreateIntentChannel());
 
             var runner = this._tagGrpRunnerFactory.Create(this);
-            runner.RunnerStarted += RunnerStarted;
-            runner.TurnProcess += async (grp, ch, turnCt) =>
+            runner.RunnerStarted = this.RunnerStarted;
+            runner.TurnProcess = async (grp, ch, turnCt) =>
             {
                 foreach (var l in logicets)
                 {
@@ -326,7 +326,7 @@ internal class TagsProject : ITagsProject
                     await handler(grp, ch, turnCt);
                 }
             };
-            runner.RunnerCrashed += RunnerCrashed;
+            runner.RunnerCrashed = this.RunnerCrashed;
             prepared.Add((entry, runner));
         }
 

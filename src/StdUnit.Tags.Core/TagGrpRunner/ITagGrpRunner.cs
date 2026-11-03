@@ -67,8 +67,8 @@ public delegate Task RunnerCrashed(ITagGrp grp, ITagChannel? channel, Exception 
 /// <b>多通道</b>：一个入口下可以挂多个通道。每轮在读写之前，运行器会先为入口子树中
 /// 所有会被用到的通道（见 <see cref="ITagGrpExtensions.CollectChannels"/>）逐一执行
 /// <see cref="ITagChannel.EnsureConnectedAsync"/>，这样不会出现“读了一半才发现辅通道未连接、整轮作废”的
-/// 情况。入口自身解析出的通道称为<b>主通道</b>，它是各事件委托中 <c>channel</c> 参数的语义；
-/// 辅通道不进事件，需要时请从入口上自行解析。
+/// 情况。入口自身解析出的通道称为<b>主通道</b>，它是各回调中 <c>channel</c> 参数的语义；
+/// 辅通道不进回调，需要时请从入口上自行解析。
 /// </para>
 /// <para>
 /// <b>通道独占约束</b>：崩溃/取消后的清理路径会断开入口相关的<b>全部</b>通道，
@@ -81,21 +81,25 @@ public interface ITagGrpRunner
 {
 
     /// <summary>
-    /// 启动事件
+    /// 启动回调（<b>单槽</b>，可为 <c>null</c>）。<br/>
+    /// 运行器实例不对外暴露，唯一的使用方是 <see cref="ITagsProject"/>——需要多播时由上层组合出<b>一个</b>委托再赋值，
+    /// 运行器不负责合并多个订阅者（<see cref="TurnProcess"/> 之类的委托返回 <see cref="Task"/>，
+    /// 用 <c>event</c> 多播会退化成"只 await 最后一个处理器"）。<br/>
+    /// 必须在 <see cref="StartAsync"/> 之前赋值。
     /// </summary>
-    event RunnerStarted? RunnerStarted;
+    RunnerStarted? RunnerStarted { get; set; }
 
     /// <summary>
-    /// 崩溃事件。<br/>
-    /// <b>取消不是崩溃</b>：项目停止导致的取消不会触发本事件。<br/>
-    /// 注意这里不要再有异常发生，否则会视作对应的入口轮询需要停机
+    /// 崩溃回调（<b>单槽</b>，可为 <c>null</c>）。<br/>
+    /// <b>取消不是崩溃</b>：项目停止导致的取消不会触发本回调。<br/>
+    /// 注意这里不要再有异常发生，否则会视作对应的入口轮询需要停机。
     /// </summary>
-    event RunnerCrashed? RunnerCrashed;
+    RunnerCrashed? RunnerCrashed { get; set; }
 
     /// <summary>
-    /// 每一轮处理
+    /// 每一轮处理回调（<b>单槽</b>，可为 <c>null</c>），在"读取输入 + 逻辑处理"之后、"刷写输出"之前调用。
     /// </summary>
-    event TurnProcess? TurnProcess;
+    TurnProcess? TurnProcess { get; set; }
 
     /// <summary>
     /// 启动对群组的监控: loop(意图执行-> 读取输入 -> 逻辑处理 -> 刷写输出)<br/>
