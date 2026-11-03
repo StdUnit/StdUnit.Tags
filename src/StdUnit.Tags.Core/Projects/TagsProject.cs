@@ -306,7 +306,8 @@ internal class TagsProject : ITagsProject
             _ = this._entryWriteIntentChannels.GetOrAdd(entry.TagName(), _ => this.CreateIntentChannel());
 
             var runner = this._tagGrpRunnerFactory.Create(this);
-            runner.RunnerStarted = this.RunnerStarted;
+            // runner 是单槽回调：把"多播 + 调用时取快照"收口在本类（项目层才是多个独立观察者的地方）。
+            runner.RunnerStarted = (grp, ch, startedCt) => this.InvokeRunnerStartedAsync(grp, ch, startedCt);
             runner.TurnProcess = async (grp, ch, turnCt) =>
             {
                 foreach (var l in logicets)
@@ -326,7 +327,7 @@ internal class TagsProject : ITagsProject
                     await handler(grp, ch, turnCt);
                 }
             };
-            runner.RunnerCrashed = this.RunnerCrashed;
+            runner.RunnerCrashed = (grp, ch, ex, crashedCt) => this.InvokeRunnerCrashedAsync(grp, ch, ex, crashedCt);
             prepared.Add((entry, runner));
         }
 
@@ -447,10 +448,96 @@ internal class TagsProject : ITagsProject
     }
     #endregion
 
+    #region Runner events（多播）
+
+    /// <summary>
+    /// 订阅者列表（低频事件：每次建连/崩溃才触发），写侧用
+    /// <see cref="_runnerEventsGate"/> 保护"读-改-写"，读侧用
+    /// <see cref="Volatile"/> 读取一次快照。<br/>
+    /// 这里刻意不做轮询热路径式的无锁设计（那是 <see cref="TurnProcess"/> 的诉求）：
+    /// 转发给 runner 的委托<b>每次调用时才读快照</b>，所以运行期订阅/退订从下一次通知开始生效。
+    /// </summary>
+    private RunnerStarted? _runnerStartedHandlers;
+
+    /// <summary>见 <see cref="_runnerStartedHandlers"/>。</summary>
+    private RunnerCrashed? _runnerCrashedHandlers;
+
+    /// <summary>保护上面两个委托字段的合并/移除。</summary>
+    private readonly object _runnerEventsGate = new();
+
     /// <inheritdoc/>
-    public event RunnerCrashed? RunnerCrashed;
+    public event RunnerStarted? RunnerStarted
+    {
+        add
+        {
+            if (value is null) return;
+            lock (this._runnerEventsGate)
+            {
+                this._runnerStartedHandlers += value;
+            }
+        }
+        remove
+        {
+            if (value is null) return;
+            lock (this._runnerEventsGate)
+            {
+                this._runnerStartedHandlers -= value;
+            }
+        }
+    }
+
     /// <inheritdoc/>
-    public event RunnerStarted? RunnerStarted;
+    public event RunnerCrashed? RunnerCrashed
+    {
+        add
+        {
+            if (value is null) return;
+            lock (this._runnerEventsGate)
+            {
+                this._runnerCrashedHandlers += value;
+            }
+        }
+        remove
+        {
+            if (value is null) return;
+            lock (this._runnerEventsGate)
+            {
+                this._runnerCrashedHandlers -= value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 按注册顺序<b>串行</b>调用订阅者；<b>遇到第一个异常立即中断</b>并原样抛出（保留类型与堆栈）。<br/>
+    /// 刻意不做"收集全部异常再抛"：收集了却只抛一个等于把其余静默丢弃，而 Core 没有 logger 可以留痕；
+    /// 也不包装成 <see cref="AggregateException"/>——"谁抛谁负责、后续不再执行"更符合直觉，异常类型也可预测。
+    /// </summary>
+    private async Task InvokeRunnerStartedAsync(ITagGrp grp, ITagChannel? channel, CancellationToken ct)
+    {
+        var handlers = Volatile.Read(ref this._runnerStartedHandlers);
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var d in handlers.GetInvocationList())
+        {
+            await ((RunnerStarted)d)(grp, channel, ct);
+        }
+    }
+
+    /// <summary>见 <see cref="InvokeRunnerStartedAsync"/>。</summary>
+    private async Task InvokeRunnerCrashedAsync(ITagGrp grp, ITagChannel? channel, Exception ex, CancellationToken ct)
+    {
+        var handlers = Volatile.Read(ref this._runnerCrashedHandlers);
+        if (handlers is null) return;
+
+        foreach (var d in handlers.GetInvocationList())
+        {
+            await ((RunnerCrashed)d)(grp, channel, ex, ct);
+        }
+    }
+    #endregion
 
     #region TurnProcess handlers
     /// <summary>

@@ -55,17 +55,26 @@ public interface ITagsProject : IDisposable
     XElement? GetRootElement();
 
     /// <summary>
-    /// 轮询开始，会透传给<see cref="ITagGrpRunner.RunnerStarted"/>。<br/>
+    /// 某个入口的<b>运行器开始工作</b>（含崩溃恢复后的重连）：<b>每个入口各触发一次</b>，不是"项目启动一次"，
+    /// 它的运行器会再次进入轮询循环时也会再触发。要观测"项目整体启停"请用
+    /// <see cref="ITagsProjectCtrl.StartedOrStopped"/>。<br/>
+    /// <b>多播</b>：按注册顺序<b>串行</b> await 全部订阅者（总耗时相加）；<b>运行期订阅/退订从下一次通知开始生效</b>。
+    /// <b>任一订阅者抛异常即中断</b>（后续订阅者本次不再被调用），异常原样抛出——等价于该入口本轮失败，
+    /// 进入 <see cref="RunnerCrashed"/> 的恢复路径。<br/>
+    /// 回调运行在轮询线程上，必须尽快返回（重活请投递到自己的队列）。观察者若比项目活得短，需要自己 <c>-=</c>。<br/>
     /// 回调拿到的是项目的生命周期取消令牌（<see cref="ITagsProjectCtrl.StopAsync"/> 时取消）。
     /// </summary>
     event RunnerStarted? RunnerStarted;
 
     /// <summary>
-    /// 轮询崩溃，会透传给<see cref="ITagGrpRunner.RunnerCrashed"/>。<br/>
+    /// 某个入口的轮询崩溃，透传自该入口运行器的 <see cref="ITagGrpRunner.RunnerCrashed"/>。<br/>
     /// <b>取消不是崩溃</b>：项目停止导致的取消<b>不会</b>触发本事件。<br/>
     /// 通常来说，在该委托正常结束后，项目会自行重启轮询循环。<br/>
     /// 但需要注意的是，这个自行重启是指<b>事件委托没有再向外抛出异常</b>的情况：<br/>
-    /// 在<see cref="RunnerCrashed"/>中外抛异常会被视作对应入口需要<b>停机</b>！
+    /// 在<see cref="RunnerCrashed"/>中外抛异常会被视作对应入口需要<b>停机</b>！<br/>
+    /// <b>多播</b>：按注册顺序串行 await 全部订阅者；<b>任一订阅者抛异常即中断</b>（排在它后面的订阅者本次收不到通知），
+    /// 异常原样抛出并按"该入口停机"处理。所以告警/计数类观察者请自己 <c>try/catch</c>——不要把"自己不出错"的责任交给别人。<br/>
+    /// 运行期订阅/退订从下一次通知开始生效；回调运行在轮询线程上，必须尽快返回。
     /// </summary>
     event RunnerCrashed? RunnerCrashed;
 

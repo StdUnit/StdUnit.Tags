@@ -20,6 +20,17 @@ StdUnit.Tags / StdUnit.Tags.Core: **`ITagGrpRunner` 的三个回调由 `event` �
     （`var h = TurnProcess; if (h is not null) await h(grp, channel, ct);`）。订阅方写 `+=` 仍然可用（等价于读取 + 赋值）。
   - 这是**公开接口形态变更**，用旧版本编译的自定义 runner 实现需要重编。
 
+StdUnit.Tags: **`ITagsProject.RunnerStarted` / `RunnerCrashed` 修复为真正的多播（形态仍是 `event`，无 API 变更）**
+  - 此前它们是"转发给 runner 时抓一次委托快照"：`RunAsync` 之后订阅的观察者**永远收不到**通知（`PrepareEntries` 那一刻
+    还没有订阅者时，runner 侧拿到的就是 `null`）；有 2 个订阅者时 runner 只 `await` 最后一个，其余 `Task` 无人观察；
+    运行期 `-=` 也不生效。现在转发改为"**每次通知时读当前订阅者快照**"，按注册顺序串行 await 全部订阅者。
+  - 异常语义：任一订阅者抛异常即<b>中断本次通知</b>（排在它后面的订阅者不再被调用），异常<b>原样</b>抛出
+    （保留类型与堆栈，不包 `AggregateException`）。不做"收集全部异常再抛第一个"——那样等于把其余静默丢弃；
+    `Core` 没有 logger 可以留痕，而"谁抛谁负责、后续不再执行"更符合直觉、也更确定。
+    抛出的异常仍等价于该入口本轮失败（`RunnerCrashed` 抛出 = 该入口停机），所以观察者请自己 `try/catch`。
+  - `RunnerStarted` 的文档澄清为"**按入口**触发：每个入口各一次，崩溃恢复重连后再次触发"；项目级启停仍看
+    `ITagsProjectCtrl.StartedOrStopped`。回调仍在轮询线程上执行，多个订阅者的耗时**相加**。
+
 StdUnit.Tags: **启动改为两阶段（事务性）**
   - `RunAsync` 先对全部入口算完逻辑组件匹配（`ILogicet.MatchEntry` / `Order`），再建 runner 并启动轮询。启动窗口内任何失败
     （`MatchEntry` / `Order` 抛异常、`IntentCapacity` 非法、runner 工厂抛异常）都不会再留下**已经跑起来但无人等待**的入口——
