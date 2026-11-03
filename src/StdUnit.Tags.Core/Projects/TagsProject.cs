@@ -319,12 +319,16 @@ internal class TagsProject : ITagsProject
                     await l.ProcessAsync(grp, ch, turnCt);
                 }
 
-                // 公共回调排在 Logicets 之后：订阅者看到的是逻辑处理完成后的值。
-                // 有意不 catch：回调抛异常等价于本轮失败（与 Logicet 抛异常同义），见 ITagsProject.SetTurnProcessHandler 的文档。
-                // 回调表是写时复制的：这里读到的那份快照本轮内不会被改（运行期设置/清除从下一轮生效），所以不需要同步。
-                if (this._entryTurnHandlers.TryGetValue(grp.TagName(), out var handler))
+                // 公共订阅排在 Logicets 之后：订阅者看到的是逻辑处理完成后的值。
+                // 有意不 catch：回调抛异常等价于本轮失败（与 Logicet 抛异常同义），并且按注册顺序
+                // "首个异常即中断后续订阅者"（与 RunnerStarted / RunnerCrashed 的语义一致）。
+                // 订阅表是写时复制的：这里读到的那份快照本轮内不会被改（运行期变更从下一轮生效）。
+                if (this._entryTurnHandlers.TryGetValue(grp.TagName(), out var handlers))
                 {
-                    await handler(grp, ch, turnCt);
+                    foreach (var handler in handlers)
+                    {
+                        await handler(grp, ch, turnCt);
+                    }
                 }
             };
             runner.RunnerCrashed = (grp, ch, ex, crashedCt) => this.InvokeRunnerCrashedAsync(grp, ch, ex, crashedCt);
@@ -539,52 +543,125 @@ internal class TagsProject : ITagsProject
     }
     #endregion
 
-    #region TurnProcess handlers
+    #region TurnProcess subscriptions
     /// <summary>
-    /// 入口名 → 该入口的回调（每个入口最多一个）。<b>写时复制</b>：设置/清除时在
-    /// <see cref="_entryTurnHandlersGate"/> 下复制一份新表再整体替换，已发布的表实例永不再改，
-    /// 所以轮询线程可以直接读、不需要任何同步，运行期设置/清除自然就是"从下一轮开始生效"。
+    /// 入口名 → 该入口的订阅者数组（每个入口 0..N 个）。<b>写时复制</b>：订阅/退订时在
+    /// <see cref="_entryTurnHandlersGate"/> 下复制一份新表（和新的数组）再整体替换，已发布的实例永不再改，
+    /// 所以轮询线程可以直接读、不需要任何同步，运行期订阅/退订自然就是"从下一轮开始生效"。
     /// </summary>
-    private volatile Dictionary<string, TurnProcess> _entryTurnHandlers = new(StringComparer.Ordinal);
+    private volatile Dictionary<string, TurnProcess[]> _entryTurnHandlers = new(StringComparer.Ordinal);
 
-    /// <summary>保护 <see cref="_entryTurnHandlers"/> 的复制作业（只在设置/清除时短暂持有）。</summary>
+    /// <summary>保护 <see cref="_entryTurnHandlers"/> 的复制作业（只在订阅/退订时短暂持有）。</summary>
     private readonly object _entryTurnHandlersGate = new();
 
     /// <inheritdoc/>
-    public void SetTurnProcessHandler(string entry, TurnProcess? handler)
+    public IDisposable SubscribeTurnProcess(string entry, TurnProcess handler)
     {
         if (entry is null)
         {
             throw new ArgumentNullException(nameof(entry));
         }
+        if (handler is null)
+        {
+            throw new ArgumentNullException(
+                nameof(handler),
+                "轮次回调不能为 null；要退订请 Dispose 订阅时返回的句柄。");
+        }
         if (this._disposed)
         {
             throw new ObjectDisposedException(
                 this.GetType().Name,
-                $"项目已释放，不能再设置 TurnProcess 回调（入口={entry}）：回调的作用域就是项目实例。");
+                $"项目已释放，不能再订阅 TurnProcess 回调（入口={entry}）：订阅的作用域就是项目实例。");
         }
 
-        // 与 WriteIntent 的入口校验保持一致：只允许向合法的入口设置
+        // 与 WriteIntent 的入口校验保持一致：只允许向合法的入口订阅
         if (!this.GetEntries().Any(e => e.TagName() == entry))
         {
             throw new KeyNotFoundException($"未找到指定的入口测点组: {entry}");
         }
 
-        // 替换语义：需要组合多个观察者时，由调用方自己组装成一个 TurnProcess。
-        // 运行期也允许设置/清除（写时复制，从下一轮开始生效）。
+        var subscription = new TurnProcessSubscription(this, entry, handler);
         lock (this._entryTurnHandlersGate)
         {
-            var updated = new Dictionary<string, TurnProcess>(this._entryTurnHandlers, StringComparer.Ordinal);
-            if (handler is null)
+            var current = this._entryTurnHandlers;
+            var updated = new Dictionary<string, TurnProcess[]>(current, StringComparer.Ordinal);
+            if (current.TryGetValue(entry, out var handlers) && handlers.Length > 0)
             {
-                updated.Remove(entry);
+                var appended = new TurnProcess[handlers.Length + 1];
+                handlers.CopyTo(appended, 0);
+                appended[appended.Length - 1] = handler;
+                updated[entry] = appended;
             }
             else
             {
-                updated[entry] = handler;
+                updated[entry] = new[] { handler };
             }
 
             this._entryTurnHandlers = updated;
+        }
+
+        return subscription;
+    }
+
+    /// <summary>
+    /// 退订（由 <see cref="TurnProcessSubscription.Dispose"/> 调用）。只摘掉<b>那一个</b>订阅实例：
+    /// 同一个委托实例订阅多次时，每次 Dispose 摘掉其中一次。
+    /// </summary>
+    private void UnsubscribeTurnProcess(TurnProcessSubscription subscription)
+    {
+        lock (this._entryTurnHandlersGate)
+        {
+            var current = this._entryTurnHandlers;
+            if (!current.TryGetValue(subscription.Entry, out var handlers))
+            {
+                return;
+            }
+
+            var index = Array.FindIndex(handlers, h => ReferenceEquals(h, subscription.Handler));
+            if (index < 0)
+            {
+                return;
+            }
+
+            var updated = new Dictionary<string, TurnProcess[]>(current, StringComparer.Ordinal);
+            if (handlers.Length == 1)
+            {
+                updated.Remove(subscription.Entry);
+            }
+            else
+            {
+                var removed = new TurnProcess[handlers.Length - 1];
+                Array.Copy(handlers, 0, removed, 0, index);
+                Array.Copy(handlers, index + 1, removed, index, handlers.Length - index - 1);
+                updated[subscription.Entry] = removed;
+            }
+
+            this._entryTurnHandlers = updated;
+        }
+    }
+
+    /// <summary>
+    /// 订阅句柄。<b>幂等</b>：Dispose 只生效一次；项目已释放之后再 Dispose 是无操作（不抛）。
+    /// </summary>
+    private sealed class TurnProcessSubscription : IDisposable
+    {
+        private TagsProject? _owner;
+
+        internal TurnProcessSubscription(TagsProject owner, string entry, TurnProcess handler)
+        {
+            this._owner = owner;
+            this.Entry = entry;
+            this.Handler = handler;
+        }
+
+        internal string Entry { get; }
+
+        internal TurnProcess Handler { get; }
+
+        public void Dispose()
+        {
+            var owner = Interlocked.Exchange(ref this._owner, null);
+            owner?.UnsubscribeTurnProcess(this);
         }
     }
     #endregion

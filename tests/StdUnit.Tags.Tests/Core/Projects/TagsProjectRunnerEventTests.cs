@@ -134,7 +134,7 @@ public class TagsProjectRunnerEventTests : IDisposable
         using var proj = CreateSingleEntryProject(scope);
 
         // 触发崩溃：轮次回调抛异常（与 Logicet 抛异常同义）。
-        proj.SetTurnProcessHandler("g1", (_, _, _) => throw new InvalidOperationException("observer boom"));
+        _ = proj.SubscribeTurnProcess("g1", (_, _, _) => throw new InvalidOperationException("observer boom"));
 
         var log = new ConcurrentQueue<string>();
         var secondCalled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -173,7 +173,7 @@ public class TagsProjectRunnerEventTests : IDisposable
         var crashOn = false;
         var turnCount = 0;
 
-        proj.SetTurnProcessHandler("g1", (_, _, _) =>
+        _ = proj.SubscribeTurnProcess("g1", (_, _, _) =>
         {
             if (Volatile.Read(ref crashOn))
             {
@@ -254,7 +254,7 @@ public class TagsProjectRunnerEventTests : IDisposable
 
         // 触发一次崩溃，让运行器重连（重连时会再次触发 RunnerStarted）。
         var crashOnce = 1;
-        proj.SetTurnProcessHandler("g1", (_, _, _) =>
+        _ = proj.SubscribeTurnProcess("g1", (_, _, _) =>
         {
             if (Interlocked.Exchange(ref crashOnce, 0) == 1)
             {
@@ -305,3 +305,4 @@ public class TagsProjectRunnerEventTests : IDisposable
         await StopAsync(cts, run);
     }
 }
+

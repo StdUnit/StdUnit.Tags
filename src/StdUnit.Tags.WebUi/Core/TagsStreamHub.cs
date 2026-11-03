@@ -7,7 +7,7 @@ namespace StdUnit.Tags.WebUi;
 /// <summary>
 /// 只读观测流的核心实现（对外只暴露 <see cref="ITagsStreamHub"/>）：<br/>
 /// - 跟踪 <see cref="ITagsProjectCtrl"/> 的启停，维护每次启动的 <c>epoch</c> 与结构索引；<br/>
-/// - 为每个入口用 <see cref="ITagsProject.SetTurnProcessHandler"/> 挂一个"轮次完成"回调，做值 diff；<br/>
+/// - 为每个入口用 <see cref="ITagsProject.SubscribeTurnProcess"/> 订阅一个"轮次完成"回调，做值 diff；<br/>
 /// - 把结果序列化成 SSE 帧，扇出给各订阅者（每帧只序列化一次）。<br/>
 /// 同时是订阅者集合的持有者：订阅相关的成员只出现在内部的
 /// <see cref="ITagsStreamHub"/> 上，只服务同一程序集里的端点与 <see cref="SseFramesPiper"/>。
@@ -49,6 +49,13 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
 
     private readonly HashSet<SseFramesPiper> _pipers = new();
     private readonly Channel<PendingBatch> _pending;
+
+    /// <summary>
+    /// 当前项目上的轮次订阅句柄（只在 <see cref="_transitionGate"/> 下访问）。<br/>
+    /// 项目停止/切换、或 hub 自己停止时必须退订：否则已释放的项目会因为委托引用而多活，
+    /// 回调也会继续打到已经停掉的 hub 上。
+    /// </summary>
+    private readonly List<IDisposable> _turnSubscriptions = new();
 
     private volatile ProjectIndex? _index;
     private volatile ITagsProject? _project;
@@ -165,6 +172,12 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
 
             this._pipers.Clear();
             Interlocked.Exchange(ref this._pipersCount, 0);
+        }
+
+        // 停止观测后不再接收轮次通知：退订并把句柄还给项目（避免已释放的项目被委托引用拖住）。
+        lock (this._transitionGate)
+        {
+            this.UnsubscribeTurns();
         }
 
         var cts = Interlocked.Exchange(ref this._cts, null);
@@ -333,6 +346,9 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
                 return;
             }
 
+            // 换项目（或上一次"已停止"没派发到）：先把旧项目上的订阅摘干净，再挂新的。
+            this.UnsubscribeTurns();
+
             var epoch = Interlocked.Increment(ref this._epoch);
             ProjectIndex index;
             try
@@ -357,33 +373,52 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
                 }
             }
 
-            // 运行期也能挂（SetTurnProcessHandler 从下一轮生效）：hub 晚于轮询启动时，这里就是在补挂回调。
+            // 运行期也能订阅（从下一轮生效）：hub 晚于轮询启动时，这里就是在补挂回调。
             foreach (var entry in index.Entries)
             {
+                if (Volatile.Read(ref this._stopped) != 0)
+                {
+                    // 已经停机：不再补挂，否则会留下指向已停止 hub 的回调。
+                    break;
+                }
+
                 var entryKey = entry.Key;
                 try
                 {
-                    project.SetTurnProcessHandler(entryKey, (_, _, _) =>
+                    this._turnSubscriptions.Add(project.SubscribeTurnProcess(entryKey, (_, _, _) =>
                     {
                         this.OnTurn(epoch, entryKey);
                         return Task.CompletedTask;
-                    });
+                    }));
                 }
                 catch (Exception ex)
                 {
                     this._logger?.LogWarning(
                         ex,
-                        "无法为入口 {Entry} 注册轮次回调（项目可能已释放）：该入口只能观测结构，观测不到值",
+                        "无法为入口 {Entry} 订阅轮次回调（项目可能已释放）：该入口只能观测结构，观测不到值",
                         entryKey);
                 }
             }
         }
     }
 
+    /// <summary>退订当前项目的全部轮次订阅（调用方必须持有 <see cref="_transitionGate"/>）。</summary>
+    private void UnsubscribeTurns()
+    {
+        foreach (var subscription in this._turnSubscriptions)
+        {
+            subscription.Dispose();
+        }
+
+        this._turnSubscriptions.Clear();
+    }
+
     private void OnProjectStopped()
     {
         lock (this._transitionGate)
         {
+            this.UnsubscribeTurns();
+
             lock (this._gate)
             {
                 if (this._project is null)

@@ -12,15 +12,15 @@ using Xunit;
 namespace StdUnit.Tags.Tests.Core.Projects;
 
 /// <summary>
-/// 验证 <see cref="ITagsProject.SetTurnProcessHandler"/>：<br/>
-/// - 按入口设置，某入口每一轮触发一次，且<b>只</b>触发该入口的回调；<br/>
-/// - 排在 Logicets <b>之后</b>（回调看到的是逻辑处理完成后的值）；<br/>
-/// - 每个入口最多一个回调：重复设置是替换，多个观察者由调用方自己组合（顺序显式）；<br/>
-/// - 运行前/运行中都能设置：运行期设置与清除都<b>从下一轮开始生效</b>，传 <c>null</c> 表示清除；<br/>
-/// - 项目已释放后设置抛 <see cref="ObjectDisposedException"/>；<br/>
-/// - 回调抛出的异常不被吞掉（走 <see cref="ITagsProject.RunnerCrashed"/> 的恢复路径）；<br/>
+/// 验证 <see cref="ITagsProject.SubscribeTurnProcess"/>：<br/>
+/// - 按入口订阅，某入口每一轮触发一次，且<b>只</b>触发该入口的订阅者；<br/>
+/// - 排在 Logicets <b>之后</b>（订阅者看到的是逻辑处理完成后的值）；<br/>
+/// - 每个入口可以有多个订阅者：按<b>注册顺序串行</b> await，任一订阅者抛异常即中断后续（本轮失败）；<br/>
+/// - 运行前/运行中都能订阅：运行期订阅与退订都<b>从下一轮开始生效</b>；<br/>
+/// - 句柄 <c>Dispose</c> 即退订（幂等），项目已释放后再 <c>Dispose</c> 是无操作；<br/>
+/// - 项目已释放后订阅抛 <see cref="ObjectDisposedException"/>；<br/>
 /// - 入口被禁用时不会产生轮次，因此不会触发；<br/>
-/// - 未知入口 / null 入口按契约抛异常。
+/// - 未知入口 / null 入口 / null 回调按契约抛异常。
 /// </summary>
 public class TagsProjectTurnProcessTests : IDisposable
 {
@@ -120,7 +120,7 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task Handler_FiresEveryTurn_ForRegisteredEntry()
+    public async Task Subscription_FiresEveryTurn_ForRegisteredEntry()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
@@ -128,7 +128,7 @@ public class TagsProjectTurnProcessTests : IDisposable
         var count = new int[1];
         var threeTurns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
             Assert.Equal("g1", entry.TagName());
             if (Interlocked.Increment(ref count[0]) >= 3)
@@ -148,7 +148,7 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task Handler_IsScopedToItsEntry()
+    public async Task Subscription_IsScopedToItsEntry()
     {
         // 通道不能跨入口共用（一个通道 = 一个轮询回路），所以每个入口用自己的通道实例。
         using var scope = _root.CreateScope();
@@ -163,7 +163,7 @@ public class TagsProjectTurnProcessTests : IDisposable
         var g1Turns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var g2Turns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
             if (Interlocked.Increment(ref g1Calls[0]) >= 2)
             {
@@ -171,7 +171,7 @@ public class TagsProjectTurnProcessTests : IDisposable
             }
             return Task.CompletedTask;
         });
-        proj.SetTurnProcessHandler("g2", (entry, channel, _) =>
+        proj.SubscribeTurnProcess("g2", (entry, channel, _) =>
         {
             if (Interlocked.Increment(ref g2Calls[0]) >= 2)
             {
@@ -193,7 +193,7 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task Handler_OnlyRegisteredEntryIsNotified()
+    public async Task Subscription_OnlyRegisteredEntryIsNotified()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateProject(scope.ServiceProvider, new XElement("Project",
@@ -205,7 +205,7 @@ public class TagsProjectTurnProcessTests : IDisposable
         var entries = new ConcurrentDictionary<string, int>(StringComparer.Ordinal);
         var g1Turns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
             entries.AddOrUpdate(entry.TagName(), 1, (_, old) => old + 1);
             g1Turns.TrySetResult(true);
@@ -218,7 +218,7 @@ public class TagsProjectTurnProcessTests : IDisposable
         await WaitOrFailAsync(g1Turns.Task, "g1 的回调");
         await Task.Delay(ScanIntervalMs * 3);
 
-        // 只为 g1 注册：无论 g2 跑了多少轮，都不应收到 g2 的通知。
+        // 只为 g1 订阅：无论 g2 跑了多少轮，都不应收到 g2 的通知。
         Assert.True(entries.ContainsKey("g1"));
         Assert.DoesNotContain("g2", entries.Keys);
 
@@ -226,7 +226,7 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task Handler_RunsAfterLogicets()
+    public async Task Subscription_RunsAfterLogicets()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
@@ -237,7 +237,7 @@ public class TagsProjectTurnProcessTests : IDisposable
         proj.Logicets.Add(new SetValueLogicet(proj, tag, written));
 
         var observed = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
             observed.TrySetResult(tag.Value);
             return Task.CompletedTask;
@@ -254,7 +254,7 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task Handler_NotRegistered_DoesNotThrow()
+    public async Task NoSubscription_DoesNotThrow()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
@@ -262,31 +262,34 @@ public class TagsProjectTurnProcessTests : IDisposable
         using var cts = new CancellationTokenSource();
         var run = proj.RunAsync(cts.Token);
 
-        // 让它跑几轮：没有注册回调时，内部必须走"查不到就跳过"而不是空引用。
+        // 让它跑几轮：没有订阅者时，内部必须走"查不到就跳过"而不是空引用。
         await Task.Delay(ScanIntervalMs * 5);
 
         await StopAsync(cts, run);
     }
 
     [Fact]
-    public async Task Set_SecondCall_ReplacesPreviousHandler()
+    public async Task MultipleSubscriptions_InvokedInRegistrationOrder_AndEachTaskAwaited()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
-        var first = new int[1];
-        var second = new int[1];
+        var log = new List<string>();
+        var firstCompleted = false;
+        var secondSawFirstCompleted = false;
         var secondCalled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        // 第一个订阅者异步完成：第二个必须等它返回的 Task 完成之后才被调用。
+        proj.SubscribeTurnProcess("g1", async (entry, channel, ct) =>
         {
-            Interlocked.Increment(ref first[0]);
-            return Task.CompletedTask;
+            await Task.Delay(30);
+            lock (log) { log.Add("first"); }
+            Volatile.Write(ref firstCompleted, true);
         });
-        // 替换语义：后设置的生效，前一个不再被调用。
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        proj.SubscribeTurnProcess("g1", (entry, channel, ct) =>
         {
-            Interlocked.Increment(ref second[0]);
+            Volatile.Write(ref secondSawFirstCompleted, Volatile.Read(ref firstCompleted));
+            lock (log) { log.Add("second"); }
             secondCalled.TrySetResult(true);
             return Task.CompletedTask;
         });
@@ -294,60 +297,60 @@ public class TagsProjectTurnProcessTests : IDisposable
         using var cts = new CancellationTokenSource();
         var run = proj.RunAsync(cts.Token);
 
-        await WaitOrFailAsync(secondCalled.Task, "后设置的回调被调用");
+        await WaitOrFailAsync(secondCalled.Task, "第二个订阅者被调用");
+        Assert.True(secondSawFirstCompleted, "多个订阅者必须逐个 await，而不是只等最后一个");
 
-        Assert.True(Volatile.Read(ref second[0]) >= 1);
-        Assert.Equal(0, Volatile.Read(ref first[0]));
+        string[] snapshot;
+        lock (log) { snapshot = log.ToArray(); }
+        Assert.Equal("first", snapshot[0]);
+        Assert.Equal("second", snapshot[1]);
 
         await StopAsync(cts, run);
     }
 
     [Fact]
-    public async Task Set_ComposedHandler_InvokesObserversInDeclaredOrder()
+    public async Task SubscribeAfterRunStarted_TakesEffectFromNextRound()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
-        var order = new List<string>();
-        var composed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        // 多个观察者由调用方自己组合：顺序在组合处显式可见，而不是依赖"注册顺序"。
-        proj.SetTurnProcessHandler("g1", async (entry, channel, ct) =>
-        {
-            await Task.CompletedTask;
-            lock (order) { order.Add("first"); }
-
-            await Task.CompletedTask;
-            lock (order) { order.Add("second"); }
-
-            composed.TrySetResult(true);
-        });
-
         using var cts = new CancellationTokenSource();
         var run = proj.RunAsync(cts.Token);
 
-        await WaitOrFailAsync(composed.Task, "组合回调被执行");
+        // 运行期订阅：下一轮开始生效（订阅表是写时复制的，轮内读取的是开始时拿到的快照）。
+        var count = new int[1];
+        var twoTurns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
+        {
+            if (Interlocked.Increment(ref count[0]) >= 2)
+            {
+                twoTurns.TrySetResult(true);
+            }
+            return Task.CompletedTask;
+        });
 
-        string[] snapshot;
-        lock (order) { snapshot = order.ToArray(); }
-        Assert.Equal(new[] { "first", "second" }, snapshot);
+        await WaitOrFailAsync(twoTurns.Task, "运行期订阅的回调从下一轮开始触发");
+        Assert.True(Volatile.Read(ref count[0]) >= 2);
 
         await StopAsync(cts, run);
     }
 
     [Fact]
-    public async Task Set_Null_ClearsHandler()
+    public async Task DisposeHandle_StopsFiring()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
         var count = new int[1];
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        var subscription = proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
             Interlocked.Increment(ref count[0]);
             return Task.CompletedTask;
         });
-        proj.SetTurnProcessHandler("g1", null);
+
+        // 幂等：重复 Dispose 不应抛，也不应影响其它订阅者。
+        subscription.Dispose();
+        subscription.Dispose();
 
         using var cts = new CancellationTokenSource();
         var run = proj.RunAsync(cts.Token);
@@ -359,41 +362,54 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task SetTurnProcessHandler_AfterRunStarted_TakesEffectFromNextRound()
+    public async Task DisposeHandle_RemovesOnlyThatSubscriber()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
-        using var cts = new CancellationTokenSource();
-        var run = proj.RunAsync(cts.Token);
+        var first = new int[1];
+        var second = new int[1];
+        var secondCalled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // 运行期挂载：下一轮开始生效（回调表是写时复制的，选中快照不会被并发改坏）。
-        var count = new int[1];
-        var twoTurns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        var firstSubscription = proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
-            if (Interlocked.Increment(ref count[0]) >= 2)
-            {
-                twoTurns.TrySetResult(true);
-            }
+            Interlocked.Increment(ref first[0]);
+            return Task.CompletedTask;
+        });
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
+        {
+            Interlocked.Increment(ref second[0]);
+            secondCalled.TrySetResult(true);
             return Task.CompletedTask;
         });
 
-        await WaitOrFailAsync(twoTurns.Task, "运行期设置的回调从下一轮开始触发");
-        Assert.True(Volatile.Read(ref count[0]) >= 2);
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+        await WaitOrFailAsync(secondCalled.Task, "两个订阅者都开始工作");
+
+        firstSubscription.Dispose();
+
+        // 等在途轮次用掉旧快照后取基线，之后的轮次不应再进第一个订阅者。
+        await Task.Delay(ScanIntervalMs * 3);
+        var baselineFirst = Volatile.Read(ref first[0]);
+        var baselineSecond = Volatile.Read(ref second[0]);
+
+        await Task.Delay(ScanIntervalMs * 10);
+        Assert.Equal(baselineFirst, Volatile.Read(ref first[0]));
+        Assert.True(Volatile.Read(ref second[0]) > baselineSecond);
 
         await StopAsync(cts, run);
     }
 
     [Fact]
-    public async Task SetTurnProcessHandler_ClearedWhileRunning_StopsFiringFromNextRound()
+    public async Task DisposeWhileRunning_StopsFiringFromNextRound()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
         var count = new int[1];
         var firstTurn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        var subscription = proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
             Interlocked.Increment(ref count[0]);
             firstTurn.TrySetResult(true);
@@ -404,8 +420,8 @@ public class TagsProjectTurnProcessTests : IDisposable
         var run = proj.RunAsync(cts.Token);
         await WaitOrFailAsync(firstTurn.Task, "回调先触发一次");
 
-        // 运行期清除：等在途轮次用掉旧快照后取基线，之后的轮次都不应再进来。
-        proj.SetTurnProcessHandler("g1", null);
+        // 运行期退订：等在途轮次用掉旧快照后取基线，之后的轮次都不应再进来。
+        subscription.Dispose();
         await Task.Delay(ScanIntervalMs * 3);
         var baseline = Volatile.Read(ref count[0]);
 
@@ -416,10 +432,11 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task SetTurnProcessHandler_OnDisposedProject_Throws()
+    public async Task SubscribeOnDisposedProject_Throws_AndDisposeHandleIsNoOp()
     {
         using var scope = _root.CreateScope();
         var proj = CreateSingleEntryProject(scope);
+        var subscription = proj.SubscribeTurnProcess("g1", (entry, channel, _) => Task.CompletedTask);
 
         using var cts = new CancellationTokenSource();
         var run = proj.RunAsync(cts.Token);
@@ -428,11 +445,15 @@ public class TagsProjectTurnProcessTests : IDisposable
         proj.Dispose();
 
         Assert.Throws<ObjectDisposedException>(
-            () => proj.SetTurnProcessHandler("g1", (entry, channel, _) => Task.CompletedTask));
+            () => proj.SubscribeTurnProcess("g1", (entry, channel, _) => Task.CompletedTask));
+
+        // 项目释放后，退订句柄仍是安全的无操作（幂等）。
+        subscription.Dispose();
+        subscription.Dispose();
     }
 
     [Fact]
-    public async Task SetTurnProcessHandler_ConcurrentSetAndClearWhileRunning_DoesNotCorrupt()
+    public async Task ConcurrentSubscribeAndDisposeWhileRunning_DoesNotCorrupt()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
@@ -443,14 +464,10 @@ public class TagsProjectTurnProcessTests : IDisposable
         using var stopMutating = new CancellationTokenSource();
         var mutator = Task.Run(() =>
         {
-            var i = 0;
             while (!stopMutating.IsCancellationRequested)
             {
-                proj.SetTurnProcessHandler("g1", (entry, channel, _) => Task.CompletedTask);
-                if ((i++ % 2) == 0)
-                {
-                    proj.SetTurnProcessHandler("g1", null);
-                }
+                var subscription = proj.SubscribeTurnProcess("g1", (entry, channel, _) => Task.CompletedTask);
+                subscription.Dispose();
             }
         });
 
@@ -458,19 +475,19 @@ public class TagsProjectTurnProcessTests : IDisposable
         stopMutating.Cancel();
         await mutator;
 
-        // 并发设置/清除不应让轮询崩掉（快照替换 + 轮询线程只读）。
+        // 并发订阅/退订不应让轮询崩掉（快照替换 + 轮询线程只读）。
         Assert.False(run.IsFaulted, run.Exception?.ToString());
 
         await StopAsync(cts, run);
     }
 
     [Fact]
-    public async Task Handler_SubscriberThrows_EntersRunnerCrashed()
+    public async Task SubscriberThrows_EntersRunnerCrashed()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
-        proj.SetTurnProcessHandler(
+        proj.SubscribeTurnProcess(
             "g1",
             (entry, channel, _) => throw new InvalidOperationException("observer boom"));
 
@@ -493,7 +510,43 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task Handler_DisabledEntry_NotFired()
+    public async Task FirstSubscriberThrows_LaterSubscribersNotInvoked()
+    {
+        using var scope = _root.CreateScope();
+        using var proj = CreateSingleEntryProject(scope);
+
+        var secondCalled = false;
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) => throw new InvalidOperationException("first boom"));
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
+        {
+            Volatile.Write(ref secondCalled, true);
+            return Task.CompletedTask;
+        });
+
+        var crashed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+        proj.RunnerCrashed += (entry, channel, ex, ct) =>
+        {
+            crashed.TrySetResult(ex);
+            return Task.CompletedTask;
+        };
+
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+
+        await WaitOrFailAsync(crashed.Task, "第一个订阅者的异常触发崩溃路径");
+
+        var captured = await crashed.Task;
+        var ex = Assert.IsType<InvalidOperationException>(captured);
+        Assert.Equal("first boom", ex.Message);
+
+        // 首个异常即中断：排在后面的订阅者本次不会被调用。
+        Assert.False(Volatile.Read(ref secondCalled));
+
+        await StopAsync(cts, run);
+    }
+
+    [Fact]
+    public async Task Subscription_DisabledEntry_NotFired()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateProject(scope.ServiceProvider, new XElement("Project",
@@ -501,7 +554,7 @@ public class TagsProjectTurnProcessTests : IDisposable
             Entry("g1", "fake", isEnabled: false)));
 
         var count = new int[1];
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) =>
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
             Interlocked.Increment(ref count[0]);
             return Task.CompletedTask;
@@ -518,7 +571,7 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public async Task Handler_ReceivesProjectCancellationToken()
+    public async Task Subscription_ReceivesProjectCancellationToken()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
@@ -526,7 +579,7 @@ public class TagsProjectTurnProcessTests : IDisposable
         using var cts = new CancellationTokenSource();
         var observed = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        proj.SetTurnProcessHandler("g1", (entry, channel, ct) =>
+        proj.SubscribeTurnProcess("g1", (entry, channel, ct) =>
         {
             observed.TrySetResult(ct);
             return Task.CompletedTask;
@@ -548,33 +601,32 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
-    public void SetTurnProcessHandler_UnknownEntry_Throws()
+    public void Subscribe_UnknownEntry_Throws()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
         Assert.Throws<KeyNotFoundException>(
-            () => proj.SetTurnProcessHandler("nope", (entry, channel, _) => Task.CompletedTask));
+            () => proj.SubscribeTurnProcess("nope", (entry, channel, _) => Task.CompletedTask));
     }
 
     [Fact]
-    public void SetTurnProcessHandler_NullHandler_IsAllowed()
+    public void Subscribe_NullHandler_Throws()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
-        // null = 清除；在从未设置过的入口上清除也是合法的空操作。
-        proj.SetTurnProcessHandler("g1", null);
-        proj.SetTurnProcessHandler("g1", (entry, channel, _) => Task.CompletedTask);
-        proj.SetTurnProcessHandler("g1", null);
+        // 退订必须用 Dispose 句柄，而不是传 null。
+        Assert.Throws<ArgumentNullException>(() => proj.SubscribeTurnProcess("g1", null!));
     }
 
     [Fact]
-    public void SetTurnProcessHandler_NullEntry_Throws()
+    public void Subscribe_NullEntry_Throws()
     {
         using var scope = _root.CreateScope();
         using var proj = CreateSingleEntryProject(scope);
 
-        Assert.Throws<ArgumentNullException>(() => proj.SetTurnProcessHandler(null!, (entry, channel, _) => Task.CompletedTask));
+        Assert.Throws<ArgumentNullException>(
+            () => proj.SubscribeTurnProcess(null!, (entry, channel, _) => Task.CompletedTask));
     }
 }

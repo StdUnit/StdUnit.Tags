@@ -2,14 +2,9 @@
 
 本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
-## 2.0.0-beta6 (尚未发布)
+## 2.0.0-beta7(尚未发布)
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
-
-StdUnit.Tags.WebUi: 改动点
-  - 停止时机：监听的宿主开始停机时（`ApplicationStopping`）退订项目事件、取消后台循环，并让在途的 SSE 订阅读到"流结束"——**连接随响应结束立即断开**，不必等服务器的关机超时；容器释放时再兜底一次（幂等）。
-  
-按 `MapTagsStream()` 映射过端点的宿主无需额外代码。
 
 StdUnit.Tags / StdUnit.Tags.Core: **`ITagGrpRunner` 的三个回调由 `event` 改为单槽属性**
   - `RunnerStarted` / `RunnerCrashed` / `TurnProcess` 由 `event` 改为 `{ get; set; }` 属性。
@@ -18,18 +13,27 @@ StdUnit.Tags / StdUnit.Tags.Core: **`ITagGrpRunner` 的三个回调由 `event` �
     而 C# 的多播只返回最后一个处理器的 `Task`，照 `await TurnProcess(...)` 写就是"只等待最后一个、其余无人观察"。
   - 自定义 `ITagGrpRunner` 实现：把 `event` 声明改成属性；调用点改成"先取本地再判空"
     （`var h = TurnProcess; if (h is not null) await h(grp, channel, ct);`）。订阅方写 `+=` 仍然可用（等价于读取 + 赋值）。
-  - 这是**公开接口形态变更**，用旧版本编译的自定义 runner 实现需要重编。
+  - 虽然对外部开发者没有影响，不过这仍属于是**公开接口形态变更**，用旧版本编译的自定义 runner 实现需要重编。
 
 StdUnit.Tags: **`ITagsProject.RunnerStarted` / `RunnerCrashed` 修复为真正的多播（形态仍是 `event`，无 API 变更）**
-  - 此前它们是"转发给 runner 时抓一次委托快照"：`RunAsync` 之后订阅的观察者**永远收不到**通知（`PrepareEntries` 那一刻
-    还没有订阅者时，runner 侧拿到的就是 `null`）；有 2 个订阅者时 runner 只 `await` 最后一个，其余 `Task` 无人观察；
-    运行期 `-=` 也不生效。现在转发改为"**每次通知时读当前订阅者快照**"，按注册顺序串行 await 全部订阅者。
+  - 此前它们是"转发给 runner 时抓一次委托快照"，`RunAsync` 之后订阅的观察者**永远收不到**通知；且当有 2 个订阅者时 runner 只 `await` 最后一个，其余 `Task` 无人观察；运行期 `-=` 也不生效。现在转发改为"**每次通知时读当前订阅者快照**"，按注册顺序串行 await 全部订阅者。
   - 异常语义：任一订阅者抛异常即<b>中断本次通知</b>（排在它后面的订阅者不再被调用），异常<b>原样</b>抛出
     （保留类型与堆栈，不包 `AggregateException`）。不做"收集全部异常再抛第一个"——那样等于把其余静默丢弃；
     `Core` 没有 logger 可以留痕，而"谁抛谁负责、后续不再执行"更符合直觉、也更确定。
     抛出的异常仍等价于该入口本轮失败（`RunnerCrashed` 抛出 = 该入口停机），所以观察者请自己 `try/catch`。
   - `RunnerStarted` 的文档澄清为"**按入口**触发：每个入口各一次，崩溃恢复重连后再次触发"；项目级启停仍看
     `ITagsProjectCtrl.StartedOrStopped`。回调仍在轮询线程上执行，多个订阅者的耗时**相加**。
+
+StdUnit.Tags: 在beta6.0中短暂引入了**`ITagsProject.SetTurnProcessHandler`**，它是一个单槽钩子。现在为了支持多播场景，改为订阅式 **`SubscribeTurnProcess`**
+  - 新签名 `IDisposable SubscribeTurnProcess(string entry, TurnProcess handler)`：每个入口可有**任意多个**订阅者，
+    按注册顺序**串行** await；任一订阅者抛异常即**中断**本次通知并原样抛出（= 该入口本轮失败，进入 `RunnerCrashed`
+    的恢复路径），与 `RunnerStarted` / `RunnerCrashed` 的语义一致。
+  - 返回的句柄就是退订凭据：`Dispose` 即退订，**幂等**；项目已释放后再 `Dispose` 是**无操作**（不抛）。
+  - 旧 `SetTurnProcessHandler(entry, handler)`（替换语义、传 `null` 清除）**已删除**。迁移：
+    `proj.SetTurnProcessHandler("g1", h)` → `var sub = proj.SubscribeTurnProcess("g1", h)`，
+    停止观测时 `sub.Dispose()`。`null` 回调现在抛 `ArgumentNullException`（退订请用句柄）。
+  - 顺带修复：`StdUnit.Tags.WebUi` 的 hub 不再独占该槽位——改为订阅，并在项目停止/切换、hub 自己停止时退订，
+    使用方自己的轮次观察者不会再被它静默覆盖。
 
 StdUnit.Tags: **启动改为两阶段（事务性）**
   - `RunAsync` 先对全部入口算完逻辑组件匹配（`ILogicet.MatchEntry` / `Order`），再建 runner 并启动轮询。启动窗口内任何失败
@@ -42,6 +46,17 @@ StdUnit.Tags: **启动改为两阶段（事务性）**
     再把原异常抛出——不会再留下"孤儿轮询"（此前调用方连那些 `Task` 都拿不到）。
     代价：入口各回调拿到的生命周期令牌不再与传给 `RunAsync` 的是同一个实例（同一次运行内仍彼此一致），
     请按"取消时机"而不是引用相等来判断。
+
+
+## 2.0.0-beta6 
+
+> 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
+
+StdUnit.Tags.WebUi: 改动点
+  - 停止时机：监听的宿主开始停机时（`ApplicationStopping`）退订项目事件、取消后台循环，并让在途的 SSE 订阅读到"流结束"——**连接随响应结束立即断开**，不必等服务器的关机超时；容器释放时再兜底一次（幂等）。
+  
+按 `MapTagsStream()` 映射过端点的宿主无需额外代码。
+
 
 ## 2.0.0-beta5
 
