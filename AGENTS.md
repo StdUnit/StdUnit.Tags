@@ -115,6 +115,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 7. **解析大小写敏感度**：`EndianKinds` / `TagAccessMode`（`LittleEndian`、`R1W` …）**大小写敏感**；`isEntry` / `isEnabled` **不敏感**。测试常覆盖这些边界。
 8. **`IntentCapacity` 必须 > 0**，且只能在 `RunAsync` 之前设置。
 9. **`isEnabled` 只作用于自动轮询**：`TagGrpRunner` 以 `TraversalMode.RespectEnabled` 遍历（自顶向下短路——父节点未使能，其整棵子树既不读也不写，脏标记保留）；手动/外部意图里的显式 `ReadAsync`/`WriteAsync` 走 `TraversalMode.IgnoreEnabled`，**不检查使能**（"平时禁用 + 需要时手动点动"是刻意支持的用法）。不要把公开的读写路径也改成检查使能，也不要让驱动自行判 `IsEnabled`。`ITagGrp` 的契约里只有 `ReadAsync(TraversalMode, ct)` / `WriteAsync(TraversalMode, ct)` 这一对「真身」，1 参版本（`ReadAsync(ct)`）是 `ITagGrpExtensions` 上的扩展方法、等价于传 `IgnoreEnabled`（`TagUnion` 上同理，两个重载都在 `TagUnionExtensions`）。**实现 `ITagGrp` 时必须把 mode 透传给子节点**，否则门控会在该层断掉。`ITagCbnt` / `ITag` **不加** mode / `IsEnabled`：门控的边界是 Cbnt（其下无递归层，mode 传下去没人用），且同一个 `Tag.IsEnabled` 在「塞进 Cbnt」（整块缓存 IO，拦不住）与「直挂 `ITagGrp`」（自己做 IO）两种挂法下行为不同，语义不自洽——代价是 `DirectTag` 想在自动轮询时单独停采只能套一层 `isEnabled="false"` 的 `TagGrp`。「不可写」仍用 `access="RO"` 表达。
+10. **启动是两阶段的（先算后启，事务性）**：`RunAsync` 先对全部入口算完逻辑组件匹配（`ILogicet.MatchEntry` / `Order`，纯计算），再准备 runner（建意图通道 / 订阅事件）、最后统一启动。因此：匹配/准备阶段失败 → **一个轮次都没开始**；启动阶段失败（含第三方 `StartAsync` 同步抛出）→ **取消并等待已启动的入口退出**再抛原异常。两条路径都**不能**留下 `Task` 无人等待、令牌永不取消的孤儿 runner。代价：各入口拿到的生命周期令牌是内部 linked 令牌（同一次运行内各回调仍是同一个实例，但**不保证** `==` 传给 `RunAsync` 的那一个），所以**不要用引用相等做判断**，取消时机才是契约。`MatchEntry` / `Order` 抛异常是**确定性的配置错误**：报 `TagsProjectConfigurationException`（`Location` = 入口路径，消息带逻辑组件类型），**不得**送入 `RunnerCrashed` 的重试/断开重连路径，也不得静默跳过该逻辑组件。`Enabled` 仍是每轮读取，运行期抛异常按普通轮询故障处理。
 
 ## 约定
 

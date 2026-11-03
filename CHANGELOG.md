@@ -11,6 +11,18 @@ StdUnit.Tags.WebUi: 改动点
   
 按 `MapTagsStream()` 映射过端点的宿主无需额外代码。
 
+StdUnit.Tags: **启动改为两阶段（事务性）**
+  - `RunAsync` 先对全部入口算完逻辑组件匹配（`ILogicet.MatchEntry` / `Order`），再建 runner 并启动轮询。启动窗口内任何失败
+    （`MatchEntry` / `Order` 抛异常、`IntentCapacity` 非法、runner 工厂抛异常）都不会再留下**已经跑起来但无人等待**的入口——
+    旧实现里这些入口的 `StartAsync` 任务会被丢弃、生命周期令牌永不取消，在后台一直轮询。
+  - `MatchEntry` / `Order` 抛出的异常现在报成 `TagsProjectConfigurationException`（`Location` = 入口路径，`InnerException` = 原异常，
+    消息带逻辑组件类型），而不是从 `RunAsync` 同步抛出的 `AggregateException`；这是确定性的配置错误，**不会**重试，也不会触发
+    `RunnerCrashed`。逻辑组件必须把它们实现成无副作用的纯判定：无法判断时返回 `false`。
+  - 启动中途失败（含第三方 `ITagGrpRunner.StartAsync` 在返回 `Task` 之前直接抛出）现在会**取消并等待已启动的入口退出**，
+    再把原异常抛出——不会再留下"孤儿轮询"（此前调用方连那些 `Task` 都拿不到）。
+    代价：入口各回调拿到的生命周期令牌不再与传给 `RunAsync` 的是同一个实例（同一次运行内仍彼此一致），
+    请按"取消时机"而不是引用相等来判断。
+
 ## 2.0.0-beta5
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。

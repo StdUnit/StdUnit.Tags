@@ -102,6 +102,16 @@ public interface ITagGrpRunner
     /// 一旦成功启动轮询，除非主动取消，否则不会抛出异常。<br/>
     /// <b>取消不是崩溃</b>：<paramref name="ct"/> 取消时本方法以 <see cref="OperationCanceledException"/> 结束
     /// （入口子树里的通道照常断开），但<b>不会</b>触发 <see cref="RunnerCrashed"/>。
+    /// <para>
+    /// <b>失败形态</b>：启动失败推荐交给返回的 <see cref="Task"/>——用 <c>async</c> 方法实现即可（异常会自动装进 Task）。
+    /// 若实现选择在返回前直接抛出（如形参校验），<see cref="ITagsProject.RunAsync"/> 也会取消并等待此前已启动的入口退出后
+    /// 再抛出，因此同样不会留下无人等待的轮询。两种形态都可以，只是前者能让故障更早地以 <see cref="Task"/> 的形式被观察到。
+    /// </para>
+    /// <para>
+    /// <b>令牌</b>：同一次运行里，本方法的 <paramref name="ct"/> 与 <see cref="RunnerStarted"/> /
+    /// <see cref="TurnProcess"/> / <see cref="RunnerCrashed"/> 拿到的是<b>同一个实例</b>；但它不必等于传给
+    /// <see cref="ITagsProject.RunAsync"/> 的令牌（内部用 linked 令牌以便启动失败时回滚）。
+    /// </para>
     /// </summary>
     /// <param name="entry">入口；其子树中的通道由本运行器建立与断开连接</param>
     /// <param name="ct">项目生命周期取消令牌；取消即结束本方法</param>

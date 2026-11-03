@@ -130,9 +130,19 @@ public interface ITagsProject : IDisposable
     /// <summary>
     /// 运行本项目下所有的入口测点组。<br/>
     /// 这个方法在所有入口组都运行结束之前，不会返回！
+    /// <para>
+    /// 启动是<b>两阶段</b>的：先对全部入口算出逻辑组件匹配（纯计算），再准备 runner 并启动轮询。
+    /// 匹配/准备阶段失败时<b>不会有入口处于"已经跑起来"的状态</b>；启动阶段失败则会<b>取消并等待已启动的入口退出</b>后
+    /// 再把原异常抛出，不会留下"Task 无人等待、令牌永不取消"的孤儿轮询。
+    /// </para>
     /// </summary>
     /// <param name="ct"></param>
     /// <returns></returns>
+    /// <exception cref="InvalidOperationException">项目未初始化（通道/测点/逻辑组件为空，或没有任何入口测点组）</exception>
+    /// <exception cref="TagsProjectConfigurationException">
+    /// 为入口匹配逻辑组件时 <see cref="ILogicet.MatchEntry"/> / <see cref="ILogicet.Order"/> 抛出了异常。
+    /// 这是确定性的配置错误，不走 <see cref="RunnerCrashed"/> 的重试路径（也不会启动任何入口）。
+    /// </exception>
     Task RunAsync(CancellationToken ct);
 
 

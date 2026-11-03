@@ -204,6 +204,15 @@ internal class TagsProject : ITagsProject
 
     /// <inheritdoc/>
     /// <exception cref="InvalidOperationException">项目未初始化（通道/测点/逻辑组件为空，或没有任何入口测点组）</exception>
+    /// <exception cref="TagsProjectConfigurationException">
+    /// 启动前为入口匹配逻辑组件（<see cref="ILogicet.MatchEntry"/> / <see cref="ILogicet.Order"/>）时抛出了异常。
+    /// 这是<b>确定性</b>的配置错误（重试不会变好），因此不走 <see cref="RunnerCrashed"/> 的重试/重连恢复路径；
+    /// 抛出时<b>没有任何入口</b>开始轮询（启动分两阶段：先算完匹配、再准备并启动 runner）。
+    /// </exception>
+    /// <remarks>
+    /// 启动失败（含 <see cref="ITagGrpRunner.StartAsync"/> 抛出的异常）会先<b>取消并等待已启动的入口退出</b>，
+    /// 再把原异常抛出——不会留下无人等待的孤儿轮询。
+    /// </remarks>
     public virtual Task RunAsync(CancellationToken ct)
     {
         if (this.Channels == null || this.Channels.Count == 0)
@@ -225,17 +234,80 @@ internal class TagsProject : ITagsProject
             throw new InvalidOperationException("未配置入口测点组");
         }
 
-        var tasks = new ConcurrentBag<Task>();
-        Parallel.ForEach(entries, entry =>
+        // 阶段 1：纯计算（匹配 + 排序）。失败时"什么都还没发生"——没有 runner、没有轮询。
+        var plans = new List<(ITagGrp Entry, List<ILogicet> Logicets)>(entries.Count);
+        foreach (var entry in entries)
         {
-            var writeIntentChannel = this._entryWriteIntentChannels.GetOrAdd(entry.TagName(), _ => this.CreateIntentChannel());
-            var logicets = this.Logicets
-                .Where(l => l.MatchEntry(entry))
-                .OrderBy(l => l.Order)
-                .ToList();
+            plans.Add((entry, this.SelectLogicets(entry)));
+        }
+
+        // 阶段 2a：准备（建意图通道 / 建 runner / 订阅事件）。仍可能有同步抛出（IntentCapacity 非法、第三方工厂），
+        // 但都发生在任何轮询启动之前，所以失败时项目"一个轮次都没开始"。
+        var prepared = this.PrepareEntries(plans);
+
+        // 阶段 2b：启动 + 失败回滚（见 StartPreparedEntriesAsync）。
+        return this.StartPreparedEntriesAsync(prepared, ct);
+    }
+
+    /// <summary>
+    /// 阶段 1：为入口算出要执行哪些逻辑组件（<see cref="ILogicet.MatchEntry"/> 匹配 + 按 <see cref="ILogicet.Order"/> 排序）。<br/>
+    /// <b>纯计算</b>：不建通道、不建 runner、不改任何状态，所以可以对全部入口先算完再启动。<br/>
+    /// 逻辑组件是扩展点（用户代码）：匹配/排序属于<b>配置判定</b>而不是轮询工作，抛异常意味着"这条配置无法判定"，
+    /// 重试不会变好，因此报成配置错误，而不是走 <see cref="RunnerCrashed"/> 的恢复路径。
+    /// </summary>
+    private List<ILogicet> SelectLogicets(ITagGrp entry)
+    {
+        var matched = new List<(ILogicet Logicet, int Order)>();
+        foreach (var logicet in this.Logicets)
+        {
+            if (this.InvokeLogicet(entry, logicet, nameof(ILogicet.MatchEntry), () => logicet.MatchEntry(entry)))
+            {
+                matched.Add((logicet, this.InvokeLogicet(entry, logicet, nameof(ILogicet.Order), () => logicet.Order)));
+            }
+        }
+
+        // 排序只操作已经取到的 Order，不再调用用户代码。
+        return matched
+            .OrderBy(x => x.Order)
+            .Select(x => x.Logicet)
+            .ToList();
+    }
+
+    /// <summary>
+    /// 调用逻辑组件的启动期成员，把抛出的异常转成带定位上下文的 <see cref="TagsProjectConfigurationException"/>。
+    /// </summary>
+    private T InvokeLogicet<T>(ITagGrp entry, ILogicet logicet, string operation, Func<T> func)
+    {
+        try
+        {
+            return func();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var location = entry.GetLocationPath();
+            throw new TagsProjectConfigurationException(
+                $"逻辑组件 {logicet.GetType().FullName} 在入口 {location} 上执行 {operation} 发生异常（{ex.GetType().Name}: {ex.Message}）。" +
+                $"{operation} 属于启动期的配置判定：必须无副作用、不阻塞、不得抛异常",
+                location,
+                ex);
+        }
+    }
+
+    /// <summary>
+    /// 阶段 2a：准备全部入口（建意图通道、建 runner、订阅事件），<b>但不启动轮询</b>。<br/>
+    /// 这一步仍可能同步抛出（<see cref="IntentCapacity"/> 非法、第三方 runner 工厂失败），
+    /// 但它发生在任何 <see cref="ITagGrpRunner.StartAsync"/> 之前，所以失败时一个轮次都没开始。
+    /// </summary>
+    private List<(ITagGrp Entry, ITagGrpRunner Runner)> PrepareEntries(List<(ITagGrp Entry, List<ILogicet> Logicets)> plans)
+    {
+        var prepared = new List<(ITagGrp Entry, ITagGrpRunner Runner)>(plans.Count);
+        foreach (var (entry, logicets) in plans)
+        {
+            _ = this._entryWriteIntentChannels.GetOrAdd(entry.TagName(), _ => this.CreateIntentChannel());
+
             var runner = this._tagGrpRunnerFactory.Create(this);
             runner.RunnerStarted += RunnerStarted;
-            runner.TurnProcess += async (entry, ch, turnCt) =>
+            runner.TurnProcess += async (grp, ch, turnCt) =>
             {
                 foreach (var l in logicets)
                 {
@@ -243,23 +315,56 @@ internal class TagsProject : ITagsProject
                     {
                         continue;
                     }
-                    await l.ProcessAsync(entry, ch, turnCt);
+                    await l.ProcessAsync(grp, ch, turnCt);
                 }
 
                 // 公共回调排在 Logicets 之后：订阅者看到的是逻辑处理完成后的值。
                 // 有意不 catch：回调抛异常等价于本轮失败（与 Logicet 抛异常同义），见 ITagsProject.SetTurnProcessHandler 的文档。
                 // 回调表是写时复制的：这里读到的那份快照本轮内不会被改（运行期设置/清除从下一轮生效），所以不需要同步。
-                if (this._entryTurnHandlers.TryGetValue(entry.TagName(), out var handler))
+                if (this._entryTurnHandlers.TryGetValue(grp.TagName(), out var handler))
                 {
-                    await handler(entry, ch, turnCt);
+                    await handler(grp, ch, turnCt);
                 }
             };
             runner.RunnerCrashed += RunnerCrashed;
-            Task task = runner.StartAsync(entry, ct);
-            tasks.Add(task);
-        });
+            prepared.Add((entry, runner));
+        }
 
-        return Task.WhenAll(tasks);
+        return prepared;
+    }
+
+    /// <summary>
+    /// 阶段 2b：启动全部入口，并在任一入口启动失败时<b>回滚</b>——取消并等待此前已启动的入口退出。<br/>
+    /// 回滚靠内部的 linked 令牌实现：同一次运行里各回调拿到的仍然是<b>同一个</b>令牌实例，
+    /// 但不保证 <c>==</c> 传给 <see cref="RunAsync"/> 的那个（否则无法回滚已经启动的入口）。
+    /// </summary>
+    private async Task StartPreparedEntriesAsync(List<(ITagGrp Entry, ITagGrpRunner Runner)> prepared, CancellationToken ct)
+    {
+        using var abort = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var tasks = new List<Task>(prepared.Count);
+        try
+        {
+            foreach (var (entry, runner) in prepared)
+            {
+                tasks.Add(runner.StartAsync(entry, abort.Token));
+            }
+
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 回滚：同步抛出的第三方实现、外部停机、运行器任务故障，都在这里收口。
+            // 清理路径的既有约定：回滚期间的异常不覆盖原始异常。
+            abort.Cancel();
+            try
+            {
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+            throw;
+        }
     }
 
     #region Intent Mgmt

@@ -536,10 +536,15 @@ public class TagsProjectTurnProcessTests : IDisposable
 
         await WaitOrFailAsync(observed.Task, "回调收到取消令牌");
         var captured = await observed.Task;
+
+        // 不必与 RunAsync 的入参是同一个实例：框架用内部 linked 令牌启动各入口（启动失败时要能回滚已启动的入口）。
+        // 契约是"取消时机"，不是引用相等。
         Assert.True(captured.CanBeCanceled);
-        Assert.Equal(cts.Token, captured);
+        Assert.False(captured.IsCancellationRequested, "取消前回调拿到的令牌不应已取消");
 
         await StopAsync(cts, run);
+
+        Assert.True(captured.IsCancellationRequested, "项目停止后，回调拿到的令牌也应取消");
     }
 
     [Fact]
