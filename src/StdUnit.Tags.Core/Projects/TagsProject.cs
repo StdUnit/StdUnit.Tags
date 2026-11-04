@@ -474,7 +474,7 @@ internal class TagsProject : ITagsProject
     {
         add
         {
-            if (value is null) return;
+            // 不需要判 null：Delegate.Combine(list, null) 就是 list 本身（空操作）。
             lock (this._runnerEventsGate)
             {
                 this._runnerStartedHandlers += value;
@@ -482,7 +482,7 @@ internal class TagsProject : ITagsProject
         }
         remove
         {
-            if (value is null) return;
+            // 不需要判 null：Delegate.Remove(list, null) 原样返回 list（空操作）。
             lock (this._runnerEventsGate)
             {
                 this._runnerStartedHandlers -= value;
@@ -495,7 +495,6 @@ internal class TagsProject : ITagsProject
     {
         add
         {
-            if (value is null) return;
             lock (this._runnerEventsGate)
             {
                 this._runnerCrashedHandlers += value;
@@ -503,7 +502,6 @@ internal class TagsProject : ITagsProject
         }
         remove
         {
-            if (value is null) return;
             lock (this._runnerEventsGate)
             {
                 this._runnerCrashedHandlers -= value;
@@ -611,22 +609,17 @@ internal class TagsProject : ITagsProject
     {
         lock (this._entryTurnHandlersGate)
         {
+            // 不变量：订阅在 SubscribeTurnProcess 里写入该入口的数组，而 Dispose 由
+            // TurnProcessSubscription 用 Interlocked 保证只生效一次 ⇒ 条目必然存在、且必然能定位到这一个委托实例。
+            // 退订只缩数组（退到最后一个时留下空数组），不删键——空数组是合法状态，之后还能再订阅。
             var current = this._entryTurnHandlers;
-            if (!current.TryGetValue(subscription.Entry, out var handlers))
-            {
-                return;
-            }
-
+            var handlers = current[subscription.Entry];
             var index = Array.FindIndex(handlers, h => ReferenceEquals(h, subscription.Handler));
-            if (index < 0)
-            {
-                return;
-            }
 
             var updated = new Dictionary<string, TurnProcess[]>(current, StringComparer.Ordinal);
             if (handlers.Length == 1)
             {
-                updated.Remove(subscription.Entry);
+                updated[subscription.Entry] = Array.Empty<TurnProcess>();
             }
             else
             {

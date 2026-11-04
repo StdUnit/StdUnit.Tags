@@ -281,6 +281,40 @@ public class RunAsyncStartupTests
     }
 
     [Fact]
+    public async Task RunAsync_AllRunnersCompleteNormally_ReturnsNormally()
+    {
+        // runner 正常结束（不是被取消、也不是故障）时，RunAsync 必须正常返回。
+        var factory = new CountingRunnerFactory();
+        using var root = CreateServices(factory);
+        using var scope = root.CreateScope();
+        using var proj = CreateProject(scope.ServiceProvider,
+            new XElement("Project", Channel("fake1"), Entry("g1", "fake1")));
+
+        await proj.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, factory.CreateCount);
+        Assert.Equal(1, factory.StartCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_FirstStartAsyncThrowsSynchronously_RollsBackEmptyList()
+    {
+        // 第一个入口就同步抛出：任务列表为空，回滚只能取消并等待"空集合"。
+        var factory = new SyncThrowingRunnerFactory { ThrowOnCreate = 1 };
+        using var root = CreateServices(factory);
+        using var scope = root.CreateScope();
+        using var proj = CreateProject(scope.ServiceProvider,
+            new XElement("Project", Channel("fake1"), Entry("g1", "fake1")));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => proj.RunAsync(CancellationToken.None));
+
+        Assert.Contains("模拟的同步抛出", ex.Message, StringComparison.Ordinal);
+        Assert.Single(factory.Created);
+        Assert.Null(factory.Created[0].StartTask);
+    }
+
+    [Fact]
     public async Task RunAsync_StartAsyncThrowsSynchronously_RollsBackAlreadyStartedRunners()
     {
         // 第三方 runner 可以在返回 Task 之前直接抛出（Task 返回值不保证"异常都在 Task 上"）。

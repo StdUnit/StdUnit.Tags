@@ -621,6 +621,86 @@ public class TagsProjectTurnProcessTests : IDisposable
     }
 
     [Fact]
+    public async Task UnsubscribeAllThenResubscribe_Works()
+    {
+        using var scope = _root.CreateScope();
+        using var proj = CreateSingleEntryProject(scope);
+
+        // 退到"该入口没有任何订阅者"（内部留下空数组）之后仍能重新订阅。
+        var firstSubscription = proj.SubscribeTurnProcess("g1", (entry, channel, _) => Task.CompletedTask);
+        firstSubscription.Dispose();
+
+        var count = new int[1];
+        var twoTurns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
+        {
+            if (Interlocked.Increment(ref count[0]) >= 2)
+            {
+                twoTurns.TrySetResult(true);
+            }
+            return Task.CompletedTask;
+        });
+
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+
+        await WaitOrFailAsync(twoTurns.Task, "退订后重新订阅仍能收到轮次");
+        Assert.True(Volatile.Read(ref count[0]) >= 2);
+
+        await StopAsync(cts, run);
+    }
+
+    [Fact]
+    public async Task DisposeMiddleSubscription_RemovesOnlyThatOne()
+    {
+        using var scope = _root.CreateScope();
+        using var proj = CreateSingleEntryProject(scope);
+
+        var first = new int[1];
+        var middle = new int[1];
+        var last = new int[1];
+        var threeTurns = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
+        {
+            Interlocked.Increment(ref first[0]);
+            return Task.CompletedTask;
+        });
+        var middleSubscription = proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
+        {
+            Interlocked.Increment(ref middle[0]);
+            return Task.CompletedTask;
+        });
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
+        {
+            if (Interlocked.Increment(ref last[0]) >= 2)
+            {
+                threeTurns.TrySetResult(true);
+            }
+            return Task.CompletedTask;
+        });
+
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+        await WaitOrFailAsync(threeTurns.Task, "最后一个订阅者连续触发");
+
+        // 摘掉中间那个（数组里 index > 0），其余两个不受影响。
+        middleSubscription.Dispose();
+
+        await Task.Delay(ScanIntervalMs * 3);
+        var baselineFirst = Volatile.Read(ref first[0]);
+        var baselineMiddle = Volatile.Read(ref middle[0]);
+        var baselineLast = Volatile.Read(ref last[0]);
+
+        await Task.Delay(ScanIntervalMs * 10);
+        Assert.True(Volatile.Read(ref first[0]) > baselineFirst);
+        Assert.Equal(baselineMiddle, Volatile.Read(ref middle[0]));
+        Assert.True(Volatile.Read(ref last[0]) > baselineLast);
+
+        await StopAsync(cts, run);
+    }
+
+    [Fact]
     public void Subscribe_NullEntry_Throws()
     {
         using var scope = _root.CreateScope();

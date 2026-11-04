@@ -304,5 +304,99 @@ public class TagsProjectRunnerEventTests : IDisposable
 
         await StopAsync(cts, run);
     }
+
+    [Fact]
+    public async Task RunnerCrashed_UnsubscribedAfterStart_StopsBeingNotified()
+    {
+        using var scope = _root.CreateScope();
+        using var proj = CreateSingleEntryProject(scope);
+
+        var crashOn = false;
+        var firstTurn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = proj.SubscribeTurnProcess("g1", (_, _, _) =>
+        {
+            if (Volatile.Read(ref crashOn))
+            {
+                throw new InvalidOperationException("boom");
+            }
+
+            firstTurn.TrySetResult(true);
+            return Task.CompletedTask;
+        });
+
+        var removedCalls = 0;
+        RunnerCrashed removed = (_, _, _, _) =>
+        {
+            Interlocked.Increment(ref removedCalls);
+            return Task.CompletedTask;
+        };
+        proj.RunnerCrashed += removed;
+
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+        await WaitOrFailAsync(firstTurn.Task, "首轮完成");
+
+        // 运行期退订（晚挂的反向操作）必须从下一次通知起生效；换一个新订阅者作为"崩溃确实发生了"的探针。
+        proj.RunnerCrashed -= removed;
+        var crashed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        proj.RunnerCrashed += (_, _, _, _) =>
+        {
+            crashed.TrySetResult(true);
+            return Task.CompletedTask;
+        };
+
+        Volatile.Write(ref crashOn, true);
+
+        await WaitOrFailAsync(crashed.Task, "新订阅者收到崩溃");
+        Assert.Equal(0, Volatile.Read(ref removedCalls));
+
+        Volatile.Write(ref crashOn, false);
+        await StopAsync(cts, run);
+    }
+
+    [Fact]
+    public async Task RunnerCrashed_NoSubscribers_CrashStillRecovers()
+    {
+        using var scope = _root.CreateScope();
+        using var proj = CreateSingleEntryProject(scope);
+
+        // 没有任何 RunnerCrashed 订阅者：崩溃通知是空操作，不能因此抛空引用、也不能让入口停摆。
+        var crashOnce = 0;
+        var turns = 0;
+        var firstTurn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var recovered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _ = proj.SubscribeTurnProcess("g1", (_, _, _) =>
+        {
+            if (Interlocked.Exchange(ref crashOnce, 0) == 1)
+            {
+                throw new InvalidOperationException("boom");
+            }
+
+            var n = Interlocked.Increment(ref turns);
+            if (n >= 1)
+            {
+                firstTurn.TrySetResult(true);
+            }
+            if (n >= 2)
+            {
+                recovered.TrySetResult(true);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        using var cts = new CancellationTokenSource();
+        var run = proj.RunAsync(cts.Token);
+
+        await WaitOrFailAsync(firstTurn.Task, "首轮完成");
+
+        Interlocked.Exchange(ref crashOnce, 1);
+
+        await WaitOrFailAsync(recovered.Task, "崩溃后自动重连并继续轮询");
+        Assert.False(run.IsFaulted, run.Exception?.ToString());
+
+        await StopAsync(cts, run);
+    }
 }
 
