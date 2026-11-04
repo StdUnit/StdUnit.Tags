@@ -90,6 +90,9 @@ public class LogicetCancellationTests
 
         // Assert
         Assert.True(logicet.CapturedToken.CanBeCanceled, "ProcessAsync 应收到项目的生命周期令牌");
-        Assert.Equal(cts.Token, logicet.CapturedToken);
+        // 不必与 RunAsync 的入参是同一个实例：框架用内部 linked 令牌启动各入口，以便启动失败时回滚
+        // 已启动的入口。契约是"取消时机"，不是引用相等。
+        Assert.True(cts.IsCancellationRequested);
+        Assert.True(logicet.CapturedToken.IsCancellationRequested, "项目停止后回调拿到的令牌也应已取消");
     }
 }

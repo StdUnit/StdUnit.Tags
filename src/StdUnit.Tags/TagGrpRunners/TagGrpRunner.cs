@@ -6,7 +6,7 @@ namespace StdUnit.Tags;
 /// <summary>
 /// <see cref="ITagGrpRunner"/> 的默认实现。<br/>
 /// <b>多通道</b>：入口子树中所有会被用到的通道（见 <see cref="ITagGrpExtensions.CollectChannels"/>）
-/// 会在每轮读写之前逐一建连；入口自身解析出的通道额外称为<b>主通道</b>，即各事件委托中的 channel 参数。<br/>
+/// 会在每轮读写之前逐一建连；入口自身解析出的通道额外称为<b>主通道</b>，即各回调中的 channel 参数。<br/>
 /// <b>通道独占约束</b>：清理路径会断开入口相关的<b>全部</b>通道，因此同一通道实例不得被多个入口
 /// （含嵌套入口）共用，否则一方崩溃/取消会掐掉另一方正在使用的连接。
 /// </summary>
@@ -37,20 +37,20 @@ internal class TagGrpRunner : ITagGrpRunner
     }
 
     /// <inheritdoc/>
-    public event RunnerStarted? RunnerStarted;
+    public RunnerStarted? RunnerStarted { get; set; }
 
     /// <inheritdoc/>
-    public event TurnProcess? TurnProcess;
+    public TurnProcess? TurnProcess { get; set; }
 
     /// <inheritdoc/>
-    public event RunnerCrashed? RunnerCrashed;
+    public RunnerCrashed? RunnerCrashed { get; set; }
 
     /// <inheritdoc/>
     public virtual async Task StartAsync(ITagGrp entry, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
-            // 入口主通道。各事件委托中的 channel 参数恒为它。
+            // 入口主通道。各回调中的 channel 参数恒为它。
             ITagChannel? channel = null;
             // 本次启动需要确保连接的全部通道（含主通道，主通道排在最前）。
             // 用空集合初始化，保证即使“解析通道”阶段抛异常，清理路径也不会空引用。
@@ -68,9 +68,11 @@ internal class TagGrpRunner : ITagGrpRunner
 
                 channel = entry.SearchChannel();
                 channels = entry.CollectChannels();
-                if (RunnerStarted is not null)
+                // 单槽回调：先取本地再判空，避免两次读取之间被改成 null。
+                var onStarted = this.RunnerStarted;
+                if (onStarted is not null)
                 {
-                    await RunnerStarted(entry, channel, ct);
+                    await onStarted(entry, channel, ct);
                 }
 
                 // 开始轮询
@@ -94,9 +96,10 @@ internal class TagGrpRunner : ITagGrpRunner
                         await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
                     }
                     await entry.ReadAsync(TraversalMode.RespectEnabled, ct);
-                    if (TurnProcess is not null)
+                    var onTurn = this.TurnProcess;
+                    if (onTurn is not null)
                     {
-                        await TurnProcess(entry, channel, ct);
+                        await onTurn(entry, channel, ct);
                     }
                     await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
 
@@ -126,11 +129,12 @@ internal class TagGrpRunner : ITagGrpRunner
                 aborted = true;
                 _consecutiveFailures++;
 
-                if (RunnerCrashed is not null)
+                var onCrashed = this.RunnerCrashed;
+                if (onCrashed is not null)
                 {
                     try
                     {
-                        await RunnerCrashed(entry, channel, ex, ct);
+                        await onCrashed(entry, channel, ex, ct);
                     }
                     catch (Exception handlingError)
                     {

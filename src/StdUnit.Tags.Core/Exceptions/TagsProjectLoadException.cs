@@ -27,6 +27,12 @@
 /// 一个核心的决策依据是，不管异常来自哪里，以及是什么原因导致，runner 都应该会统一 <c>catch (Exception)</c> 交给重试策略与 <c>RunnerCrashed</c>——
 /// 所以<b>不存在</b>一个"能兜住本库全部异常"的根类型，请按加载期/运行期分别处理。
 /// </para>
+/// <para>
+/// <b>启动期归属于本族</b>：<see cref="ITagsProject.RunAsync"/> 在真正轮询之前为入口匹配逻辑组件
+/// （<see cref="ILogicet.MatchEntry"/> / <see cref="ILogicet.Order"/>），这也是<b>配置判定</b>而不是轮询工作——
+/// 它发生在任何 IO 之前、对它重试也不会变好，所以同样报 <see cref="TagsProjectConfigurationException"/>，
+/// 而不是交给 <c>RunnerCrashed</c> 的重试/重连路径。
+/// </para>
 /// </summary>
 public abstract class TagsProjectLoadException : Exception
 {

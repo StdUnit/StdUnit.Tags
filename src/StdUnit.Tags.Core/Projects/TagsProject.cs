@@ -204,6 +204,15 @@ internal class TagsProject : ITagsProject
 
     /// <inheritdoc/>
     /// <exception cref="InvalidOperationException">项目未初始化（通道/测点/逻辑组件为空，或没有任何入口测点组）</exception>
+    /// <exception cref="TagsProjectConfigurationException">
+    /// 启动前为入口匹配逻辑组件（<see cref="ILogicet.MatchEntry"/> / <see cref="ILogicet.Order"/>）时抛出了异常。
+    /// 这是<b>确定性</b>的配置错误（重试不会变好），因此不走 <see cref="RunnerCrashed"/> 的重试/重连恢复路径；
+    /// 抛出时<b>没有任何入口</b>开始轮询（启动分两阶段：先算完匹配、再准备并启动 runner）。
+    /// </exception>
+    /// <remarks>
+    /// 启动失败（含 <see cref="ITagGrpRunner.StartAsync"/> 抛出的异常）会先<b>取消并等待已启动的入口退出</b>，
+    /// 再把原异常抛出——不会留下无人等待的孤儿轮询。
+    /// </remarks>
     public virtual Task RunAsync(CancellationToken ct)
     {
         if (this.Channels == null || this.Channels.Count == 0)
@@ -225,17 +234,81 @@ internal class TagsProject : ITagsProject
             throw new InvalidOperationException("未配置入口测点组");
         }
 
-        var tasks = new ConcurrentBag<Task>();
-        Parallel.ForEach(entries, entry =>
+        // 阶段 1：纯计算（匹配 + 排序）。失败时"什么都还没发生"——没有 runner、没有轮询。
+        var plans = new List<(ITagGrp Entry, List<ILogicet> Logicets)>(entries.Count);
+        foreach (var entry in entries)
         {
-            var writeIntentChannel = this._entryWriteIntentChannels.GetOrAdd(entry.TagName(), _ => this.CreateIntentChannel());
-            var logicets = this.Logicets
-                .Where(l => l.MatchEntry(entry))
-                .OrderBy(l => l.Order)
-                .ToList();
+            plans.Add((entry, this.SelectLogicets(entry)));
+        }
+
+        // 阶段 2a：准备（建意图通道 / 建 runner / 订阅事件）。仍可能有同步抛出（IntentCapacity 非法、第三方工厂），
+        // 但都发生在任何轮询启动之前，所以失败时项目"一个轮次都没开始"。
+        var prepared = this.PrepareEntries(plans);
+
+        // 阶段 2b：启动 + 失败回滚（见 StartPreparedEntriesAsync）。
+        return this.StartPreparedEntriesAsync(prepared, ct);
+    }
+
+    /// <summary>
+    /// 阶段 1：为入口算出要执行哪些逻辑组件（<see cref="ILogicet.MatchEntry"/> 匹配 + 按 <see cref="ILogicet.Order"/> 排序）。<br/>
+    /// <b>纯计算</b>：不建通道、不建 runner、不改任何状态，所以可以对全部入口先算完再启动。<br/>
+    /// 逻辑组件是扩展点（用户代码）：匹配/排序属于<b>配置判定</b>而不是轮询工作，抛异常意味着"这条配置无法判定"，
+    /// 重试不会变好，因此报成配置错误，而不是走 <see cref="RunnerCrashed"/> 的恢复路径。
+    /// </summary>
+    private List<ILogicet> SelectLogicets(ITagGrp entry)
+    {
+        var matched = new List<(ILogicet Logicet, int Order)>();
+        foreach (var logicet in this.Logicets)
+        {
+            if (this.InvokeLogicet(entry, logicet, nameof(ILogicet.MatchEntry), () => logicet.MatchEntry(entry)))
+            {
+                matched.Add((logicet, this.InvokeLogicet(entry, logicet, nameof(ILogicet.Order), () => logicet.Order)));
+            }
+        }
+
+        // 排序只操作已经取到的 Order，不再调用用户代码。
+        return matched
+            .OrderBy(x => x.Order)
+            .Select(x => x.Logicet)
+            .ToList();
+    }
+
+    /// <summary>
+    /// 调用逻辑组件的启动期成员，把抛出的异常转成带定位上下文的 <see cref="TagsProjectConfigurationException"/>。
+    /// </summary>
+    private T InvokeLogicet<T>(ITagGrp entry, ILogicet logicet, string operation, Func<T> func)
+    {
+        try
+        {
+            return func();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var location = entry.GetLocationPath();
+            throw new TagsProjectConfigurationException(
+                $"逻辑组件 {logicet.GetType().FullName} 在入口 {location} 上执行 {operation} 发生异常（{ex.GetType().Name}: {ex.Message}）。" +
+                $"{operation} 属于启动期的配置判定：必须无副作用、不阻塞、不得抛异常",
+                location,
+                ex);
+        }
+    }
+
+    /// <summary>
+    /// 阶段 2a：准备全部入口（建意图通道、建 runner、订阅事件），<b>但不启动轮询</b>。<br/>
+    /// 这一步仍可能同步抛出（<see cref="IntentCapacity"/> 非法、第三方 runner 工厂失败），
+    /// 但它发生在任何 <see cref="ITagGrpRunner.StartAsync"/> 之前，所以失败时一个轮次都没开始。
+    /// </summary>
+    private List<(ITagGrp Entry, ITagGrpRunner Runner)> PrepareEntries(List<(ITagGrp Entry, List<ILogicet> Logicets)> plans)
+    {
+        var prepared = new List<(ITagGrp Entry, ITagGrpRunner Runner)>(plans.Count);
+        foreach (var (entry, logicets) in plans)
+        {
+            _ = this._entryWriteIntentChannels.GetOrAdd(entry.TagName(), _ => this.CreateIntentChannel());
+
             var runner = this._tagGrpRunnerFactory.Create(this);
-            runner.RunnerStarted += RunnerStarted;
-            runner.TurnProcess += async (entry, ch, turnCt) =>
+            // runner 是单槽回调：把"多播 + 调用时取快照"收口在本类（项目层才是多个独立观察者的地方）。
+            runner.RunnerStarted = (grp, ch, startedCt) => this.InvokeRunnerStartedAsync(grp, ch, startedCt);
+            runner.TurnProcess = async (grp, ch, turnCt) =>
             {
                 foreach (var l in logicets)
                 {
@@ -243,23 +316,60 @@ internal class TagsProject : ITagsProject
                     {
                         continue;
                     }
-                    await l.ProcessAsync(entry, ch, turnCt);
+                    await l.ProcessAsync(grp, ch, turnCt);
                 }
 
-                // 公共回调排在 Logicets 之后：订阅者看到的是逻辑处理完成后的值。
-                // 有意不 catch：回调抛异常等价于本轮失败（与 Logicet 抛异常同义），见 ITagsProject.SetTurnProcessHandler 的文档。
-                // 回调表是写时复制的：这里读到的那份快照本轮内不会被改（运行期设置/清除从下一轮生效），所以不需要同步。
-                if (this._entryTurnHandlers.TryGetValue(entry.TagName(), out var handler))
+                // 公共订阅排在 Logicets 之后：订阅者看到的是逻辑处理完成后的值。
+                // 有意不 catch：回调抛异常等价于本轮失败（与 Logicet 抛异常同义），并且按注册顺序
+                // "首个异常即中断后续订阅者"（与 RunnerStarted / RunnerCrashed 的语义一致）。
+                // 订阅表是写时复制的：这里读到的那份快照本轮内不会被改（运行期变更从下一轮生效）。
+                if (this._entryTurnHandlers.TryGetValue(grp.TagName(), out var handlers))
                 {
-                    await handler(entry, ch, turnCt);
+                    foreach (var handler in handlers)
+                    {
+                        await handler(grp, ch, turnCt);
+                    }
                 }
             };
-            runner.RunnerCrashed += RunnerCrashed;
-            Task task = runner.StartAsync(entry, ct);
-            tasks.Add(task);
-        });
+            runner.RunnerCrashed = (grp, ch, ex, crashedCt) => this.InvokeRunnerCrashedAsync(grp, ch, ex, crashedCt);
+            prepared.Add((entry, runner));
+        }
 
-        return Task.WhenAll(tasks);
+        return prepared;
+    }
+
+    /// <summary>
+    /// 阶段 2b：启动全部入口，并在任一入口启动失败时<b>回滚</b>——取消并等待此前已启动的入口退出。<br/>
+    /// 回滚靠内部的 linked 令牌实现：同一次运行里各回调拿到的仍然是<b>同一个</b>令牌实例，
+    /// 但不保证 <c>==</c> 传给 <see cref="RunAsync"/> 的那个（否则无法回滚已经启动的入口）。
+    /// </summary>
+    private async Task StartPreparedEntriesAsync(List<(ITagGrp Entry, ITagGrpRunner Runner)> prepared, CancellationToken ct)
+    {
+        using var abort = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var tasks = new List<Task>(prepared.Count);
+        try
+        {
+            foreach (var (entry, runner) in prepared)
+            {
+                tasks.Add(runner.StartAsync(entry, abort.Token));
+            }
+
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 回滚：同步抛出的第三方实现、外部停机、运行器任务故障，都在这里收口。
+            // 清理路径的既有约定：回滚期间的异常不覆盖原始异常。
+            abort.Cancel();
+            try
+            {
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+            throw;
+        }
     }
 
     #region Intent Mgmt
@@ -342,57 +452,209 @@ internal class TagsProject : ITagsProject
     }
     #endregion
 
-    /// <inheritdoc/>
-    public event RunnerCrashed? RunnerCrashed;
-    /// <inheritdoc/>
-    public event RunnerStarted? RunnerStarted;
+    #region Runner events（多播）
 
-    #region TurnProcess handlers
     /// <summary>
-    /// 入口名 → 该入口的回调（每个入口最多一个）。<b>写时复制</b>：设置/清除时在
-    /// <see cref="_entryTurnHandlersGate"/> 下复制一份新表再整体替换，已发布的表实例永不再改，
-    /// 所以轮询线程可以直接读、不需要任何同步，运行期设置/清除自然就是"从下一轮开始生效"。
+    /// 订阅者列表（低频事件：每次建连/崩溃才触发），写侧用
+    /// <see cref="_runnerEventsGate"/> 保护"读-改-写"，读侧用
+    /// <see cref="Volatile"/> 读取一次快照。<br/>
+    /// 这里刻意不做轮询热路径式的无锁设计（那是 <see cref="TurnProcess"/> 的诉求）：
+    /// 转发给 runner 的委托<b>每次调用时才读快照</b>，所以运行期订阅/退订从下一次通知开始生效。
     /// </summary>
-    private volatile Dictionary<string, TurnProcess> _entryTurnHandlers = new(StringComparer.Ordinal);
+    private RunnerStarted? _runnerStartedHandlers;
 
-    /// <summary>保护 <see cref="_entryTurnHandlers"/> 的复制作业（只在设置/清除时短暂持有）。</summary>
+    /// <summary>见 <see cref="_runnerStartedHandlers"/>。</summary>
+    private RunnerCrashed? _runnerCrashedHandlers;
+
+    /// <summary>保护上面两个委托字段的合并/移除。</summary>
+    private readonly object _runnerEventsGate = new();
+
+    /// <inheritdoc/>
+    public event RunnerStarted? RunnerStarted
+    {
+        add
+        {
+            // 不需要判 null：Delegate.Combine(list, null) 就是 list 本身（空操作）。
+            lock (this._runnerEventsGate)
+            {
+                this._runnerStartedHandlers += value;
+            }
+        }
+        remove
+        {
+            // 不需要判 null：Delegate.Remove(list, null) 原样返回 list（空操作）。
+            lock (this._runnerEventsGate)
+            {
+                this._runnerStartedHandlers -= value;
+            }
+        }
+    }
+
+    /// <inheritdoc/>
+    public event RunnerCrashed? RunnerCrashed
+    {
+        add
+        {
+            lock (this._runnerEventsGate)
+            {
+                this._runnerCrashedHandlers += value;
+            }
+        }
+        remove
+        {
+            lock (this._runnerEventsGate)
+            {
+                this._runnerCrashedHandlers -= value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 按注册顺序<b>串行</b>调用订阅者；<b>遇到第一个异常立即中断</b>并原样抛出（保留类型与堆栈）。<br/>
+    /// 刻意不做"收集全部异常再抛"：收集了却只抛一个等于把其余静默丢弃，而 Core 没有 logger 可以留痕；
+    /// 也不包装成 <see cref="AggregateException"/>——"谁抛谁负责、后续不再执行"更符合直觉，异常类型也可预测。
+    /// </summary>
+    private async Task InvokeRunnerStartedAsync(ITagGrp grp, ITagChannel? channel, CancellationToken ct)
+    {
+        var handlers = Volatile.Read(ref this._runnerStartedHandlers);
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var d in handlers.GetInvocationList())
+        {
+            await ((RunnerStarted)d)(grp, channel, ct);
+        }
+    }
+
+    /// <summary>见 <see cref="InvokeRunnerStartedAsync"/>。</summary>
+    private async Task InvokeRunnerCrashedAsync(ITagGrp grp, ITagChannel? channel, Exception ex, CancellationToken ct)
+    {
+        var handlers = Volatile.Read(ref this._runnerCrashedHandlers);
+        if (handlers is null) return;
+
+        foreach (var d in handlers.GetInvocationList())
+        {
+            await ((RunnerCrashed)d)(grp, channel, ex, ct);
+        }
+    }
+    #endregion
+
+    #region TurnProcess subscriptions
+    /// <summary>
+    /// 入口名 → 该入口的订阅者数组（每个入口 0..N 个）。<b>写时复制</b>：订阅/退订时在
+    /// <see cref="_entryTurnHandlersGate"/> 下复制一份新表（和新的数组）再整体替换，已发布的实例永不再改，
+    /// 所以轮询线程可以直接读、不需要任何同步，运行期订阅/退订自然就是"从下一轮开始生效"。
+    /// </summary>
+    private volatile Dictionary<string, TurnProcess[]> _entryTurnHandlers = new(StringComparer.Ordinal);
+
+    /// <summary>保护 <see cref="_entryTurnHandlers"/> 的复制作业（只在订阅/退订时短暂持有）。</summary>
     private readonly object _entryTurnHandlersGate = new();
 
     /// <inheritdoc/>
-    public void SetTurnProcessHandler(string entry, TurnProcess? handler)
+    public IDisposable SubscribeTurnProcess(string entry, TurnProcess handler)
     {
         if (entry is null)
         {
             throw new ArgumentNullException(nameof(entry));
         }
+        if (handler is null)
+        {
+            throw new ArgumentNullException(
+                nameof(handler),
+                "轮次回调不能为 null；要退订请 Dispose 订阅时返回的句柄。");
+        }
         if (this._disposed)
         {
             throw new ObjectDisposedException(
                 this.GetType().Name,
-                $"项目已释放，不能再设置 TurnProcess 回调（入口={entry}）：回调的作用域就是项目实例。");
+                $"项目已释放，不能再订阅 TurnProcess 回调（入口={entry}）：订阅的作用域就是项目实例。");
         }
 
-        // 与 WriteIntent 的入口校验保持一致：只允许向合法的入口设置
+        // 与 WriteIntent 的入口校验保持一致：只允许向合法的入口订阅
         if (!this.GetEntries().Any(e => e.TagName() == entry))
         {
             throw new KeyNotFoundException($"未找到指定的入口测点组: {entry}");
         }
 
-        // 替换语义：需要组合多个观察者时，由调用方自己组装成一个 TurnProcess。
-        // 运行期也允许设置/清除（写时复制，从下一轮开始生效）。
+        var subscription = new TurnProcessSubscription(this, entry, handler);
         lock (this._entryTurnHandlersGate)
         {
-            var updated = new Dictionary<string, TurnProcess>(this._entryTurnHandlers, StringComparer.Ordinal);
-            if (handler is null)
+            var current = this._entryTurnHandlers;
+            var updated = new Dictionary<string, TurnProcess[]>(current, StringComparer.Ordinal);
+            if (current.TryGetValue(entry, out var handlers) && handlers.Length > 0)
             {
-                updated.Remove(entry);
+                var appended = new TurnProcess[handlers.Length + 1];
+                handlers.CopyTo(appended, 0);
+                appended[appended.Length - 1] = handler;
+                updated[entry] = appended;
             }
             else
             {
-                updated[entry] = handler;
+                updated[entry] = new[] { handler };
             }
 
             this._entryTurnHandlers = updated;
+        }
+
+        return subscription;
+    }
+
+    /// <summary>
+    /// 退订（由 <see cref="TurnProcessSubscription.Dispose"/> 调用）。只摘掉<b>那一个</b>订阅实例：
+    /// 同一个委托实例订阅多次时，每次 Dispose 摘掉其中一次。
+    /// </summary>
+    private void UnsubscribeTurnProcess(TurnProcessSubscription subscription)
+    {
+        lock (this._entryTurnHandlersGate)
+        {
+            // 不变量：订阅在 SubscribeTurnProcess 里写入该入口的数组，而 Dispose 由
+            // TurnProcessSubscription 用 Interlocked 保证只生效一次 ⇒ 条目必然存在、且必然能定位到这一个委托实例。
+            // 退订只缩数组（退到最后一个时留下空数组），不删键——空数组是合法状态，之后还能再订阅。
+            var current = this._entryTurnHandlers;
+            var handlers = current[subscription.Entry];
+            var index = Array.FindIndex(handlers, h => ReferenceEquals(h, subscription.Handler));
+
+            var updated = new Dictionary<string, TurnProcess[]>(current, StringComparer.Ordinal);
+            if (handlers.Length == 1)
+            {
+                updated[subscription.Entry] = Array.Empty<TurnProcess>();
+            }
+            else
+            {
+                var removed = new TurnProcess[handlers.Length - 1];
+                Array.Copy(handlers, 0, removed, 0, index);
+                Array.Copy(handlers, index + 1, removed, index, handlers.Length - index - 1);
+                updated[subscription.Entry] = removed;
+            }
+
+            this._entryTurnHandlers = updated;
+        }
+    }
+
+    /// <summary>
+    /// 订阅句柄。<b>幂等</b>：Dispose 只生效一次；项目已释放之后再 Dispose 是无操作（不抛）。
+    /// </summary>
+    private sealed class TurnProcessSubscription : IDisposable
+    {
+        private TagsProject? _owner;
+
+        internal TurnProcessSubscription(TagsProject owner, string entry, TurnProcess handler)
+        {
+            this._owner = owner;
+            this.Entry = entry;
+            this.Handler = handler;
+        }
+
+        internal string Entry { get; }
+
+        internal TurnProcess Handler { get; }
+
+        public void Dispose()
+        {
+            var owner = Interlocked.Exchange(ref this._owner, null);
+            owner?.UnsubscribeTurnProcess(this);
         }
     }
     #endregion
