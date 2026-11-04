@@ -119,6 +119,20 @@ public class TagsProjectTurnProcessTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// 轮询到条件成立（带总超时）。用于替代"固定延时 + 再断言"：CI 上的线程池调度可能远慢于本地，
+    /// 固定窗口会把"轮询是否还在继续"变成碰运气（本地绿、CI 红）。
+    /// </summary>
+    private static async Task WaitUntilAsync(Func<bool> condition, string what)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(TimeoutMs);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"等待 {what} 超时（{TimeoutMs}ms）");
+            await Task.Delay(ScanIntervalMs);
+        }
+    }
+
     [Fact]
     public async Task Subscription_FiresEveryTurn_ForRegisteredEntry()
     {
@@ -388,15 +402,18 @@ public class TagsProjectTurnProcessTests : IDisposable
         await WaitOrFailAsync(secondCalled.Task, "两个订阅者都开始工作");
 
         firstSubscription.Dispose();
-
-        // 等在途轮次用掉旧快照后取基线，之后的轮次不应再进第一个订阅者。
-        await Task.Delay(ScanIntervalMs * 3);
         var baselineFirst = Volatile.Read(ref first[0]);
         var baselineSecond = Volatile.Read(ref second[0]);
 
-        await Task.Delay(ScanIntervalMs * 10);
-        Assert.Equal(baselineFirst, Volatile.Read(ref first[0]));
-        Assert.True(Volatile.Read(ref second[0]) > baselineSecond);
+        // 用"第二个订阅者确实又跑了几轮"作为轮询仍在推进的证据（不要用固定延时去赌调度速度）。
+        await WaitUntilAsync(
+            () => Volatile.Read(ref second[0]) >= baselineSecond + 3,
+            "退订后第二个订阅者继续触发");
+
+        // 退订前可能已有一轮读到旧快照，因此允许它再调用一次；但绝不能继续增长。
+        Assert.True(
+            Volatile.Read(ref first[0]) <= baselineFirst + 1,
+            $"退订后的订阅者最多只允许在途那一轮再调用一次（baseline={baselineFirst}, actual={Volatile.Read(ref first[0])}）");
 
         await StopAsync(cts, run);
     }
@@ -408,6 +425,7 @@ public class TagsProjectTurnProcessTests : IDisposable
         using var proj = CreateSingleEntryProject(scope);
 
         var count = new int[1];
+        var probe = new int[1];
         var firstTurn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var subscription = proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
         {
@@ -415,18 +433,29 @@ public class TagsProjectTurnProcessTests : IDisposable
             firstTurn.TrySetResult(true);
             return Task.CompletedTask;
         });
+        // 独立探针：用来证明"轮询确实还在跑"，否则"计数不涨"也可能是循环停摆。
+        proj.SubscribeTurnProcess("g1", (entry, channel, _) =>
+        {
+            Interlocked.Increment(ref probe[0]);
+            return Task.CompletedTask;
+        });
 
         using var cts = new CancellationTokenSource();
         var run = proj.RunAsync(cts.Token);
         await WaitOrFailAsync(firstTurn.Task, "回调先触发一次");
 
-        // 运行期退订：等在途轮次用掉旧快照后取基线，之后的轮次都不应再进来。
+        // 运行期退订：之后轮次都不应再进来（在途那一轮最多再调用一次）。
         subscription.Dispose();
-        await Task.Delay(ScanIntervalMs * 3);
         var baseline = Volatile.Read(ref count[0]);
+        var baselineProbe = Volatile.Read(ref probe[0]);
 
-        await Task.Delay(ScanIntervalMs * 10);
-        Assert.Equal(baseline, Volatile.Read(ref count[0]));
+        await WaitUntilAsync(
+            () => Volatile.Read(ref probe[0]) >= baselineProbe + 3,
+            "退订后轮询仍在继续");
+
+        Assert.True(
+            Volatile.Read(ref count[0]) <= baseline + 1,
+            $"退订后的订阅者最多只允许在途那一轮再调用一次（baseline={baseline}, actual={Volatile.Read(ref count[0])}）");
 
         await StopAsync(cts, run);
     }
@@ -686,15 +715,19 @@ public class TagsProjectTurnProcessTests : IDisposable
 
         // 摘掉中间那个（数组里 index > 0），其余两个不受影响。
         middleSubscription.Dispose();
-
-        await Task.Delay(ScanIntervalMs * 3);
         var baselineFirst = Volatile.Read(ref first[0]);
         var baselineMiddle = Volatile.Read(ref middle[0]);
         var baselineLast = Volatile.Read(ref last[0]);
 
-        await Task.Delay(ScanIntervalMs * 10);
+        // 用最后一个订阅者继续推进作为"轮询没停"的证据，而不是赌固定延时。
+        await WaitUntilAsync(
+            () => Volatile.Read(ref last[0]) >= baselineLast + 3,
+            "摘掉中间订阅者后其余订阅者继续触发");
+
         Assert.True(Volatile.Read(ref first[0]) > baselineFirst);
-        Assert.Equal(baselineMiddle, Volatile.Read(ref middle[0]));
+        Assert.True(
+            Volatile.Read(ref middle[0]) <= baselineMiddle + 1,
+            $"被退订的订阅者最多只允许在途那一轮再调用一次（baseline={baselineMiddle}, actual={Volatile.Read(ref middle[0])}）");
         Assert.True(Volatile.Read(ref last[0]) > baselineLast);
 
         await StopAsync(cts, run);
