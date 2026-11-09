@@ -145,7 +145,27 @@ internal sealed class SyncCountingHub : ITagsStreamHub
 /// <summary>可控的假控制器：只用于决定"何时启动/停止"。</summary>
 internal sealed class FakeProjectCtrl : ITagsProjectCtrl
 {
+    private long _runId;
+
     public ITagsProject? Project { get; private set; }
+
+    public TagsProjectState State => this.Project is null ? TagsProjectState.Stopped : TagsProjectState.Running;
+
+    public long RunId => Volatile.Read(ref this._runId);
+
+    public bool TryGetRunning(out ITagsProject project, out long runId)
+    {
+        if (this.Project is { } running)
+        {
+            project = running;
+            runId = this.RunId;
+            return true;
+        }
+
+        project = null!;
+        runId = 0;
+        return false;
+    }
 
     public Func<Exception, Task<bool>>? OnStartingException { get; set; }
 
@@ -154,13 +174,14 @@ internal sealed class FakeProjectCtrl : ITagsProjectCtrl
     public void RaiseStarted(ITagsProject project)
     {
         this.Project = project;
-        this.StartedOrStopped?.Invoke(this, new TagsProjectEventArgs(true, project));
+        var runId = Interlocked.Increment(ref this._runId);
+        this.StartedOrStopped?.Invoke(this, new TagsProjectEventArgs(TagsProjectState.Running, project, runId, null));
     }
 
     public void RaiseStopped()
     {
         this.Project = null;
-        this.StartedOrStopped?.Invoke(this, new TagsProjectEventArgs(false, null));
+        this.StartedOrStopped?.Invoke(this, new TagsProjectEventArgs(TagsProjectState.Stopped, null, Volatile.Read(ref this._runId), null));
     }
 
     public Task StartPollAsync(string? dir, System.Xml.Linq.XElement? root, Func<ITagsProject, IServiceProvider, CancellationToken, Task> hook) =>

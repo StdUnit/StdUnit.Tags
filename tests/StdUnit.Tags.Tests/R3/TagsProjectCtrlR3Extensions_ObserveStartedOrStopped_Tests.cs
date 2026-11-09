@@ -17,13 +17,13 @@ public class TagsProjectCtrlR3Extensions_ObserveStartedOrStopped_Tests
         using var subscription = ctrl.ObserveStartedOrStopped().Subscribe(received.Add);
 
         // Act
-        ctrl.FireStarted();
+        ctrl.FireStarted(new Mock<ITagsProject>().Object);
         ctrl.FireStopped();
 
         // Assert
         Assert.Equal(2, received.Count);
-        Assert.True(received[0].IsStarted);
-        Assert.False(received[1].IsStarted);
+        Assert.True(received[0].IsStarted());
+        Assert.False(received[1].IsStarted());
         Assert.Null(received[1].Project);
     }
 
@@ -41,7 +41,7 @@ public class TagsProjectCtrlR3Extensions_ObserveStartedOrStopped_Tests
 
         // Assert
         Assert.Single(received);
-        Assert.True(received[0].IsStarted);
+        Assert.True(received[0].IsStarted());
         Assert.Same(project, received[0].Project);
     }
 
@@ -52,7 +52,7 @@ public class TagsProjectCtrlR3Extensions_ObserveStartedOrStopped_Tests
         var ctrl = new FakeR3TagsProjectCtrl();
         var received = new List<TagsProjectEventArgs>();
         var subscription = ctrl.ObserveStartedOrStopped().Subscribe(received.Add);
-        ctrl.FireStarted();
+        ctrl.FireStarted(new Mock<ITagsProject>().Object);
         Assert.Single(received);
 
         // Act
@@ -61,6 +61,6 @@ public class TagsProjectCtrlR3Extensions_ObserveStartedOrStopped_Tests
 
         // Assert
         Assert.Single(received);
-        Assert.True(received[0].IsStarted);
+        Assert.True(received[0].IsStarted());
     }
 }

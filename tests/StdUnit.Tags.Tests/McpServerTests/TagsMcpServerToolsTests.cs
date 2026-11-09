@@ -711,6 +711,25 @@ public class TagsMcpServerToolsTests : IAsyncDisposable
     private sealed class ProjectCtrl(ITagsProject? project) : ITagsProjectCtrl
     {
         public ITagsProject? Project => project;
+
+        public TagsProjectState State => project is null ? TagsProjectState.Stopped : TagsProjectState.Running;
+
+        public long RunId => project is null ? 0 : 1;
+
+        public bool TryGetRunning(out ITagsProject running, out long runId)
+        {
+            if (project is not null)
+            {
+                running = project;
+                runId = 1;
+                return true;
+            }
+
+            running = null!;
+            runId = 0;
+            return false;
+        }
+
         public Func<Exception, Task<bool>>? OnStartingException { get; set; }
 
         public event TagsProjectStartedOrStopped? StartedOrStopped;

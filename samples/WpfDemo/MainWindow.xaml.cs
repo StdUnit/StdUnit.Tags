@@ -1,4 +1,4 @@
-﻿using StdUnit.Tags;
+using StdUnit.Tags;
 using StdUnit.Tags.R3;
 using R3;
 using System.Windows;
@@ -19,7 +19,7 @@ public partial class MainWindow : Window
         var app = App.Current as App ?? throw new InvalidCastException("App.Current is not of type App");
 
         var projobs = app.Ctrl.ObserveStartedOrStopped()
-            .Select(evt => evt.IsStarted ? evt.Project : null)
+            .Select(evt => evt.IsStarted() ? evt.Project : null)
             // 测点项目由后台线程在 Application_Startup 中启动，可能早于本窗口构造；
             // StartedOrStopped 是普通事件、不会重放历史记录，因此用当前 Project 作首值兜底。
             .Prepend(() => app.Ctrl.Project)
