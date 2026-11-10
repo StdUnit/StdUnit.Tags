@@ -159,6 +159,30 @@ public class AttachRunningProjectTests
     }
 
     [Fact]
+    public void AttachRunningProject_EventArrivesAfterDispose_IsIgnored()
+    {
+        var ctrl = new FakeCtrl();
+        var project = new MockTagsProject();
+        ctrl.Start(project);
+
+        var attachCalls = 0;
+        var handle = ctrl.AttachRunningProject((_, _) =>
+        {
+            attachCalls++;
+            return new CountingSubscription();
+        });
+
+        // 派发器已取到订阅者快照；此时调用方 Dispose，之后那份快照仍会被调用一次。
+        var inFlight = ctrl.CaptureStartedSnapshot(project);
+        handle.Dispose();
+
+        inFlight();
+
+        // 已解挂：迟到的通知不能再挂一次
+        Assert.Equal(1, attachCalls);
+    }
+
+    [Fact]
     public void AttachRunningProject_WhenArgsAreNull_Throws()
     {
         ITagsProjectCtrl? ctrl = null;
@@ -220,8 +244,19 @@ public class AttachRunningProjectTests
             this.StartedOrStopped?.Invoke(this, new TagsProjectEventArgs(TagsProjectState.Stopped, null, this.RunId));
         }
 
+        /// <summary>
+        /// 抓一份事件订阅者快照，返回"调用这份快照"的委托。<br/>
+        /// 用于模拟派发器的真实竞态：它先取到订阅者快照，随后订阅者被 <c>Dispose</c> 退订，
+        /// 但那份快照仍会被调用一次。
+        /// </summary>
+        public Action CaptureStartedSnapshot(ITagsProject project)
+        {
+            var handlers = this.StartedOrStopped;
+            return () => handlers?.Invoke(this, new TagsProjectEventArgs(TagsProjectState.Running, project, this.RunId));
+        }
+
         public Task StartPollAsync(string? dir, XElement? root, Func<ITagsProject, IServiceProvider, CancellationToken, Task> hook)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
 
         public Task StopAsync() => Task.CompletedTask;
     }

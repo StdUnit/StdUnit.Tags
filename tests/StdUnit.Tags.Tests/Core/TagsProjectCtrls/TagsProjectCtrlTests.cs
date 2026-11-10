@@ -1004,6 +1004,284 @@ public class TagsProjectCtrlTests
     }
 
     /// <summary>
+    /// 并发调用两次 <c>StopAsync</c>：两次都可能越过"未运行则直接返回"的检查，
+    /// 但"断开通道"和"派发已停止"必须各自只生效一次（靠 <c>Interlocked</c> 守卫）。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_CalledConcurrently_CleansUpAndNotifiesOnce()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var stoppedCount = 0;
+        var disconnectedCount = 0;
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (!args.IsStarted())
+            {
+                Interlocked.Increment(ref stoppedCount);
+            }
+        };
+
+        var channel = new MockChannel
+        {
+            DisconnectAsyncImpl = _ =>
+            {
+                Interlocked.Increment(ref disconnectedCount);
+                return Task.CompletedTask;
+            },
+        };
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).AddChannel(channel);
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+
+        // 两次都同步越过"未运行"检查（第一次还在 await 轮询退出，_lock 仍为 1）
+        var first = ctrl.StopAsync();
+        var second = ctrl.StopAsync();
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+        await startTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, stoppedCount);
+        Assert.Equal(1, disconnectedCount);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// <c>CancellationTokenSource.Cancel()</c> 会同步执行注册的回调；回调抛异常时会以
+    /// <see cref="AggregateException"/> 冒出。停机不能被它打断：记 Warning 后继续清理。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenCancellationCallbackThrows_SwallowsAndLogs()
+    {
+        var logs = new CapturingLoggerProvider();
+        var (ctrl, sp) = CreateCtrl(logs);
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, ct) =>
+            {
+                ct.Register(() => throw new InvalidOperationException("取消回调-boom"));
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+
+        // 不应抛出
+        await ctrl.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        await startTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains(logs.Entries, e => e.Message.Contains("取消测点项目轮询时出错"));
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 轮询不响应取消（等超时）且项目释放抛异常：超时兜底里的释放失败必须被吞掉并留痕，
+    /// 不能把 <c>StopAsync</c> 变成异常。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenTimedOutProjectDisposeThrows_SwallowsAndLogs()
+    {
+        var logs = new CapturingLoggerProvider();
+        var (ctrl, sp) = CreateCtrl(logs);
+        ctrl.PollExitWaitTimeout = TimeSpan.FromMilliseconds(100);
+        _factory.ProjectRunAsyncNeverCompletes = true;
+
+        using var started = WatchProjectStarted(ctrl);
+        _ = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).DisposeThrows = true;
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync().WaitAsync(TimeSpan.FromSeconds(10)); // 不应抛出
+
+        Assert.Contains(logs.Entries, e => e.Exception?.Message == "模拟的 Dispose 异常");
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// DI 作用域释放抛异常：不能覆盖原始结果，也不能拦着后续启动（锁必须已释放）。记 Warning 留痕。
+    /// </summary>
+    [Fact]
+    public async Task StartPollAsync_WhenScopeDisposeThrows_SwallowsAndLogs()
+    {
+        var logs = new CapturingLoggerProvider();
+        var services = new ServiceCollection();
+        services.AddLogging(b => b.AddProvider(logs));
+        services.AddSingleton<ITagsProjectFactory>(_factory);
+        using var root = services.BuildServiceProvider();
+
+        var logger = root.GetRequiredService<ILogger<TagsProjectCtrl>>();
+        var inner = new ServiceCollection().AddSingleton<ITagsProjectFactory>(_factory).BuildServiceProvider();
+        await using var _ = inner.ConfigureAwait(false);
+
+        var ssf = new ThrowingScopeFactory(inner);
+        var ctrl = new TagsProjectCtrl(ssf, logger);
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, _) => Task.CompletedTask));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync();
+        await startTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains(logs.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("释放 DI 作用域失败"));
+
+        // 作用域释放失败不得让控制器卡在"已启动"
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+    }
+
+    /// <summary>
+    /// 并发停机的真实时序：第一次 <c>StopAsync</c> 在等轮询退出超时后已把 <c>Project</c> 置空，
+    /// 但还堵在"断开通道"里（<c>_lock</c> 仍为 1）；此时第二次 <c>StopAsync</c> 到达，
+    /// 它看到的是一个没有项目、取消回调还会抛异常的控制器——两条兜底日志都必须留痕且不抛。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_ConcurrentWhileDisconnectBlocks_SecondToleratesMissingProject()
+    {
+        var logs = new CapturingLoggerProvider();
+        var (ctrl, sp) = CreateCtrl(logs);
+        ctrl.PollExitWaitTimeout = TimeSpan.FromMilliseconds(50);
+        _factory.ProjectRunAsyncNeverCompletes = true;
+
+        var disconnectStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseDisconnect = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var slowChannel = new MockChannel
+        {
+            DisconnectAsyncImpl = async _ =>
+            {
+                disconnectStarted.TrySetResult(true);
+                await releaseDisconnect.Task;
+            },
+        };
+
+        using var started = WatchProjectStarted(ctrl);
+        _ = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, ct) =>
+            {
+                ((MockTagsProject)proj).AddChannel(slowChannel);
+                ct.Register(() => throw new InvalidOperationException("取消回调-boom"));
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+
+        var first = ctrl.StopAsync();
+        // 等第一次进入"断开通道"：此时 Project 已被置空、锁尚未释放
+        await disconnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var second = ctrl.StopAsync();     // 第二次看到的 Project 为 null
+        await second.WaitAsync(TimeSpan.FromSeconds(10));
+
+        releaseDisconnect.TrySetResult(true);
+        await first.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // 两条"看似不可能"的兜底分支都走到了：取消时没有项目、超时日志里没有项目
+        Assert.Contains(logs.Entries, e => e.Message.Contains("取消测点项目轮询时出错"));
+        Assert.Contains(logs.Entries, e => e.Message.Contains("等待轮询循环退出超时"));
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 第三方项目实现违反"<c>Channels</c> 非 null"的约定：断开通道时跳过，不影响其它清理。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenProjectChannelsIsNull_SkipsDisconnect()
+    {
+        var (ctrl, sp) = CreateCtrl();
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).ChannelsReturnsNull = true;
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync(); // 不应因为 Channels 为 null 抛 NullReferenceException
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        Assert.Equal(1, _factory.LastCreatedProject!.DisposeCallCount);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 通道列表里混入 null 元素（第三方实现的脏数据）：跳过它，其它通道照常断开。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenChannelListContainsNull_SkipsNullEntry()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var healthyDisconnected = false;
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                var mock = (MockTagsProject)proj;
+                mock.AddChannel(null!);
+                mock.AddChannel(new MockChannel
+                {
+                    DisconnectAsyncImpl = _ =>
+                    {
+                        healthyDisconnected = true;
+                        return Task.CompletedTask;
+                    },
+                });
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync(); // 不应抛 NullReferenceException
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(healthyDisconnected, "null 元素不应阻断其它通道的断开");
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 用于验证"DI 作用域释放失败"的工厂：作用域照常提供项目工厂，但 <c>Dispose</c> 抛异常。
+    /// </summary>
+    private sealed class ThrowingScopeFactory(IServiceProvider provider) : IServiceScopeFactory
+    {
+        public IServiceScope CreateScope() => new ThrowingScope(provider);
+
+        private sealed class ThrowingScope(IServiceProvider provider) : IServiceScope
+        {
+            public IServiceProvider ServiceProvider { get; } = provider;
+
+            public void Dispose() => throw new InvalidOperationException("作用域释放-boom");
+        }
+    }
+
+    /// <summary>
     /// 用于测试通道断开连接的模拟通道。
     /// </summary>
     private class MockChannel : ITagChannel

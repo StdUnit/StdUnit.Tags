@@ -296,7 +296,9 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
         catch (Exception ex)
         {
             // 有意吞掉：取消失败（如 CTS 已释放）不应阻断后续的清理。但不能静默——留痕。
-            this._logger.LogWarning(ex, "取消测点项目轮询时出错（项目根目录={ProjectRoot}）", project?.ProjectRoot);
+            // 这里不记项目根目录：能走到这个 catch 的前提是 Cancel() 执行了注册回调并抛异常，
+            // 那时项目必定已创建（回调只可能由 hook/项目自己注册），写 project?.ProjectRoot 是永远走不到的分支。
+            this._logger.LogWarning(ex, "取消测点项目轮询时出错");
         }
 
         // 取消是协作式的：先等轮询循环真正退出。不等它就直接释放/断开，会与循环里的读/写/重连并发——
@@ -386,6 +388,12 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
     /// </summary>
     private async Task DisconnectChannelsAsync(ITagsProject? project)
     {
+        // 没有项目就没有通道可断（启动阶段在 MakeProject 之前失败时会传 null）。
+        if (project is null)
+        {
+            return;
+        }
+
         if (Interlocked.Exchange(ref this._channelsDisconnected, 1) != 0)
         {
             return;
@@ -396,7 +404,8 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
             return;
         }
 
-        var channels = project?.Channels;
+        // 接口声明 Channels 非 null，但第三方实现可能违反：此时同样没有通道可断。
+        var channels = project.Channels;
         if (channels is null)
         {
             return;

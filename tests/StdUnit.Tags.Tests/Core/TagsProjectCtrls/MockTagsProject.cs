@@ -14,7 +14,7 @@ internal class MockTagsProject : ITagsProject
 {
     private readonly List<ITagChannel> _channels = new();
 
-    public IReadOnlyList<ITagChannel> Channels => _channels;
+    public IReadOnlyList<ITagChannel> Channels => this.ChannelsReturnsNull ? null! : _channels;
     public IList<ILogicet> Logicets { get; } = new List<ILogicet>();
     public ITagGrp Tags { get; set; } = null!;
     public string? ProjectRoot { get; set; }
@@ -39,6 +39,12 @@ internal class MockTagsProject : ITagsProject
     /// 如果为 true，<see cref="RunAsync"/> 立即正常返回（模拟"轮询自行结束"，即没有调用 <c>StopAsync</c>）。
     /// </summary>
     public bool RunAsyncCompletesImmediately { get; set; }
+
+    /// <summary>
+    /// 如果为 true，<see cref="Channels"/> 返回 <c>null</c>。<br/>
+    /// 用于验证 <c>TagsProjectCtrl</c> 断开通道时对"第三方实现违反接口约定"的防御分支。
+    /// </summary>
+    public bool ChannelsReturnsNull { get; set; }
 
     /// <summary>
     /// 如果为 true，<see cref="RunAsync"/> 在被取消时以 <see cref="OperationCanceledException"/> 结束
