@@ -70,7 +70,12 @@ internal static class StreamTestContext
         return root;
     }
 
-    public static bool WaitUntil(Func<bool> condition, int timeoutMs = 5000)
+    /// <summary>
+    /// 轮询等待条件成立。<br/>
+    /// <b>超时给得宽松（30s）是有意的</b>：条件成立就立刻返回，所以正常路径不受影响；而 CI runner 只有 2 个 vCPU，
+    /// 线程池爬坡（每秒一两个线程）可能让轮询循环的续体排队数秒——用 5s 当上限会把"机器慢"变成随机失败。
+    /// </summary>
+    public static bool WaitUntil(Func<bool> condition, int timeoutMs = 30_000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < deadline)

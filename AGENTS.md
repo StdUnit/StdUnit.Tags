@@ -128,6 +128,15 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
   - **分隔符**：相对路径一律用 `/` 或 `Path.Combine` 分段，**不要写 `@"Samples\Web\index.xml"`**——反斜杠在 Linux 是合法文件名字符，`Path.Combine` 不会转换，结果是"Windows 上绿、Linux 上 `File.Exists` 失败"。夹具/示例用 `TestPaths.Fixture("Samples", "Web", "index.xml")` 定位。
   - **Windows 专有绝对路径**：`C:\base` 在 Linux 上**不是** rooted 路径，`Path.Combine` 的行为会不同（Windows 丢弃前一段、Linux 拼接），于是同一个用例在两个平台上"测的不是同一件事"。需要"绝对路径"语义的数据请用 `TestPaths.TempPath("base")`（运行时由 `Path.GetTempPath()` 拼出，两个平台都真 rooted）。
   - 两者都收在 `tests/StdUnit.Tags.Tests/TestPaths.cs`。新增夹具/路径类用例后请在 WSL 上跑一遍 `-f net8.0`（或直接看 CI）。
+- **不要用"短固定窗口"等待异步推进**：WebUi 的观测流测试要跑真实轮询循环 + SSE 写循环，CI runner 只有 4 个 vCPU、
+  且多个测试项目可能同时在跑（`dotnet test` 打解决方案时会并行启动多个 testhost），5s 级的窗口会把"机器忙"变成随机红
+  （2026-11 实测一次打挂 3 个互不相干的用例：`Subscribe_FiltersByEntry` / `WriteValue_ParsesEveryBuiltinKind` / `Delta_IsSplitByMaxValuesPerFrame`）。
+  - 等待"某事发生了"请用 `StreamTestContext.WaitUntil(...)`（默认 30s，条件成立即返回）或 `WaitUntilAsync`，**不要写 `Task.Delay(150)` 再断言**；
+  - 等待上限给宽松不会拖慢通过路径，只影响真失败时的反馈时间——所以宁可 30s 也不要 5s；
+  - 断言"某事**没有**发生"时，必须先用一个**正向信号**证明"轮询确实又推进了"（例如再改一个值并等它到达），
+    否则循环停摆也会让负向断言通过（测试失去鉴别力）；
+  - `tests/StdUnit.Tags.Tests.NetCoreOnly/TestProcessSetup.cs` 会在进程启动时抬高线程池最小线程数，避免线程池爬坡造成的假超时；
+    两个 release 工作流也据此把测试项目**分成两步顺序跑**。
 - **大小写也算"跨平台"**：Linux 文件系统区分大小写，Windows 不区分。写错大小写的路径（例如测试里的 `Schemas/drivers` 而 csproj 的 `Link` 是 `Schemas\Drivers`）在 Windows 上一直绿，一到 Linux CI 就 `DirectoryNotFoundException`。
   - **警告：这个坑在 WSL 里测不出来**——`/mnt/d`（DrvFs）同样不区分大小写。要真验证，得把仓库复制到 WSL 的 ext4（`tar` 排除 `bin`/`obj`，删掉 `paket-files/paket.restore.cached` 后 `paket restore`），或直接依赖 CI。
   - 需要按名字定位文件/目录时，**大小写必须与产出方（csproj 的 `Link`、`TestPaths.Fixture(...)`）逐字符一致**——不要为了"容错"写成不区分大小写，那恰好把这个坑掩盖掉（我们就是先写成 `SchemaPath("drivers")` 才红的）。写错了就让它在 CI 上红，并顺手核对 csproj。
