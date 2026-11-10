@@ -121,9 +121,14 @@ public class TagsStreamHubTests : IDisposable
         StreamTestContext.TagAt(project, "g2/a").Value = (short)22;
 
         Assert.True(StreamTestContext.WaitUntil(() => output.Text.Contains("\"raw\":\"22\"")));
-        await Task.Delay(150);
+
+        // 再用"g2 的第二个值"确认轮询又推进了至少一轮：两个入口是并行轮询的，
+        // 所以 g1 只要会发增量，早就该在 output 里出现了——不用固定延时去赌调度速度。
+        StreamTestContext.TagAt(project, "g2/a").Value = (short)23;
+        Assert.True(StreamTestContext.WaitUntil(() => output.Text.Contains("\"raw\":\"23\"")));
 
         Assert.DoesNotContain("\"raw\":\"11\"", output.Text);
+        Assert.DoesNotContain("\"path\":\"g1/a\"", output.Text);
 
         await StreamTestContext.StopAsync(runCts, run);
         await StopSubscriberAsync(piperCts, writer);

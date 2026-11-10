@@ -15,7 +15,13 @@ namespace StdUnit.Tags.Tests.NetCoreOnly.WebUi;
 /// </summary>
 public class TagsStreamCommandsTests : IDisposable
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// 写意图的超时上限。<b>给得宽松是有意的</b>：CI runner 只有 2 个 vCPU，线程池爬坡可能让轮询循环的
+    /// 续体排队数秒，5s 的上限会把"机器慢"变成随机失败（实测 INT16 那个用例报过 504）。
+    /// 真正要验证"超时"的用例请用 <see cref="ShortTimeout"/>。
+    /// </summary>
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
+
     private static readonly TimeSpan ShortTimeout = TimeSpan.FromMilliseconds(200);
 
     private readonly ServiceProvider _root;

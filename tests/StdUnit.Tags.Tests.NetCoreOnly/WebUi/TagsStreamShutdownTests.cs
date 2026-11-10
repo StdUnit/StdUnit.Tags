@@ -19,7 +19,11 @@ namespace StdUnit.Tags.Tests.NetCoreOnly.WebUi;
 /// </summary>
 public class TagsStreamShutdownTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// "流应当结束"的等待上限。<b>给得宽松是有意的</b>：条件成立就立刻返回，慢的只可能是 CI 的线程池爬坡
+    /// （2 核 runner 上每秒才一两个新线程），用 5s 当上限会把"机器慢"变成随机失败。
+    /// </summary>
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
 
     private static TagsStreamOptions FastOptions() => new()
     {

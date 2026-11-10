@@ -31,9 +31,16 @@ jobs:
       working-directory: .
       run: dotnet build StdUnit.Tags.sln -c Release --nologo
 
-    - name: Test with Coverage
+    # ⚠ 两个测试项目**分成两步顺序跑**（理由同 release-nuget.yml）：`dotnet test` 直接打解决方案会并行
+    # 启动多个 testhost，windows-latest 只有 4 个 vCPU，WebUi 的观测流测试（真实轮询循环 + SSE 写循环）
+    # 与另外上千个用例抢 CPU 后会出现"偶发超时"的假红。
+    - name: Test with Coverage (core, net8.0 + net472)
       working-directory: .
-      run: dotnet test -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --nologo
+      run: dotnet test tests/StdUnit.Tags.Tests/StdUnit.Tags.Tests.csproj -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --nologo
+
+    - name: Test with Coverage (net8.0-only)
+      working-directory: .
+      run: dotnet test tests/StdUnit.Tags.Tests.NetCoreOnly/StdUnit.Tags.Tests.NetCoreOnly.csproj -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --nologo
 
     - name: Upload Coverage to Codecov
       uses: codecov/codecov-action@v4
