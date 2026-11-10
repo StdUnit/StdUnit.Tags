@@ -964,6 +964,46 @@ public class TagsProjectCtrlTests
     }
 
     /// <summary>
+    /// 正常停机时，即便 <c>RunAsync</c> 以 <see cref="OperationCanceledException"/> 结束，"已停止"里的
+    /// <see cref="TagsProjectEventArgs.Failure"/> 也必须为 <c>null</c> —— 判据是"令牌确实已取消"，
+    /// 否则每次正常停机都会被误报成"崩了"。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenRunAsyncEndsWithOce_StoppedHasNoFailure()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var stoppedArgs = new TaskCompletionSource<TagsProjectEventArgs>();
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (!args.IsStarted())
+            {
+                stoppedArgs.TrySetResult(args);
+            }
+        };
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).RunAsyncThrowsOceOnCancel = true;
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync();
+
+        // OCE 是停机引起的，不算失败：StartPollAsync 正常结束（不抛），停止事件也不带 Failure
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var stopped = await stoppedArgs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Null(stopped.Failure);
+        sp.Dispose();
+    }
+
+    /// <summary>
     /// 用于测试通道断开连接的模拟通道。
     /// </summary>
     private class MockChannel : ITagChannel

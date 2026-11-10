@@ -155,16 +155,22 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
         var exitSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         this._pollExitSource = exitSource;
 
-        using var scope = this._ssf.CreateScope();
-        var sp = scope.ServiceProvider;
-
+        // 这两个声明在 try 之外：
+        // - ct 供 catch 的 when 过滤条件使用（try 块内声明的局部变量在 catch 里不在作用域内）；
+        // - scope 交给 finally 释放（项目里的对象可能引用作用域内的服务，所以必须先放项目、再放作用域）。
+        CancellationToken ct = default;
+        IServiceScope? scope = null;
 
         try
         {
-            this._cts = new CancellationTokenSource();
+            scope = this._ssf.CreateScope();
+            var sp = scope.ServiceProvider;
+
+            var cts = new CancellationTokenSource();
+            this._cts = cts;
+            ct = cts.Token;
             var project = sp.MakeProject(dir, root);
             this._project = project;
-            var ct = _cts.Token;
             await hook(project, sp, ct);
 
             // hook 已执行完、轮询即将开始：这是唯一的"已就绪"时刻
@@ -174,6 +180,11 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
             this.RaiseStartedOrStopped(new TagsProjectEventArgs(TagsProjectState.Running, project, runId, null));
 
             await project.RunAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // 正常停机：取消不是失败（与 RunnerCrashed 的判据一致）。不记 Error、不填 Failure、不外抛——
+            // 否则 StopAsync 引发的 OCE 会让每次正常停机都表现成"启动失败"。
         }
         catch (Exception ex)
         {
@@ -238,6 +249,21 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
             if (ReferenceEquals(this._pollExitSource, exitSource))
             {
                 this._pollExitSource = null;
+            }
+
+            // DI 作用域放在最后释放：通道实例可能来自作用域内的服务，必须先让它们断开（上面那步）、
+            // 再放作用域。这也保持了原来 `using var scope` 的"方法结束才释放"的时序。
+            if (scope is not null)
+            {
+                try
+                {
+                    scope.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    // 有意吞掉：作用域释放失败不应覆盖原始异常。但不能静默——留痕。
+                    this._logger.LogWarning(ex, "释放 DI 作用域失败，资源可能未完全释放");
+                }
             }
         }
     }

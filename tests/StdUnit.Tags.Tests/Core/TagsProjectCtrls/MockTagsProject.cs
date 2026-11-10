@@ -41,6 +41,12 @@ internal class MockTagsProject : ITagsProject
     public bool RunAsyncCompletesImmediately { get; set; }
 
     /// <summary>
+    /// 如果为 true，<see cref="RunAsync"/> 在被取消时以 <see cref="OperationCanceledException"/> 结束
+    /// （模拟"runner 不把取消当正常返回"的实现）。用于验证正常停机的"已停止"事件里 <c>Failure</c> 仍为 <c>null</c>。
+    /// </summary>
+    public bool RunAsyncThrowsOceOnCancel { get; set; }
+
+    /// <summary>
     /// 如果为 true，<see cref="Dispose"/> 会在计数之后抛出 InvalidOperationException。<br/>
     /// 用于验证清理路径「吞掉异常但必须留痕」的语义。
     /// </summary>
@@ -81,6 +87,14 @@ internal class MockTagsProject : ITagsProject
         {
             // 自行结束：模拟"轮询没有等到 StopAsync 就退出了"
             return Task.CompletedTask;
+        }
+
+        if (RunAsyncThrowsOceOnCancel)
+        {
+            // 取消时以 OCE 结束：模拟"runner 把取消当异常抛出"的实现
+            var oce = new TaskCompletionSource<bool>();
+            ct.Register(() => oce.TrySetException(new OperationCanceledException(ct)));
+            return oce.Task;
         }
 
         // 阻塞直到被取消，模拟正在运行的测点项目

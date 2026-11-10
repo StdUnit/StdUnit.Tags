@@ -83,8 +83,10 @@ public interface ITagsProjectCtrl
     /// 测点项目启动或停止事件。<b>只在两个稳定态上派发</b>（<see cref="TagsProjectState.Running"/> / <see cref="TagsProjectState.Stopped"/>）：<br/>
     /// <list type="bullet">
     /// <item><b>配对由库保证</b>：只要派发过一次"已启动"，本次运行结束前<b>必定</b>派发一次"已停止"，
-    /// 两者的 <see cref="TagsProjectEventArgs.RunId"/> 相同；启动失败、<c>RunAsync</c> 异常退出都算运行结束，
-    /// 结束时 <see cref="TagsProjectEventArgs.Failure"/> 带异常，正常停机为 <c>null</c>。</item>
+    /// 两者的 <see cref="TagsProjectEventArgs.RunId"/> 相同。"运行中"异常结束（如 <c>RunAsync</c> 抛错）同样补发，
+    /// 此时 <see cref="TagsProjectEventArgs.Failure"/> 带异常；正常停机为 <c>null</c>（停机引起的
+    /// <see cref="OperationCanceledException"/> 也算正常停机）。<b>启动阶段就失败</b>（<c>MakeProject</c> / <c>hook</c> 抛错）
+    /// 的运行没有"已启动"，因此也不会有"已停止"——配对约束的是"对外宣告过的运行"，不是"每次 StartPollAsync 都有回执"。</item>
     /// <item><b>热事件</b>：只在状态迁移时派发一次，晚订阅者收不到历史通知。
     /// 需要"当前是否已启动"请查 <see cref="State"/>，需要"现在就是这个状态"请自行补偿。</item>
     /// <item><b>订阅者抛异常不影响启停</b>：逐个 <c>try/catch</c> 并记 Error 日志，后续订阅者仍会收到通知
@@ -180,8 +182,9 @@ public class TagsProjectEventArgs : EventArgs
     public long RunId { get; }
 
     /// <summary>
-    /// 导致本次运行结束的异常：启动失败或 <c>RunAsync</c> 异常退出时非 null；
-    /// 正常停机（<c>StopAsync</c>）为 null。"已启动"通知里恒为 null。
+    /// 导致本次运行结束的异常：<b>运行中</b>异常结束（如 <c>RunAsync</c> 抛错）时非 null；
+    /// 正常停机（<c>StopAsync</c>，含停机引起的 <see cref="OperationCanceledException"/>）为 null。
+    /// "已启动"通知里恒为 null；启动阶段就失败的运行不会派发任何事件，因此也谈不上 Failure。
     /// </summary>
     public Exception? Failure { get; }
 }

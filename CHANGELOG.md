@@ -18,9 +18,13 @@ StdUnit.Tags / StdUnit.Tags.Core: **项目级启停的确定化（`State` / `Run
     返回 `false` 时它是 `null`）。构造函数也改为只接收 `State`（不再有 `bool isstarted` 版本）：
     事件参数里只有一个"真相"，自定义实现与测试替身都不会造出"bool 与 State 各说各话"的参数。
   - **配对保证**：只要派发过一次"已启动"，本次运行结束前**必定**派发一次、且只有一次"已停止"，两者 `RunId` 相同。
-    启动失败（`hook` 抛异常、`OnStartingException` 吞掉异常、`RunAsync` 抛异常）现在也会补发"已停止"，
-    并带 `Failure`；`RunAsync` 自行正常返回同样补发（`Failure` 为 null）。此前这些路径只释放项目、不发事件，
+    **运行中**异常结束（如 `RunAsync` 抛错）补发"已停止"并带 `Failure`；`RunAsync` 自行正常返回同样补发（`Failure` 为 null）。
+    **启动阶段就失败**（`MakeProject` / `hook` 抛错）的运行没有"已启动"，因此也不会补"已停止"——配对约束的是
+    "对外宣告过的运行"，不是"每次 `StartPollAsync` 都有回执"。此前这些路径只释放项目、不发事件，
     观察者会永远停在"已启动"，且通道不会被断开——现在收尾统一：释放项目 → 断开通道 → 派发"已停止"。
+  - **停机引起的取消不算失败**：`StopAsync` 触发的 `OperationCanceledException`（取决于 runner 是"正常返回"还是
+    "抛 OCE"）既不会让 `StartPollAsync` 外抛，也不会写进 `Failure`。判据与 `RunnerCrashed` 一致——看"令牌确实已取消"，
+    驱动自身原因抛的 `OCE` 仍算失败。
   - **`StopAsync()` 在未运行时是空操作**：不再凭空派发"已停止"；重复调用也只派发一次。
   - **订阅者异常不再影响启停**：`StartedOrStopped` 改为逐个订阅者 `try/catch` + Error 日志，后续订阅者仍会收到通知。
     此前"已启动"在 `StartPollAsync` 的 `try` 内派发，任一观察者抛异常都会**导致项目启动失败**。这与
