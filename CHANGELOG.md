@@ -2,7 +2,58 @@
 
 本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
-## 2.0.0-beta7(尚未发布)
+
+## 2.0.0-beta8(尚未发布)
+
+> 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
+
+StdUnit.Tags / StdUnit.Tags.Core: **项目级启停的确定化（`State` / `RunId` / 配对保证）**
+  - `ITagsProjectCtrl` 新增 `State`（`TagsProjectState`：`Stopped` / `Starting` / `Running` / `Stopping`）
+    与 `RunId`（每次启动递增）。**"已就绪"的唯一可靠判据是 `State == Running && Project is { }`**：
+    `Project` 在 `hook` 执行**之前**就已赋值（那时是 `Starting`），单看 `Project != null` 会早于就绪，
+    旧文档里"等 `Project != null` 就去 `StopAsync` 会与 hook 竞态"正是这个原因。
+  - `TagsProjectEventArgs` 新增 `State` / `RunId` / `Failure`，**移除** `IsStarted` 属性，改为扩展方法
+    `TagsProjectEventArgsExtensions.IsStarted()`（等价于 `State == Running`），另提供
+    `IsStarted(out ITagsProject project)`：判定与取项目一步完成（返回 `true` 时 `project` 必定可用，
+    返回 `false` 时它是 `null`）。构造函数也改为只接收 `State`（不再有 `bool isstarted` 版本）：
+    事件参数里只有一个"真相"，自定义实现与测试替身都不会造出"bool 与 State 各说各话"的参数。
+  - **配对保证**：只要派发过一次"已启动"，本次运行结束前**必定**派发一次、且只有一次"已停止"，两者 `RunId` 相同。
+    **运行中**异常结束（如 `RunAsync` 抛错）补发"已停止"并带 `Failure`；`RunAsync` 自行正常返回同样补发（`Failure` 为 null）。
+    **启动阶段就失败**（`MakeProject` / `hook` 抛错）的运行没有"已启动"，因此也不会补"已停止"——配对约束的是
+    "对外宣告过的运行"，不是"每次 `StartPollAsync` 都有回执"。此前这些路径只释放项目、不发事件，
+    观察者会永远停在"已启动"，且通道不会被断开——现在收尾统一：释放项目 → 断开通道 → 派发"已停止"。
+  - **停机引起的取消不算失败**：`StopAsync` 触发的 `OperationCanceledException`（取决于 runner 是"正常返回"还是
+    "抛 OCE"）既不会让 `StartPollAsync` 外抛，也不会写进 `Failure`。判据与 `RunnerCrashed` 一致——看"令牌确实已取消"，
+    驱动自身原因抛的 `OCE` 仍算失败。
+  - **`StopAsync()` 在未运行时是空操作**：不再凭空派发"已停止"；重复调用也只派发一次。
+  - **订阅者异常不再影响启停**：`StartedOrStopped` 改为逐个订阅者 `try/catch` + Error 日志，后续订阅者仍会收到通知。
+    此前"已启动"在 `StartPollAsync` 的 `try` 内派发，任一观察者抛异常都会**导致项目启动失败**。这与
+    `RunnerStarted` 的 fast-fail 语义刻意不同：项目级观测是纯旁路，要参与启动的初始化请用 `hook`。
+  - `OnStartingException` 改为**先取快照再调用**，启动过程中替换该属性不会引发二次读取。
+  - 新增 `ITagsProjectCtrl.TryGetRunning(out ITagsProject project, out long runId)`：**一次读取**拿到
+    "正在运行的项目 + 它的运行标识"，且两者必定来自同一次运行。`State` / `Project` / `RunId` 是三个独立属性，
+    "停止后立刻重启"的窗口里分别读取可能拼出「旧项目 + 新 RunId」；需要配对时（尤其是晚订阅者的补查与去重）
+    请用本方法。**"是否已就绪"只认它**：不再提供 `GetRunningProject()` 这类"只返回项目"的便捷包装，
+    避免同一件事出现两种读法、两种语义。
+  - 自定义 `ITagsProjectCtrl` 实现：需要补上 `State`、`RunId`、`TryGetRunning` 三个成员
+    （`Stopped` / `0` / 恒返回 `false` 是合理默认）。
+  - 新增扩展方法 `TagsProjectCtrlAttachmentExtensions.AttachRunningProject(Func<ITagsProject, long, IDisposable>)`：
+    把"给正在运行的项目挂一段观测"的四件固定杂活收敛成一个方法——**晚挂补偿**（先订阅 `StartedOrStopped`，
+    再补查 `TryGetRunning`）、**按 `RunId` 去重**、**配对摘除**（停止/换运行时先 `Dispose` 旧句柄）、**加锁串行化**。
+    没有它时，每个观察者都要抄一遍那十几行样板，且很容易写成"分别读 `RunId` 与 `Project`"的错误版本。
+
+StdUnit.Tags.WebUi: 观测流改用 `AttachRunningProject` + 控制器提供的 `RunId`
+  - 不再自己维护轮次订阅列表、`OnStartedOrStopped` 分发与 `_transitionGate`：订阅、晚挂补偿、
+    按 `RunId` 去重、停止/换运行时摘除全部交给 `AttachRunningProject`，hub 只保留"挂上之后做什么"
+    （建索引、发布状态、逐入口订阅）。`_turnSubscriptions` / `UnsubscribeTurns` / `SyncWithController` 随之删除。
+  - 心跳里的周期性"对账"不再需要：`StartedOrStopped` 的配对与晚挂补偿已经覆盖那些场景
+    （`ReconcileInterval` 仍作为心跳 tick 的间隔保留）。
+  - `epoch` 直接取 `RunId`（`TagsProjectEventArgs.RunId` / `ctrl.RunId`），不再维护私有计数器。
+  - 行为保持：正常停止发一帧 `started=false`；**换运行时不发**中间的 `stopped`，只发新的 `started`
+    （`OnDetached` 用 `TryGetRunning` 区分"真停止"与"换运行"）。
+
+
+## 2.0.0-beta7
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
 

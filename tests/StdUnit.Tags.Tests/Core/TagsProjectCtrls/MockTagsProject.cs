@@ -14,7 +14,7 @@ internal class MockTagsProject : ITagsProject
 {
     private readonly List<ITagChannel> _channels = new();
 
-    public IReadOnlyList<ITagChannel> Channels => _channels;
+    public IReadOnlyList<ITagChannel> Channels => this.ChannelsReturnsNull ? null! : _channels;
     public IList<ILogicet> Logicets { get; } = new List<ILogicet>();
     public ITagGrp Tags { get; set; } = null!;
     public string? ProjectRoot { get; set; }
@@ -34,6 +34,23 @@ internal class MockTagsProject : ITagsProject
     /// 如果为 true，<see cref="RunAsync"/> 永不退出（模拟"驱动不响应取消"），用于验证 StopAsync 的超时兜底。
     /// </summary>
     public bool RunAsyncNeverCompletes { get; set; }
+
+    /// <summary>
+    /// 如果为 true，<see cref="RunAsync"/> 立即正常返回（模拟"轮询自行结束"，即没有调用 <c>StopAsync</c>）。
+    /// </summary>
+    public bool RunAsyncCompletesImmediately { get; set; }
+
+    /// <summary>
+    /// 如果为 true，<see cref="Channels"/> 返回 <c>null</c>。<br/>
+    /// 用于验证 <c>TagsProjectCtrl</c> 断开通道时对"第三方实现违反接口约定"的防御分支。
+    /// </summary>
+    public bool ChannelsReturnsNull { get; set; }
+
+    /// <summary>
+    /// 如果为 true，<see cref="RunAsync"/> 在被取消时以 <see cref="OperationCanceledException"/> 结束
+    /// （模拟"runner 不把取消当正常返回"的实现）。用于验证正常停机的"已停止"事件里 <c>Failure</c> 仍为 <c>null</c>。
+    /// </summary>
+    public bool RunAsyncThrowsOceOnCancel { get; set; }
 
     /// <summary>
     /// 如果为 true，<see cref="Dispose"/> 会在计数之后抛出 InvalidOperationException。<br/>
@@ -70,6 +87,20 @@ internal class MockTagsProject : ITagsProject
         {
             // 永不完成：模拟驱动不响应取消（StopAsync 只能等超时）
             return new TaskCompletionSource<bool>().Task;
+        }
+
+        if (RunAsyncCompletesImmediately)
+        {
+            // 自行结束：模拟"轮询没有等到 StopAsync 就退出了"
+            return Task.CompletedTask;
+        }
+
+        if (RunAsyncThrowsOceOnCancel)
+        {
+            // 取消时以 OCE 结束：模拟"runner 把取消当异常抛出"的实现
+            var oce = new TaskCompletionSource<bool>();
+            ct.Register(() => oce.TrySetException(new OperationCanceledException(ct)));
+            return oce.Task;
         }
 
         // 阻塞直到被取消，模拟正在运行的测点项目

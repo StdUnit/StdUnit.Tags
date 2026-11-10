@@ -15,7 +15,8 @@ namespace StdUnit.Tags.WebUi;
 /// <b>启动时机</b>：由 <c>MapTagsStream()</c>（<see cref="TagsStreamRegistry.StartAll"/>）启动——
 /// 映射端点必然发生在任何请求之前，也早于 <c>StartPollAsync</c>，因此<b>不依赖 Generic Host 的
 /// <c>IHostedService</c> 机制</b>；启动后运行期的状态迁移一律以 <see cref="ITagsProjectCtrl.StartedOrStopped"/> 为准
-/// （见 <see cref="OnStartedOrStopped"/>）。
+/// （订阅、晚挂补偿、按运行去重都交给 <see cref="TagsProjectCtrlAttachmentExtensions.AttachRunningProject"/>，
+/// hub 自己只负责"挂上之后做什么"：见 <see cref="AttachProject"/>）。
 /// </para>
 /// <para>
 /// <b>停止时机</b>：由 <see cref="TagsStreamRegistry"/> 在宿主的 <c>ApplicationStopping</c> 上调用
@@ -27,7 +28,7 @@ namespace StdUnit.Tags.WebUi;
 /// <c>StopAsync</c> 就不能再 <c>StartAsync</c>（实测两边都抛 <see cref="OperationCanceledException"/>），
 /// 所以 <see cref="Start"/> 在 <see cref="Stop"/> 之后是 no-op，而不是"再起一遍"。
 /// 运行期会反复启停的是被观测的<b>项目</b>（<see cref="ITagsProjectCtrl"/>），那条路径不需要重启 hub：
-/// 见 <see cref="OnStartedOrStopped"/> / <see cref="OnProjectStarted"/>（每次启动递增 epoch）。
+/// 见 <see cref="AttachProject"/> / <see cref="OnDetached"/>（每次启动递增 epoch）。
 /// </para>
 /// <para>
 /// <b>线程模型</b>：轮次回调在<b>轮询线程</b>上执行，只做 O(改动的点) 的字典写入 + 一次 <c>TryWrite</c>，
@@ -41,27 +42,23 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     private readonly TagsStreamOptions _options;
     private readonly ILogger<TagsStreamHub>? _logger;
 
-    /// <summary>订阅者集合与状态发布。<c>_transitionGate → _gate</c> 是唯一允许的加锁顺序。</summary>
+    /// <summary>订阅者集合与状态发布。</summary>
     private readonly object _gate = new();
-
-    /// <summary>启动/停止的状态迁移串行化（避免事件与对账线程同时迁移）。</summary>
-    private readonly object _transitionGate = new();
 
     private readonly HashSet<SseFramesPiper> _pipers = new();
     private readonly Channel<PendingBatch> _pending;
 
     /// <summary>
-    /// 当前项目上的轮次订阅句柄（只在 <see cref="_transitionGate"/> 下访问）。<br/>
-    /// 项目停止/切换、或 hub 自己停止时必须退订：否则已释放的项目会因为委托引用而多活，
-    /// 回调也会继续打到已经停掉的 hub 上。
+    /// "挂到当前运行中的项目"的会话：订阅/退订轮次回调、晚挂补偿、按运行去重、配对摘除都由
+    /// <see cref="TagsProjectCtrlAttachmentExtensions.AttachRunningProject"/> 负责。
+    /// 换运行时旧会话会被它自己摘掉，所以这里只需要持有"最新一次"的句柄。
     /// </summary>
-    private readonly List<IDisposable> _turnSubscriptions = new();
+    private IDisposable? _attachment;
 
     private volatile ProjectIndex? _index;
     private volatile ITagsProject? _project;
     private volatile StateDto _state = new(0, false, null);
 
-    private long _epoch;
     private int _pipersCount;
     private int _overflow;
     private int _started;
@@ -139,12 +136,11 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
 
         var cts = new CancellationTokenSource();
         this._cts = cts;
-        this._ctrl.StartedOrStopped += this.OnStartedOrStopped;
         this._pumpTask = Task.Run(() => this.PumpAsync(cts.Token), CancellationToken.None);
         this._heartbeatTask = Task.Run(() => this.HeartbeatAsync(cts.Token), CancellationToken.None);
 
-        // 订阅之前项目可能就已经在跑（hub 启动得晚）：先对一次账。
-        this.SyncWithController();
+        // 订阅 + 晚挂补偿 + 按运行去重，一次交给库：hub 比项目晚启动时也接得上。
+        this._attachment = this._ctrl.AttachRunningProject(this.AttachProject);
     }
 
     /// <summary>
@@ -154,8 +150,6 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     /// </summary>
     public void Stop()
     {
-        this._ctrl.StartedOrStopped -= this.OnStartedOrStopped;
-
         lock (this._gate)
         {
             if (Interlocked.Exchange(ref this._stopped, 1) != 0)
@@ -174,11 +168,9 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
             Interlocked.Exchange(ref this._pipersCount, 0);
         }
 
-        // 停止观测后不再接收轮次通知：退订并把句柄还给项目（避免已释放的项目被委托引用拖住）。
-        lock (this._transitionGate)
-        {
-            this.UnsubscribeTurns();
-        }
+        // 停止观测后不再接收轮次通知：摘掉挂载（会退订并把句柄还给项目，
+        // 避免已释放的项目被委托引用拖住）。此时 _stopped 已置位，不会再多播一帧"已停止"。
+        Interlocked.Exchange(ref this._attachment, null)?.Dispose();
 
         var cts = Interlocked.Exchange(ref this._cts, null);
         if (cts is null)
@@ -315,141 +307,131 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
     /// <inheritdoc/>
     public void Dispose() => this.Stop();
 
-    private void OnStartedOrStopped(ITagsProjectCtrl sender, TagsProjectEventArgs args)
+    /// <summary>
+    /// 挂到一次运行上：建索引、发布"已运行"状态、并给每个入口订阅轮次回调。<br/>
+    /// 由 <see cref="TagsProjectCtrlAttachmentExtensions.AttachRunningProject"/> 在"某次运行就绪"时调用一次
+    /// （同一次运行只会调用一次，晚挂/重启/去重由它负责）。返回的句柄在停止或换运行时被 <c>Dispose</c>。
+    /// </summary>
+    private IDisposable AttachProject(ITagsProject project, long runId)
     {
+        ProjectIndex index;
         try
         {
-            if (args.IsStarted && args.Project is not null)
-            {
-                this.OnProjectStarted(args.Project);
-            }
-            else
-            {
-                this.OnProjectStopped();
-            }
+            index = ProjectIndex.Build(runId, project);
         }
         catch (Exception ex)
         {
-            // ⚠ "已启动"是在 TagsProjectCtrl.StartPollAsync 的 try 里同步派发的：
-            // 从这里抛出会被当作启动失败并让 StartPollAsync 抛错（项目随即被释放）。
-            // 观测流的问题绝不允许影响项目启动。
-            this._logger?.LogError(ex, "观测流处理 StartedOrStopped 时出错");
+            // 索引建不起来：不发布状态、也不订阅轮次。下一次运行会重新尝试。
+            this._logger?.LogError(ex, "构建观测索引失败（项目根目录={ProjectRoot}）", project.ProjectRoot);
+            return new ProjectAttachment(this, runId, new List<IDisposable>(0));
         }
-    }
 
-    private void OnProjectStarted(ITagsProject project)
-    {
-        lock (this._transitionGate)
+        lock (this._gate)
         {
-            if (ReferenceEquals(project, this._project))
+            this._project = project;
+            this._index = index;
+            this._state = new StateDto(runId, true, project.ProjectRoot);
+            this.Broadcast(SseFrames.State(this._state));
+            foreach (var subscriber in this._pipers)
             {
-                return;
+                subscriber.MarkResync();
+            }
+        }
+
+        // 运行期也能订阅（从下一轮生效）：hub 晚于轮询启动时，这里就是在补挂回调。
+        var subscriptions = new List<IDisposable>(index.Entries.Count);
+        foreach (var entry in index.Entries)
+        {
+            if (Volatile.Read(ref this._stopped) != 0)
+            {
+                // 已经停机：不再补挂，否则会留下指向已停止 hub 的回调。
+                break;
             }
 
-            // 换项目（或上一次"已停止"没派发到）：先把旧项目上的订阅摘干净，再挂新的。
-            this.UnsubscribeTurns();
-
-            var epoch = Interlocked.Increment(ref this._epoch);
-            ProjectIndex index;
+            var entryKey = entry.Key;
             try
             {
-                index = ProjectIndex.Build(epoch, project);
+                subscriptions.Add(project.SubscribeTurnProcess(entryKey, (_, _, _) =>
+                {
+                    this.OnTurn(runId, entryKey);
+                    return Task.CompletedTask;
+                }));
             }
             catch (Exception ex)
             {
-                this._logger?.LogError(ex, "构建观测索引失败（项目根目录={ProjectRoot}）", project.ProjectRoot);
+                this._logger?.LogWarning(
+                    ex,
+                    "无法为入口 {Entry} 订阅轮次回调（项目可能已释放）：该入口只能观测结构，观测不到值",
+                    entryKey);
+            }
+        }
+
+        return new ProjectAttachment(this, runId, subscriptions);
+    }
+
+    /// <summary>
+    /// 一次挂载的句柄：退订该运行上的全部轮次回调，并在"真正停止"时补发一帧状态。<br/>
+    /// 换运行时也会被调用（新运行还没发布状态），此时<b>不</b>发帧——由新运行的"已运行"帧接续，
+    /// 避免客户端看到 started → stopped → started 的多余抖动。
+    /// </summary>
+    private sealed class ProjectAttachment : IDisposable
+    {
+        private readonly TagsStreamHub _hub;
+        private readonly long _runId;
+        private List<IDisposable>? _subscriptions;
+
+        internal ProjectAttachment(TagsStreamHub hub, long runId, List<IDisposable> subscriptions)
+        {
+            this._hub = hub;
+            this._runId = runId;
+            this._subscriptions = subscriptions;
+        }
+
+        public void Dispose()
+        {
+            var subscriptions = Interlocked.Exchange(ref this._subscriptions, null);
+            if (subscriptions is null)
+            {
                 return;
             }
 
-            lock (this._gate)
+            foreach (var subscription in subscriptions)
             {
-                this._project = project;
-                this._index = index;
-                this._state = new StateDto(epoch, true, project.ProjectRoot);
-                this.Broadcast(SseFrames.State(this._state));
-                foreach (var subscriber in this._pipers)
-                {
-                    subscriber.MarkResync();
-                }
+                subscription.Dispose();
             }
 
-            // 运行期也能订阅（从下一轮生效）：hub 晚于轮询启动时，这里就是在补挂回调。
-            foreach (var entry in index.Entries)
-            {
-                if (Volatile.Read(ref this._stopped) != 0)
-                {
-                    // 已经停机：不再补挂，否则会留下指向已停止 hub 的回调。
-                    break;
-                }
-
-                var entryKey = entry.Key;
-                try
-                {
-                    this._turnSubscriptions.Add(project.SubscribeTurnProcess(entryKey, (_, _, _) =>
-                    {
-                        this.OnTurn(epoch, entryKey);
-                        return Task.CompletedTask;
-                    }));
-                }
-                catch (Exception ex)
-                {
-                    this._logger?.LogWarning(
-                        ex,
-                        "无法为入口 {Entry} 订阅轮次回调（项目可能已释放）：该入口只能观测结构，观测不到值",
-                        entryKey);
-                }
-            }
-        }
-    }
-
-    /// <summary>退订当前项目的全部轮次订阅（调用方必须持有 <see cref="_transitionGate"/>）。</summary>
-    private void UnsubscribeTurns()
-    {
-        foreach (var subscription in this._turnSubscriptions)
-        {
-            subscription.Dispose();
-        }
-
-        this._turnSubscriptions.Clear();
-    }
-
-    private void OnProjectStopped()
-    {
-        lock (this._transitionGate)
-        {
-            this.UnsubscribeTurns();
-
-            lock (this._gate)
-            {
-                if (this._project is null)
-                {
-                    return;
-                }
-
-                this._project = null;
-                this._index = null;
-                this._state = new StateDto(this._state.Epoch, false, this._state.ProjectRoot);
-                this.Broadcast(SseFrames.State(this._state));
-            }
+            this._hub.OnDetached(this._runId);
         }
     }
 
     /// <summary>
-    /// 对账：以 <see cref="ITagsProjectCtrl.Project"/> 为准，纠正"未收到事件"的状态差异
-    /// （例如 <c>RunAsync</c> 异常退出时项目被释放但不会派发"已停止"）。
+    /// 某次运行被摘除后的收尾：只有"项目确实停了"才发布"已停止"。
+    /// hub 自己停机（<c>_stopped</c>）或只是换运行时不发帧。
     /// </summary>
-    private void SyncWithController()
+    private void OnDetached(long runId)
     {
-        var project = this._ctrl.Project;
-        if (project is null)
+        if (Volatile.Read(ref this._stopped) != 0)
         {
-            this.OnProjectStopped();
             return;
         }
 
-        if (!ReferenceEquals(project, this._project))
+        if (this._ctrl.TryGetRunning(out _, out _))
         {
-            this.OnProjectStarted(project);
+            // 换运行：新运行的"已运行"帧紧跟其后，这里不必先发一帧 stopped。
+            return;
+        }
+
+        lock (this._gate)
+        {
+            if (this._project is null || this._state.Epoch != runId)
+            {
+                return;   // 已经被别的运行取代（或从未发布过）
+            }
+
+            this._project = null;
+            this._index = null;
+            this._state = new StateDto(this._state.Epoch, false, this._state.ProjectRoot);
+            this.Broadcast(SseFrames.State(this._state));
         }
     }
 
@@ -534,15 +516,6 @@ internal sealed class TagsStreamHub : ITagsStreamHub, IDisposable
         {
             while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
             {
-                try
-                {
-                    this.SyncWithController();
-                }
-                catch (Exception ex)
-                {
-                    this._logger?.LogError(ex, "观测流对账失败");
-                }
-
                 if (DateTime.UtcNow >= nextPing)
                 {
                     nextPing = DateTime.UtcNow + this._options.HeartbeatInterval;

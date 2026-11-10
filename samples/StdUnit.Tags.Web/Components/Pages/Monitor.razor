@@ -1,4 +1,4 @@
-﻿@using System.Collections.ObjectModel
+@using System.Collections.ObjectModel
 @using System.Reactive.Linq
 @using System.Xml.Linq
 @using StdUnit.Tags
@@ -66,7 +66,7 @@
             {
                 var sender = ep.Sender;
                 var args = ep.EventArgs;
-                this._project = args.IsStarted ? this.projctrl.Project : null;
+                this._project = args.IsStarted() ? this.projctrl.Project : null;
                 this.InvokeAsync(StateHasChanged);
             });
 

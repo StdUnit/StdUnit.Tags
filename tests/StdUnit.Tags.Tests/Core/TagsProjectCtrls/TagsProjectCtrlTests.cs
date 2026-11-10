@@ -75,7 +75,7 @@ public class TagsProjectCtrlTests
         {
             _subscription = ctrl.ObserveStartedOrStopped().Subscribe(args =>
             {
-                if (args.IsStarted)
+                if (args.IsStarted())
                 {
                     _started.TrySetResult(args);
                 }
@@ -145,7 +145,7 @@ public class TagsProjectCtrlTests
 
         ctrl.StartedOrStopped += (_, args) =>
         {
-            if (args.IsStarted)
+            if (args.IsStarted())
             {
                 startEventFired.TrySetResult(args);
             }
@@ -158,7 +158,7 @@ public class TagsProjectCtrlTests
 
         var eventArgs = await startEventFired.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.True(eventArgs.IsStarted);
+        Assert.True(eventArgs.IsStarted());
         Assert.NotNull(eventArgs.Project);
         Assert.Same(ctrl.Project, eventArgs.Project);
 
@@ -175,7 +175,7 @@ public class TagsProjectCtrlTests
 
         ctrl.StartedOrStopped += (_, args) =>
         {
-            if (!args.IsStarted)
+            if (!args.IsStarted())
             {
                 stopEventFired.TrySetResult(args);
             }
@@ -193,7 +193,7 @@ public class TagsProjectCtrlTests
 
         var eventArgs = await stopEventFired.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.False(eventArgs.IsStarted);
+        Assert.False(eventArgs.IsStarted());
         Assert.Null(eventArgs.Project);
 
         await startTask.WaitAsync(TimeSpan.FromSeconds(5));
@@ -560,7 +560,7 @@ public class TagsProjectCtrlTests
 
         ctrl.StartedOrStopped += (_, args) =>
         {
-            if (!args.IsStarted)
+            if (!args.IsStarted())
             {
                 throw new InvalidOperationException("停止通知处理器-boom");
             }
@@ -576,7 +576,7 @@ public class TagsProjectCtrlTests
         await ctrl.StopAsync(); // 不应抛出
         await startTask.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Contains(logs.Entries, e => e.Level == LogLevel.Warning && e.Exception?.Message == "停止通知处理器-boom");
+        Assert.Contains(logs.Entries, e => e.Level == LogLevel.Error && e.Exception?.Message == "停止通知处理器-boom");
         sp.Dispose();
     }
 
@@ -635,6 +635,650 @@ public class TagsProjectCtrlTests
 
         Assert.Equal(2, _factory.TotalDisposeCallCount);
         sp.Dispose();
+    }
+
+    /// <summary>
+    /// 状态机：<c>hook</c> 执行期间是 <see cref="TagsProjectState.Starting"/>（此时 Project 已非 null），
+    /// <c>hook</c> 完成后是 <see cref="TagsProjectState.Running"/>，停止后回到 <see cref="TagsProjectState.Stopped"/>。
+    /// 这条测试锁住"<c>Project != null</c> 不等于已就绪"的语义：就绪只能看 <c>State</c>。
+    /// </summary>
+    [Fact]
+    public async Task State_IsStartingInsideHook_ThenRunning_ThenStopped()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        Assert.Null(ctrl.Project);
+
+        TagsProjectState stateInsideHook = default;
+        var projectInsideHookIsNull = true;
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                stateInsideHook = ctrl.State;
+                projectInsideHookIsNull = ctrl.Project is null;
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+
+        // hook 期间：已经是 Starting、Project 已经赋值（所以不能凭 Project != null 判定就绪）
+        Assert.Equal(TagsProjectState.Starting, stateInsideHook);
+        Assert.False(projectInsideHookIsNull);
+
+        // hook 完成之后：Running，且 RunId 非 0
+        Assert.Equal(TagsProjectState.Running, ctrl.State);
+        Assert.NotNull(ctrl.Project);
+        Assert.True(ctrl.RunId > 0);
+
+        await ctrl.StopAsync();
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        Assert.Null(ctrl.Project);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 从未启动时调用 <c>StopAsync</c>：空操作，**不派发**"已停止"（否则观察者会收到一次没人宣布过的停止）。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenNeverStarted_DoesNotFireStopped()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var stoppedCount = 0;
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (!args.IsStarted())
+            {
+                Interlocked.Increment(ref stoppedCount);
+            }
+        };
+
+        await ctrl.StopAsync();
+        await ctrl.StopAsync();
+
+        Assert.Equal(0, stoppedCount);
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 重复 <c>StopAsync</c> 只派发一次"已停止"。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_CalledTwice_FiresStoppedOnce()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var stoppedCount = 0;
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (!args.IsStarted())
+            {
+                Interlocked.Increment(ref stoppedCount);
+            }
+        };
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, _) => Task.CompletedTask));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync();
+        await ctrl.StopAsync();
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, stoppedCount);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 启动之后 <c>RunAsync</c> 抛异常（没有 StopAsync）：仍然必须补发一次"已停止"，
+    /// 并且用 <see cref="TagsProjectEventArgs.Failure"/> 告诉观察者"这不是正常停机"。
+    /// </summary>
+    [Fact]
+    public async Task StartPollAsync_WhenRunAsyncThrows_EmitsStoppedWithFailure()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var startedArgs = new TaskCompletionSource<TagsProjectEventArgs>();
+        var stoppedArgs = new TaskCompletionSource<TagsProjectEventArgs>();
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (args.IsStarted())
+            {
+                startedArgs.TrySetResult(args);
+            }
+            else
+            {
+                stoppedArgs.TrySetResult(args);
+            }
+        };
+
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).RunAsyncThrows = true;
+                return Task.CompletedTask;
+            }));
+
+        var started = await startedArgs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => startTask.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Contains("模拟的 RunAsync 异常", ex.Message);
+
+        var stopped = await stoppedArgs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(TagsProjectState.Stopped, stopped.State);
+        Assert.Equal(started.RunId, stopped.RunId);
+        Assert.NotNull(stopped.Failure);
+        Assert.Contains("模拟的 RunAsync 异常", stopped.Failure!.Message);
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 启动之后 <c>RunAsync</c> 自行正常结束（没有 StopAsync）：同样补发"已停止"，只是 <c>Failure</c> 为 null。
+    /// </summary>
+    [Fact]
+    public async Task StartPollAsync_WhenRunAsyncCompletesByItself_EmitsStoppedWithoutFailure()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var stoppedArgs = new TaskCompletionSource<TagsProjectEventArgs>();
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (!args.IsStarted())
+            {
+                stoppedArgs.TrySetResult(args);
+            }
+        };
+
+        await ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).RunAsyncCompletesImmediately = true;
+                return Task.CompletedTask;
+            });
+
+        var stopped = await stoppedArgs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Null(stopped.Failure);
+        Assert.Equal(TagsProjectState.Stopped, stopped.State);
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        Assert.Null(ctrl.Project);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// "已启动"的订阅者抛异常：<b>启动必须照常成功</b>，并且排在它后面的订阅者仍然收到通知。
+    /// （项目级观测是纯旁路，不能因为一个写坏的观察者就让整个项目起不来。）
+    /// </summary>
+    [Fact]
+    public async Task StartPollAsync_WhenStartedHandlerThrows_StartupSucceedsAndLaterHandlersRun()
+    {
+        var logs = new CapturingLoggerProvider();
+        var (ctrl, sp) = CreateCtrl(logs);
+        var laterHandlerFired = new TaskCompletionSource<bool>();
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (args.IsStarted())
+            {
+                throw new InvalidOperationException("启动通知处理器-boom");
+            }
+        };
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (args.IsStarted())
+            {
+                laterHandlerFired.TrySetResult(true);
+            }
+        };
+
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, _) => Task.CompletedTask));
+
+        await laterHandlerFired.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(TagsProjectState.Running, ctrl.State);
+
+        await ctrl.StopAsync();
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5)); // 不应抛出
+
+        Assert.Contains(logs.Entries, e => e.Level == LogLevel.Error && e.Exception?.Message == "启动通知处理器-boom");
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// "已启动"与"已停止"携带同一个 <see cref="TagsProjectEventArgs.RunId"/>；重新启动后 RunId 递增。
+    /// </summary>
+    [Fact]
+    public async Task StartedAndStopped_ShareRunId_AndRunIdIncreasesPerStart()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var events = new List<TagsProjectEventArgs>();
+        var started = new SemaphoreSlim(0);
+        var stopped = new SemaphoreSlim(0);
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            lock (events)
+            {
+                events.Add(args);
+            }
+
+            if (args.IsStarted())
+            {
+                started.Release();
+            }
+            else
+            {
+                stopped.Release();
+            }
+        };
+
+        for (var round = 0; round < 2; round++)
+        {
+            var startTask = Task.Run(() => ctrl.StartPollAsync(
+                dir: "test_dir",
+                root: new XElement("Project"),
+                hook: (_, _, _) => Task.CompletedTask));
+
+            Assert.True(await started.WaitAsync(TimeSpan.FromSeconds(5)));
+            await ctrl.StopAsync();
+            Assert.True(await stopped.WaitAsync(TimeSpan.FromSeconds(5)));
+            await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        TagsProjectEventArgs[] snapshot;
+        lock (events)
+        {
+            snapshot = events.ToArray();
+        }
+
+        Assert.Equal(4, snapshot.Length);
+        Assert.Equal(snapshot[0].RunId, snapshot[1].RunId);
+        Assert.Equal(snapshot[2].RunId, snapshot[3].RunId);
+        Assert.True(snapshot[2].RunId > snapshot[0].RunId, "每次启动应分配新的 RunId");
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// <see cref="ITagsProjectCtrl.TryGetRunning"/>：一次读取就拿到配对的 <c>(Project, RunId)</c>，
+    /// 且只在 <see cref="TagsProjectState.Running"/> 期间返回 true（<c>hook</c> 执行期间是 <c>Starting</c>，应为 false）。
+    /// </summary>
+    [Fact]
+    public async Task TryGetRunning_ReturnsAtomicPairOnlyWhileRunning()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var startedArgs = new TaskCompletionSource<TagsProjectEventArgs>();
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (args.IsStarted())
+            {
+                startedArgs.TrySetResult(args);
+            }
+        };
+
+        var insideHookResult = true;
+        long insideHookRunId = -1;
+
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, _) =>
+            {
+                insideHookResult = ctrl.TryGetRunning(out _, out insideHookRunId);
+                return Task.CompletedTask;
+            }));
+
+        var args = await startedArgs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // hook 期间是 Starting：即便 Project 已赋值，也不该被当成"正在运行"
+        Assert.False(insideHookResult);
+        Assert.Equal(0, insideHookRunId);
+
+        // 已启动之后：快照里的项目和 RunId 与"已启动"事件完全一致
+        Assert.True(ctrl.TryGetRunning(out var project, out var runId));
+        Assert.Same(ctrl.Project, project);
+        Assert.Equal(args.RunId, runId);
+
+        await ctrl.StopAsync();
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(ctrl.TryGetRunning(out _, out var stoppedRunId));
+        Assert.Equal(0, stoppedRunId);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 正常停机时，即便 <c>RunAsync</c> 以 <see cref="OperationCanceledException"/> 结束，"已停止"里的
+    /// <see cref="TagsProjectEventArgs.Failure"/> 也必须为 <c>null</c> —— 判据是"令牌确实已取消"，
+    /// 否则每次正常停机都会被误报成"崩了"。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenRunAsyncEndsWithOce_StoppedHasNoFailure()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var stoppedArgs = new TaskCompletionSource<TagsProjectEventArgs>();
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (!args.IsStarted())
+            {
+                stoppedArgs.TrySetResult(args);
+            }
+        };
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).RunAsyncThrowsOceOnCancel = true;
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync();
+
+        // OCE 是停机引起的，不算失败：StartPollAsync 正常结束（不抛），停止事件也不带 Failure
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var stopped = await stoppedArgs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Null(stopped.Failure);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 并发调用两次 <c>StopAsync</c>：两次都可能越过"未运行则直接返回"的检查，
+    /// 但"断开通道"和"派发已停止"必须各自只生效一次（靠 <c>Interlocked</c> 守卫）。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_CalledConcurrently_CleansUpAndNotifiesOnce()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var stoppedCount = 0;
+        var disconnectedCount = 0;
+
+        ctrl.StartedOrStopped += (_, args) =>
+        {
+            if (!args.IsStarted())
+            {
+                Interlocked.Increment(ref stoppedCount);
+            }
+        };
+
+        var channel = new MockChannel
+        {
+            DisconnectAsyncImpl = _ =>
+            {
+                Interlocked.Increment(ref disconnectedCount);
+                return Task.CompletedTask;
+            },
+        };
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).AddChannel(channel);
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+
+        // 两次都同步越过"未运行"检查（第一次还在 await 轮询退出，_lock 仍为 1）
+        var first = ctrl.StopAsync();
+        var second = ctrl.StopAsync();
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+        await startTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, stoppedCount);
+        Assert.Equal(1, disconnectedCount);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// <c>CancellationTokenSource.Cancel()</c> 会同步执行注册的回调；回调抛异常时会以
+    /// <see cref="AggregateException"/> 冒出。停机不能被它打断：记 Warning 后继续清理。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenCancellationCallbackThrows_SwallowsAndLogs()
+    {
+        var logs = new CapturingLoggerProvider();
+        var (ctrl, sp) = CreateCtrl(logs);
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, ct) =>
+            {
+                ct.Register(() => throw new InvalidOperationException("取消回调-boom"));
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+
+        // 不应抛出
+        await ctrl.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        await startTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains(logs.Entries, e => e.Message.Contains("取消测点项目轮询时出错"));
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 轮询不响应取消（等超时）且项目释放抛异常：超时兜底里的释放失败必须被吞掉并留痕，
+    /// 不能把 <c>StopAsync</c> 变成异常。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenTimedOutProjectDisposeThrows_SwallowsAndLogs()
+    {
+        var logs = new CapturingLoggerProvider();
+        var (ctrl, sp) = CreateCtrl(logs);
+        ctrl.PollExitWaitTimeout = TimeSpan.FromMilliseconds(100);
+        _factory.ProjectRunAsyncNeverCompletes = true;
+
+        using var started = WatchProjectStarted(ctrl);
+        _ = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).DisposeThrows = true;
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync().WaitAsync(TimeSpan.FromSeconds(10)); // 不应抛出
+
+        Assert.Contains(logs.Entries, e => e.Exception?.Message == "模拟的 Dispose 异常");
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// DI 作用域释放抛异常：不能覆盖原始结果，也不能拦着后续启动（锁必须已释放）。记 Warning 留痕。
+    /// </summary>
+    [Fact]
+    public async Task StartPollAsync_WhenScopeDisposeThrows_SwallowsAndLogs()
+    {
+        var logs = new CapturingLoggerProvider();
+        var services = new ServiceCollection();
+        services.AddLogging(b => b.AddProvider(logs));
+        services.AddSingleton<ITagsProjectFactory>(_factory);
+        using var root = services.BuildServiceProvider();
+
+        var logger = root.GetRequiredService<ILogger<TagsProjectCtrl>>();
+        var inner = new ServiceCollection().AddSingleton<ITagsProjectFactory>(_factory).BuildServiceProvider();
+        await using var _ = inner.ConfigureAwait(false);
+
+        var ssf = new ThrowingScopeFactory(inner);
+        var ctrl = new TagsProjectCtrl(ssf, logger);
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, _) => Task.CompletedTask));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync();
+        await startTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains(logs.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("释放 DI 作用域失败"));
+
+        // 作用域释放失败不得让控制器卡在"已启动"
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+    }
+
+    /// <summary>
+    /// 并发停机的真实时序：第一次 <c>StopAsync</c> 在等轮询退出超时后已把 <c>Project</c> 置空，
+    /// 但还堵在"断开通道"里（<c>_lock</c> 仍为 1）；此时第二次 <c>StopAsync</c> 到达，
+    /// 它看到的是一个没有项目、取消回调还会抛异常的控制器——两条兜底日志都必须留痕且不抛。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_ConcurrentWhileDisconnectBlocks_SecondToleratesMissingProject()
+    {
+        var logs = new CapturingLoggerProvider();
+        var (ctrl, sp) = CreateCtrl(logs);
+        ctrl.PollExitWaitTimeout = TimeSpan.FromMilliseconds(50);
+        _factory.ProjectRunAsyncNeverCompletes = true;
+
+        var disconnectStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseDisconnect = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var slowChannel = new MockChannel
+        {
+            DisconnectAsyncImpl = async _ =>
+            {
+                disconnectStarted.TrySetResult(true);
+                await releaseDisconnect.Task;
+            },
+        };
+
+        using var started = WatchProjectStarted(ctrl);
+        _ = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, ct) =>
+            {
+                ((MockTagsProject)proj).AddChannel(slowChannel);
+                ct.Register(() => throw new InvalidOperationException("取消回调-boom"));
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+
+        var first = ctrl.StopAsync();
+        // 等第一次进入"断开通道"：此时 Project 已被置空、锁尚未释放
+        await disconnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var second = ctrl.StopAsync();     // 第二次看到的 Project 为 null
+        await second.WaitAsync(TimeSpan.FromSeconds(10));
+
+        releaseDisconnect.TrySetResult(true);
+        await first.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // 两条"看似不可能"的兜底分支都走到了：取消时没有项目、超时日志里没有项目
+        Assert.Contains(logs.Entries, e => e.Message.Contains("取消测点项目轮询时出错"));
+        Assert.Contains(logs.Entries, e => e.Message.Contains("等待轮询循环退出超时"));
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 第三方项目实现违反"<c>Channels</c> 非 null"的约定：断开通道时跳过，不影响其它清理。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenProjectChannelsIsNull_SkipsDisconnect()
+    {
+        var (ctrl, sp) = CreateCtrl();
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                ((MockTagsProject)proj).ChannelsReturnsNull = true;
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync(); // 不应因为 Channels 为 null 抛 NullReferenceException
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(TagsProjectState.Stopped, ctrl.State);
+        Assert.Equal(1, _factory.LastCreatedProject!.DisposeCallCount);
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 通道列表里混入 null 元素（第三方实现的脏数据）：跳过它，其它通道照常断开。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenChannelListContainsNull_SkipsNullEntry()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        var healthyDisconnected = false;
+
+        using var started = WatchProjectStarted(ctrl);
+        var startTask = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (proj, _, _) =>
+            {
+                var mock = (MockTagsProject)proj;
+                mock.AddChannel(null!);
+                mock.AddChannel(new MockChannel
+                {
+                    DisconnectAsyncImpl = _ =>
+                    {
+                        healthyDisconnected = true;
+                        return Task.CompletedTask;
+                    },
+                });
+                return Task.CompletedTask;
+            }));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync(); // 不应抛 NullReferenceException
+        await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(healthyDisconnected, "null 元素不应阻断其它通道的断开");
+        sp.Dispose();
+    }
+
+    /// <summary>
+    /// 用于验证"DI 作用域释放失败"的工厂：作用域照常提供项目工厂，但 <c>Dispose</c> 抛异常。
+    /// </summary>
+    private sealed class ThrowingScopeFactory(IServiceProvider provider) : IServiceScopeFactory
+    {
+        public IServiceScope CreateScope() => new ThrowingScope(provider);
+
+        private sealed class ThrowingScope(IServiceProvider provider) : IServiceScope
+        {
+            public IServiceProvider ServiceProvider { get; } = provider;
+
+            public void Dispose() => throw new InvalidOperationException("作用域释放-boom");
+        }
     }
 
     /// <summary>
