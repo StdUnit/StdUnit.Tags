@@ -357,15 +357,18 @@ public class S7TagChannelTests
         Assert.Null(channel.Client);
     }
 
+    /// <summary>
+    /// 不判 <c>Connected</c>：它是底层 Socket 的快照，半死连接上返回 false，恰好会把最该关的连接留下来。
+    /// </summary>
     [Fact]
-    public void Dispose_WhenClientNotConnected_ShouldNotDisconnect()
+    public void Dispose_WhenClientNotConnected_ShouldStillDisconnect()
     {
         var (channel, mock) = CreateChannel(connected: false);
         channel.Client = mock;
 
         channel.Dispose();
 
-        Assert.Equal(0, mock.DisconnectCallCount);
+        Assert.Equal(1, mock.DisconnectCallCount);
         Assert.Null(channel.Client);
     }
 

@@ -20,6 +20,14 @@
   同时**只有 `StartPollAsync` 的 finally 能释放门**，`StopAsync` 不再碰它
   （超时兜底后旧循环仍活着时，门保持关闭，新的启动会被 `OnStartingException` 拒绝，而不是并发出第二个运行）。
 
+StdUnit.Tags.S7: **通道内部简化**（公开行为不变）
+  - `S7TagChannel.CreateClientAndConnectAsync(ct)` → **`CreateClientAndConnect(channelName)`**：`protected virtual`，
+    返回 `S7Client`、失败即抛 `InvalidOperationException`，不再泄露 F# 类型到通道代码里。
+  - `Dispose()` 与 `DisconnectAsync()` 收敛为**同一条释放路径**，且不再用 `S7Client.Connected` 当守卫——
+    它是底层 Socket 的快照，半死连接上返回 `false`，恰好会把最该关的连接留下来。
+    报告方式仍按既有约定：`DisconnectAsync` 失败抛出，`Dispose` 只记日志。
+  - 连接/断开不再用 `Thread` 把同步调用伪装成异步；读/写本就是"调用方提供缓冲区"的同步实现，限制条件不变。
+
 ## 2.0.0-beta8
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。

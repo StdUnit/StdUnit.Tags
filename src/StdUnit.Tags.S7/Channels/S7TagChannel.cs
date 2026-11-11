@@ -1,7 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using StdUnit.Sharp7;
-using Microsoft.FSharp.Core;
-
 
 namespace StdUnit.Tags.S7;
 
@@ -32,7 +30,7 @@ public class S7TagChannel : ITagChannel
 
     /// <summary>
     /// S7Client 工厂。
-    /// 如果不为 null，则在 <see cref="CreateClientAndConnectAsync"/> 被调用；
+    /// 如果不为 null，则在 <see cref="CreateClientAndConnect"/> 里被调用；
     /// 如果返回null，则会直接使用默认的<see cref="S7Client"/>构造
     /// </summary>
     public Func<S7PlcItem, S7Client?>? ClientFactory { get; set; }
@@ -52,112 +50,63 @@ public class S7TagChannel : ITagChannel
     /// <inheritdoc/>
     public virtual async Task DisconnectAsync(CancellationToken ct)
     {
-        await this.ExecuteOneByOneAsync(
-            async ct =>
-            {
-                if (this.Client == null)
-                    return;
-
-                var tcs = new TaskCompletionSource<Object?>();
-                var th = new Thread(() =>
-                {
-                    try
-                    {
-                        this.Client?.Disconnect();
-                        this.Client = null;
-                        tcs.SetResult(null);
-                    }
-                    catch (Exception ex)
-                    {
-                        this._logger.LogWarning(ex, "通道{ChannelName}断开连接失败", this.ChannelName());
-                        this.Client = null;
-                        tcs.SetException(ex);
-                    }
-                });
-                th.IsBackground = true;
-                th.Start();
-                await tcs.Task;
-            },
-            ct
-        );
+        await this.RunExclusiveAsync(() =>
+        {
+            // 先摘引用再断开：断开失败也不留下状态未知的 Client；异常原样抛出，堆栈天然完整。
+            var client = this.DetachClient();
+            client?.Disconnect();
+        }, ct);
     }
 
     /// <inheritdoc/>
     public virtual async Task EnsureConnectedAsync(bool force, CancellationToken ct)
     {
-        await this.ExecuteOneByOneAsync(
-            async ct =>
+        await this.RunExclusiveAsync(() =>
+        {
+            //当前client存在并且连接有效
+            if (!force && this.Client != null && !this.Client.IsDead())
             {
-                //当前client存在并且连接有效
-                if (!force && Client != null && !Client.IsDead())
-                {
-                    return;
-                }
-                var channelName = this.ChannelName();
+                return;
+            }
 
-                // 如果要强制连接，先清理当前的连接
-                if (force && Client != null)
-                {
-                    try
-                    {
-                        this._logger.LogInformation("通道={ChannelName} 强制断开连接中...", channelName);
-                        this.Client.Disconnect();
-                    }
-                    catch (Exception ex)
-                    {
-                        this._logger.LogError(ex, "通道={ChannelName} 强制断开异常", channelName);
-                    }
-                    finally
-                    {
-                        this.Client = null;
-                    }
-                }
+            var channelName = this.ChannelName();
 
-                var result = await this.CreateClientAndConnectAsync(ct);
-                if (result.IsError)
+            // 如果要强制连接，先清理当前的连接
+            if (force && this.Client != null)
+            {
+                this._logger.LogInformation("通道={ChannelName} 强制断开连接中...", channelName);
+                try
                 {
-                    var err = result.ErrorValue;
-                    throw new InvalidOperationException($"通道({channelName}) 连接PLC失败：{this.PlcItem.IpAddr} Rack={this.PlcItem.Rack} Slot={this.PlcItem.Slot}；{err.Text}（{err.Error}）");
+                    this.DetachClient()?.Disconnect();
                 }
-                this.Client = result.ResultValue;
-            },
-            ct
-        );
+                catch (Exception ex)
+                {
+                    this._logger.LogError(ex, "通道={ChannelName} 强制断开异常", channelName);
+                }
+            }
+
+            this.Client = this.CreateClientAndConnect(channelName);
+        }, ct);
     }
 
 
     /// <summary>
-    /// 创建客户端并连接PLC
+    /// 创建客户端并连接PLC。失败时抛 <see cref="InvalidOperationException"/>（消息带 Sharp7 的 ApiError 文案与错误码）。
     /// </summary>
-    /// <param name="ct"></param>
-    /// <returns></returns>
-    protected virtual Task<FSharpResult<S7Client, ApiError>> CreateClientAndConnectAsync(CancellationToken ct)
+    /// <param name="channelName">通道名，仅用于错误消息</param>
+    protected virtual S7Client CreateClientAndConnect(string channelName)
     {
-        var tcs = new TaskCompletionSource<FSharpResult<S7Client, ApiError>>();
-        var th = new Thread(() =>
+        var client = this.ClientFactory?.Invoke(this.PlcItem) ?? new S7Client();
+        client.SetConnectionType(this.PlcItem.ConnectionType);
+
+        var code = client.ConnectTo(this.PlcItem.IpAddr, this.PlcItem.Rack, this.PlcItem.Slot);
+        if (code != 0)
         {
-            var client = ClientFactory?.Invoke(this.PlcItem) ?? new S7Client();
-            client.SetConnectionType(this.PlcItem.ConnectionType);
-            try
-            {
-                var code = client.ConnectTo(this.PlcItem.IpAddr, this.PlcItem.Rack, this.PlcItem.Slot);
-                if (code == 0)
-                {
-                    tcs.SetResult(FSharpResult<S7Client, ApiError>.NewOk(client));
-                }
-                else
-                {
-                    tcs.SetResult(FSharpResult<S7Client, ApiError>.NewError(S7ErrorCodeHelper.GenerateApiError(this.ChannelName(), code)));
-                }
-            }
-            catch (Exception ex)
-            {
-                tcs.SetException(ex);
-            }
-        });
-        th.IsBackground = true;
-        th.Start();
-        return tcs.Task;
+            var err = S7ErrorCodeHelper.GenerateApiError(channelName, code);
+            throw new InvalidOperationException($"通道({channelName}) 连接PLC失败：{this.PlcItem.IpAddr} Rack={this.PlcItem.Rack} Slot={this.PlcItem.Slot}；{err.Text}（{err.Error}）");
+        }
+
+        return client;
     }
 
 
@@ -246,36 +195,57 @@ public class S7TagChannel : ITagChannel
     /// <inheritdoc/>
     public virtual void Dispose()
     {
-        var client = this.Client;
-        if (client != null && client.Connected)
-        {
-            var channelName = this.ChannelName();
-            try
-            {
-                this._logger.LogInformation("通道={ChannelName} 正在释放: 断开连接中...", channelName);
-
-                this.ExecuteOneByOne(() =>
-                {
-                    client.Disconnect();
-                    this._logger.LogInformation("通道={ChannelName} 正在释放: 断开连接完成!", channelName);
-                });
-            }
-            catch (Exception e)
-            {
-                this._logger.LogWarning("通道={ChannelName} 释放异常:{exception}", channelName, e.Message);
-            }
-        }
-        this.Client = null;
-        this._rw.Dispose();
-    }
-
-
-    private async Task ExecuteOneByOneAsync(Func<CancellationToken, Task> action, CancellationToken ct)
-    {
-        await this._rw.WaitAsync(ct);
         try
         {
-            await action(ct);
+            this.RunExclusive(() =>
+            {
+                var client = this.DetachClient();
+                if (client is null)
+                {
+                    return;
+                }
+
+                var channelName = this.ChannelName();
+                try
+                {
+                    client.Disconnect();
+                    this._logger.LogInformation("通道={ChannelName} 释放完成（已断开连接）", channelName);
+                }
+                catch (Exception e)
+                {
+                    // Dispose 只留痕、不外抛（.NET 的释放惯例）。
+                    this._logger.LogWarning(e, "通道={ChannelName} 释放异常", channelName);
+                }
+            });
+        }
+        finally
+        {
+            this._rw.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// 把当前连接摘下来并清空 <see cref="Client"/>。<b>不做</b>断开动作——由调用方决定怎么处理：
+    /// <see cref="DisconnectAsync"/> 让它抛（显式方法报告失败），<see cref="Dispose"/> 与强制重连只记日志。<br/>
+    /// 有意<b>不</b>判 <see cref="S7Client.Connected"/>：它是底层 Socket 的快照，半死连接上返回 <c>false</c>，
+    /// 恰好会把最该关的 socket 留下来。
+    /// </summary>
+    private S7Client? DetachClient()
+    {
+        var client = this.Client;
+        this.Client = null;
+        return client;
+    }
+
+    /// <summary>
+    /// 独占 I/O 互斥体执行一段<b>同步</b>工作（读/写直接用 <see cref="_rw"/>，因为 <see cref="Span{T}"/> 不能进闭包）。
+    /// </summary>
+    private void RunExclusive(Action action, CancellationToken ct = default)
+    {
+        this._rw.Wait(ct);
+        try
+        {
+            action();
         }
         finally
         {
@@ -283,9 +253,12 @@ public class S7TagChannel : ITagChannel
         }
     }
 
-    private void ExecuteOneByOne(Action action)
+    /// <summary>
+    /// 同 <see cref="RunExclusive"/>，差别只在"等待互斥体时可取消"——连接/断开这类可能长时间持锁的操作走这个。
+    /// </summary>
+    private async Task RunExclusiveAsync(Action action, CancellationToken ct)
     {
-        this._rw.Wait();
+        await this._rw.WaitAsync(ct);
         try
         {
             action();
