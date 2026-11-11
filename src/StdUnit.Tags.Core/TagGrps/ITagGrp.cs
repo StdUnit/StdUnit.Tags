@@ -98,7 +98,12 @@ public interface ITagGrp
 
 
     /// <summary>
-    /// 是否有脏数据
+    /// 是否有脏数据。<br/>
+    /// <b>契约（与 <c>WriteAsync</c> 的一致性）</b>：返回 <c>false</c> 时，<c>WriteAsync</c> 不得写入任何东西；
+    /// 只要子树里存在待写节点（<see cref="ITag" /> 或 <see cref="ITagCbnt" /> 自身的 <c>IsDirty</c> 为 true），就必须返回 <c>true</c>。<br/>
+    /// 注意它<b>不是</b>"父脏必有脏子"：<see cref="ITagCbnt.IsDirty"/> 可以独立为 true（整块缓存重写），
+    /// 此时子测点可以全是干净的。运行器据此用扁平索引判脏（收录的正是 Tag 与组合本身），
+    /// 违反本契约会导致"该写的没写"，且不会有任何编译错误。
     /// </summary>
     /// <returns></returns>
     bool IsDirty();

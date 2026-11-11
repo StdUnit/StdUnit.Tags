@@ -28,6 +28,14 @@ StdUnit.Tags.S7: **通道内部简化**（公开行为不变）
     报告方式仍按既有约定：`DisconnectAsync` 失败抛出，`Dispose` 只记日志。
   - 连接/断开不再用 `Thread` 把同步调用伪装成异步；读/写本就是"调用方提供缓冲区"的同步实现，限制条件不变。
 
+StdUnit.Tags: **运行器判脏改用扁平索引，干净轮次不再空写**
+  - `TagGrpRunner` 在每次（重）启动时把入口子树中的 `ITag` / `ITagCbnt` 收集成扁平数组，每轮判脏
+    由"递归遍历 + `TagUnion` 分发"改为两次数组扫描；并在逻辑处理后判一次，**干净时整趟跳过 `WriteAsync`**
+    （它原本对干净节点也是空操作）。10k 点位：判脏 52 µs → 26 µs，另省掉约 81 µs/轮的空写遍历。
+  - 索引的正确性依据是 `ITagGrp.IsDirty()` 与 `WriteAsync` 的一致性契约：**`IsDirty()` 为 false 时写不得有任何动作；
+    只要存在待写节点（`ITag` / `ITagCbnt` 自身的 `IsDirty`）就必须为 true**。这**不是**"父脏必有脏子"——
+    `ITagCbnt.IsDirty` 可以独立为 true（整块缓存重写），索引收录的正是 Tag 与组合本身，因此不会漏。
+
 StdUnit.Tags.ModbusTcp: **修复每轮存活探测的 15.9 ms 开销**
   - `ModbusTcpChannel.Connected` 原先用 `Socket.Poll(1000, SelectRead)` 判断链路是否还活着。
     Windows 的计时器粒度约 15.6 ms，空闲连接上这一步实测 **15.9 ms/次**；而 `TagGrpRunner`

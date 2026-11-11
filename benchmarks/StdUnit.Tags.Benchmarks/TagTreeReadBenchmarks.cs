@@ -12,7 +12,7 @@ namespace StdUnit.Tags.Benchmarks;
 /// </summary>
 [MemoryDiagnoser]
 [SimpleJob(warmupCount: 3, iterationCount: 5)]
-public class TagTreeTraversalBenchmarks
+public class TagTreeReadBenchmarks
 {
     /// <summary>叶子测点总数（均分到 10 个子组里）。</summary>
     [Params(1_000, 10_000)]

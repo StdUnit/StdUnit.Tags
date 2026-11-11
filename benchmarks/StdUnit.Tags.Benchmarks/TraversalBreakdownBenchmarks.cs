@@ -117,6 +117,25 @@ public class TraversalBreakdownBenchmarks
     }
 
     /// <summary>
+    /// 扁平索引 + 直接读 <see cref="ITag.IsDirty"/>：在 runner 里预先收集所有可写节点的做法，
+    /// 每次判脏只需一次数组遍历 + 一次属性读，不做字典递归。
+    /// </summary>
+    [Benchmark]
+    public int IsDirty_DirectArray()
+    {
+        var n = 0;
+        foreach (var tag in _tags)
+        {
+            if (tag.IsDirty)
+            {
+                n++;
+            }
+        }
+
+        return n;
+    }
+
+    /// <summary>
     /// 每轮开头运行器还会调一次 <c>entry.IsDirty()</c>：全树干净时要走完所有子节点。
     /// 这是"每轮固定成本"里除读之外的另一大块，所以单独量。
     /// </summary>

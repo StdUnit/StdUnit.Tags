@@ -23,7 +23,7 @@ dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./Tes
 ```
 
 CI（`.github/workflows/dotnet.yml`）有**三个 job**：
-- **`build`（ubuntu-latest，权威）**：整解 `dotnet build StdUnit.Tags.sln -c Release`（含 net472 的**编译**校验——引用程序集由 SDK 隐式引入的 `Microsoft.NETFramework.ReferenceAssemblies` 提供）+ `dotnet test -f net8.0`（带覆盖率上报 codecov）。
+- **`build`（ubuntu-latest，权威）**：整解 `dotnet build StdUnit.Tags.sln -c Release`（含 net472 的**编译**校验——引用程序集由 SDK 隐式引入的 `Microsoft.NETFramework.ReferenceAssemblies` 提供）+ 两个测试项目**分两步顺序**跑 `dotnet test -f net8.0`（`StdUnit.Tags.Tests` 与 `StdUnit.Tags.Tests.NetCoreOnly`，带覆盖率上报 codecov）。
 - **`net472-on-mono`（ubuntu-latest）**：`apt-get install -y mono-complete` 自己装 Mono，跑 `dotnet test -f net472`，让 net472 的**运行**测试也自动化、又不占 Windows runner 的排队时间。**mono ≠ .NET Framework**，它绿只说明"大概率没退化"，（权威结果仍归发版工作流 `release-nuget.yml` / `release-baget.yml`，windows-latest 全 TFM）+ 本机 Windows。当前是**硬性把关**（未设 `continue-on-error`）；万一出现 mono 专有的伪失败，可在 job 上加 `continue-on-error: true` 降级为补充信号。mono job 红时先看是不是"mono 与真框架的差异"，别急着改产品代码。
 - **`aot-smoke`（ubuntu-latest）**：三个示例各自 `dotnet publish ... -r linux-x64`（需 `clang` + `zlib1g-dev`）后**运行原生产物**：`AotSmokeTest.LogicetPlugins` 验证"无 `<Logicet>` 的正常加载 + `TryAddLogicet<T>` + AOT 下配了 `<Logicet>` 必须快速失败"，`AotSmokeTest.SimpleFiles` 验证"基本类型测点 + JSON 测点（源生成元数据）读写 + AOT 下缺元数据必须快速失败"，`AotSmokeTest.WebUi` 验证"起 Kestrel + 结构树的多态 JSON 序列化（`[JsonDerivedType]` 源生成）+ SSE 从全量基线到增量"。改了 AOT 相关代码（`IsAotCompatible`、`[DynamicallyAccessedMembers]`、`Compat/*`、插件加载路径、WebUi 的 DTO/序列化）时以它为准；publish 输出里的 `IL2104`/`IL3053` 来自第三方 `McMaster.NETCore.Plugins`，属已知噪声。
 - 两条 Linux job 统一遵循 **"`ubuntu-latest` + 依赖自装"**，不钉镜像版本：本仓库自己装依赖（mono / clang+zlib），就没有理由把 job 的寿命绑在镜像标签上——`ubuntu-22.04` 已被官方公告 2026-09-17 起弃用、2027-04-17 退役（`actions/runner-images#14254`，期间还有 brownout 会直接判红），`ubuntu-latest` 也已宣布 2026-11 起为 26.04。
@@ -40,7 +40,7 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
 
 ## 目标框架（多目标）
 
-**Core / StdUnit.Tags / Rx / R3 / 全部驱动包（S7、ModbusTcp、Hjzk、ZLan、OpcUaClient、ComScanner、SimpleFiles）/ McpServer 都是 `net8.0;net472`；仅 BlazorLib(.Core) 仍是 `net8.0`。**
+**Core / StdUnit.Tags / Rx / R3 / 全部驱动包（S7、ModbusTcp、Hjzk、ZLan、OpcUaClient、ComScanner、SimpleFiles）/ McpServer 都是 `net8.0;net472`；仅 BlazorLib.Core 仍是 `net8.0`。**
 
 > McpServer 走 `ModelContextProtocol`（核心包）的 `netstandard2.0` 资产。
 > `ModelContextProtocol.AspNetCore` 是 net8-only，与核心包同在 `Mcp` 组，但只被 net8-only 的项目引用，因此不影响 net472。
@@ -49,7 +49,7 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
 
 - **有标准库就用标准库。** 跨框架差异用调用点的 `#if NETFRAMEWORK` 或项目内 `Compat/` 目录的单点垫片（如 `StdUnit.Tags.Core/Compat/ReferenceEqualityComparer.cs`、`StdUnit.Tags/Compat/DynamicLoadingCompat.cs`、各驱动的 `Compat/*.cs`）。
 - **不要把 `#if` 铺到调用点满屏幕，也不要用 `#if` 去条件修饰公共 API**（那会给库使用者制造两套签名）。
-- `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 由 `src/` 与 `tests/` 各自的 `Directory.Build.props` 统一提供（`tests/` 那份不含 NuGet 打包元数据，且已把 `GenerateDocumentationFile` 设为 `false`），新建项目不用再写这几项（net472 默认 C# 7.3，少写一次就少一次 CS8630）；`TargetFrameworks` 仍写在各 csproj（存在 net8-only 项目）。`src/` 下不生成 XML 文档的项目仍要在本项目显式写 `<GenerateDocumentationFile>false</GenerateDocumentationFile>`（现有：BlazorLib；它是"尚未补注释"的历史包袱）。
+- `ImplicitUsings`/`Nullable`/`LangVersion`/`GenerateDocumentationFile` 由 `src/` 与 `tests/` 各自的 `Directory.Build.props` 统一提供（`tests/` 那份不含 NuGet 打包元数据，且已把 `GenerateDocumentationFile` 设为 `false`），新建项目不用再写这几项（net472 默认 C# 7.3，少写一次就少一次 CS8630）；`TargetFrameworks` 仍写在各 csproj（存在 net8-only 项目）。`src/` 下不生成 XML 文档的项目仍要在本项目显式写 `<GenerateDocumentationFile>false</GenerateDocumentationFile>`（目前没有这种情况）。`src/Directory.Build.props` 已开启 `TreatWarningsAsErrors`（整解仍是 0 警告）；`tests/` 与 `samples/` 有意不加，因为 AOT 冒烟项目的 `dotnet publish` 会带出第三方 `McMaster.NETCore.Plugins` 的 IL2104/IL3053 噪声。
 - **AOT 相关**（逐包状态见 `docs/设计决策与边界/4. 目标框架差异.md` 的表，新增包记得补一行并放进对应分组）：
   - `<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>`
     ——**TFM 下界必须写 `net8.0`**：`NETSDK1210` 的提示文本里给的是 `'net7.0'`（SDK 的通用下界），**不要照抄**——
@@ -75,6 +75,9 @@ CI（`.github/workflows/dotnet.yml`）有**三个 job**：
     **必须快速失败**（`TagsProjectNotSupportedException`），**不要**让它被 `LogicetLoader` 的通用 `catch` 吞掉——配了却静默不跑业务逻辑是硬红线。
     `tests/AotSmokeTest.LogicetPlugins` / `tests/AotSmokeTest.SimpleFiles` / `tests/AotSmokeTest.WebUi` 是这些链路的端到端验证（CI 的 `aot-smoke` job）。
 - net472 缺 init-only setter 时，在 `paket.references` 里加 `IsExternalInit`（已有先例：Core / StdUnit.Tags / ComScanner / OpcUaClient / SimpleFiles）。
+- **net8.0 共享框架里有的 API，在 net472 上一律按需补包引用，且只在 net472 生效**：`paket.references` 写
+  `framework: net472`（先例：`System.Threading.Channels`、`System.Diagnostics.DiagnosticSource`——后者是
+  `StdUnit.Tags` 暴露 Metrics 所需）。这样 net8.0 的 nuspec / 消费方体验完全不变，代价只落在 net472 组。
 - **net472 的引用程序集没有可空标注**，`string.IsNullOrEmpty` 之类的 BCL 后置条件看不到，会出现 net472 专属的 CS8601/CS8603/CS8604 假阳性。改用语言级判空（`x is null || x.Length == 0`），**不要用 `NoWarn` 压掉**。
 - 不要用 `| Select-Object -First n` 过滤 `dotnet paket`/`dotnet build` 的长输出：会在第 n 行处终止上游进程。先 `Out-File` 再 grep。
 
@@ -91,7 +94,7 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 │   ├── StdUnit.Tags.ComScanner
 │   ├── StdUnit.Tags.SimpleFiles
 │   ├── StdUnit.Tags.McpServer
-│   └── StdUnit.Tags.BlazorLib(.Core)
+│   └── StdUnit.Tags.BlazorLib.Core     维护模式（不再加新功能，界面能力走 WebUi）
 └── StdUnit.Tags.RxExtensions / R3Extensions     只依赖 Core
 ```
 
@@ -100,9 +103,13 @@ StdUnit.Tags.Core                硬件无关的核心抽象 + Schemas/tagsproje
 如果驱动会从 `TagDescriptor.Extras` / `TagCbntDescriptor.Extras` 里读**自己的属性**（如 S7 的 `maxlen`、SimpleFiles 的 `autoCreateFile`、ModbusTcp 的 `interpret`），还要在同一个 `appinfo` 里用 `<tagAttribute>` / `<cbntAttribute>` 声明；核心 schema 因 `xs:anyAttribute` 放行这些属性，但 XSD 1.0 无法给既有类型追加属性，所以"有哪些、什么类型、什么文案"只能由驱动声明（仅供设计器，不参与校验）。详见 `Schemas/README.md`。
 - 测试分两个项目（xUnit），且**主测试项目多目标 `net8.0;net472`**：
   - `tests/StdUnit.Tags.Tests`：主体测试，跑在两个 TFM 上；
-  - `tests/StdUnit.Tags.Tests.NetCoreOnly`：**仅 net8.0**，专门存放无法面向 net472 的测试（如依赖 `AssemblyLoadContext`，或将来涉及 Blazor / ASP.NET Core 的测试）。目前为空项，作占位预留。
-- **新增测试默认放 `tests/StdUnit.Tags.Tests`**（多目标，两个 TFM 都跑）；只有当测试依赖 `net8.0` 专属的包/项目（如 `ModelContextProtocol.AspNetCore`、`BlazorLib`）或 `net8.0` 专属运行期 API（如 `AssemblyLoadContext`）时，才放 `tests/StdUnit.Tags.Tests.NetCoreOnly`。
+  - `tests/StdUnit.Tags.Tests.NetCoreOnly`：**仅 net8.0**，专门存放无法面向 net472 的测试（如依赖 `AssemblyLoadContext`，或涉及 Blazor / ASP.NET Core 的测试）。目前承载 `StdUnit.Tags.WebUi` 与 `BlazorLib.Core` 的测试，并已在 PR CI 中执行（不要把它排除出 CI：它曾是"只在发版当天才跑一次"的盲区）。
+- **新增测试默认放 `tests/StdUnit.Tags.Tests`**（多目标，两个 TFM 都跑）；只有当测试依赖 `net8.0` 专属的包/项目（如 `ModelContextProtocol.AspNetCore`、`BlazorLib.Core`、`WebUi`）或 `net8.0` 专属运行期 API（如 `AssemblyLoadContext`）时，才放 `tests/StdUnit.Tags.Tests.NetCoreOnly`。
   不要在 `tests/StdUnit.Tags.Tests` 里用 `#if NETFRAMEWORK` 排除整个文件——那是编译期开关，解决不了“引用 net8-only 项目”的问题（目前仅 `Core/Logicets/LogicetPluginLifecycleTests.cs` 因这一原因用 `Compile Remove` 在 net472 下排除）。
+- `benchmarks/StdUnit.Tags.Benchmarks`：BenchmarkDotNet 基准（`net8.0`）。它在解决方案内，所以整解构建会编译它
+  （防止 API 漂移后悄悄腐烂），但**不**参与 CI 的测试与 AOT 冒烟；完整测量只在本地跑
+  `dotnet run -c Release --project benchmarks/StdUnit.Tags.Benchmarks -- --filter *`。
+  依赖走 Paket 的 `Benchmarks` 组（`storage: none`），**绝不能**出现在任何发布包的依赖里。
 
 ## 不可破坏的设计约束
 
