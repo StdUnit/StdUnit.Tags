@@ -109,8 +109,16 @@ $projects | ForEach-Object -Process{
     try{
         Write-Host "[-] current location: $distPath"
 
-        # 用数组 splat，避免 -OutputDir 带空格时被拆成多个参数
-        $packArgs = @("-c", "Release", "-p:PackageVersion=$($packageVersion)")
+        # 用数组 splat，避免 -OutputDir 带空格时被拆成多个参数。
+        # 同时注入 InformationalVersion：它默认派生自 $(Version)（恒为 1.0.0），不注入的话每个版本发布出去的
+        # 程序集都自称 1.0.0——崩溃日志、dotnet-counters / OTel 的 scope 版本、以及任何读 AssemblyInformationalVersion
+        # 的地方都会拿到错值。只设 InformationalVersion、不动 Version，是为了让 AssemblyVersion 稳定在 1.0.0.0
+        # （程序集身份不随补丁版跳动，net472 的绑定重定向也不用跟着改）。
+        $packArgs = @(
+            "-c", "Release",
+            "-p:PackageVersion=$($packageVersion)",
+            "-p:InformationalVersion=$($packageVersion)"
+        )
         if (-not [String]::IsNullOrEmpty($OutputDir))
         {
             $packArgs += @("-o", $OutputDir)

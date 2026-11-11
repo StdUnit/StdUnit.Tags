@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 namespace StdUnit.Tags;
@@ -48,6 +48,11 @@ internal class TagGrpRunner : ITagGrpRunner
     /// <inheritdoc/>
     public virtual async Task StartAsync(ITagGrp entry, CancellationToken ct)
     {
+        // 指标维度只随入口变化，建一次、每轮复用（每轮新建 tag 数组会让"指标零分配"失效）。
+        var metricTags = TagsMetric.TagsFor(entry);
+        // 上一轮是否以崩溃收场？用于把"崩溃后的重新建连"记成一次 reconnect。
+        var recovering = false;
+
         while (!ct.IsCancellationRequested)
         {
             // 入口主通道。各回调中的 channel 参数恒为它。
@@ -90,6 +95,12 @@ internal class TagGrpRunner : ITagGrpRunner
                         await ch.EnsureConnectedAsync(force: false, ct);
                     }
 
+                    if (recovering)
+                    {
+                        recovering = false;
+                        TagsMetric.RecordReconnect(metricTags);
+                    }
+
                     await this.DrainWriteIntentsAsync(entry, ct);
                     if (entry.IsDirty())
                     {
@@ -104,6 +115,7 @@ internal class TagGrpRunner : ITagGrpRunner
                     await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
 
                     sw.Stop();
+                    TagsMetric.RecordTurn(metricTags, sw.Elapsed);
                     var span = TimeSpan.FromMilliseconds(entry.SearchScanInterval() ?? 0);
                     var delay = this._pollDelayStrategy.GetDelay(span, sw.Elapsed);
                     if (delay > TimeSpan.Zero)
@@ -128,6 +140,8 @@ internal class TagGrpRunner : ITagGrpRunner
             {
                 aborted = true;
                 _consecutiveFailures++;
+                recovering = true;
+                TagsMetric.RecordFailure(metricTags);
 
                 var onCrashed = this.RunnerCrashed;
                 if (onCrashed is not null)

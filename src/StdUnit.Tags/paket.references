@@ -7,3 +7,4 @@ FSharp.Core
 # net8.0 相关框架由共享框架提供；net472 需要包引用，
 System.Threading.Channels framework: net472
 IsExternalInit framework: net472
+System.Diagnostics.DiagnosticSource framework: net472

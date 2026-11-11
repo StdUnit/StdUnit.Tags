@@ -28,6 +28,17 @@ StdUnit.Tags.S7: **通道内部简化**（公开行为不变）
     报告方式仍按既有约定：`DisconnectAsync` 失败抛出，`Dispose` 只记日志。
   - 连接/断开不再用 `Thread` 把同步调用伪装成异步；读/写本就是"调用方提供缓冲区"的同步实现，限制条件不变。
 
+StdUnit.Tags: **新增运行期指标（`System.Diagnostics.Metrics`）**
+  - Meter 名 `StdUnit.Tags`，四个指标：`stdunit.tags.turns`、`stdunit.tags.turn.duration`（单位 `s`）、
+    `stdunit.tags.failures`、`stdunit.tags.reconnects`；维度只有 `entry`（入口定位路径）。
+    指标名 / 单位 / tag 键属于对外契约，只增不改；无监听者时零分配，也没有开关。
+  - 新增**公开静态类 `TagsMetricContract`**：上述契约（名称 / 单位 / tag 键）以常量形式集中暴露
+    （`MeterName` / `Turns` / `TurnDurationUnit` / `EntryTag` …），订阅与建视图时不用抄字面量。
+  - **net472 因此多一个依赖** `System.Diagnostics.DiagnosticSource`（net8.0 由共享框架提供）；
+    `StdUnit.Tags.Core` 仍然零外部依赖。
+  - 新增公开扩展 `ITagGrpExtensions.GetLocationPath()`：返回 `TagGrp(a)/TagGrp(b)` 形式的定位路径。
+    它此前只是加载期错误消息的内部工具，现在错误消息与指标的 `entry` 维度共用这一种格式。
+
 ## 2.0.0-beta8
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。

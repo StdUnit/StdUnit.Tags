@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -816,6 +817,56 @@ public class TagGrpRunnerTests
         Assert.True(disabled.IsDirty, "被跳过的组合应保留脏标记，重新使能后再刷写");
         Assert.Equal(1, enabled.ReadCount);
         Assert.Equal(1, enabled.WriteCount);
+    }
+
+    /// <summary>
+    /// 运行器把每轮记进 Metrics：<c>stdunit.tags.turns</c> 至少有一条带该入口路径的测量。
+    /// 用 MeterListener 的完成信号而不是"等一会儿再断言"，避免机器忙时的随机红。
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_RecordsTurnMetrics()
+    {
+        var (runner, entry, _, _) = CreateRunner();
+        entry.Descriptor!.Name = "metrics-" + Guid.NewGuid().ToString("N");
+        entry.Descriptor!.ScanInterval = 10;
+        entry.IsEnabled = true;
+        var expectedEntry = entry.GetLocationPath();
+
+        var turnRecorded = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == TagsMetricContract.MeterName)
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, value, tagList, state) =>
+        {
+            if (instrument.Name != "stdunit.tags.turns")
+            {
+                return;
+            }
+
+            foreach (var tag in tagList)
+            {
+                if (tag.Key == "entry" && Equals(tag.Value, expectedEntry))
+                {
+                    turnRecorded.TrySetResult(true);
+                    return;
+                }
+            }
+        });
+        listener.Start();
+
+        using var cts = new CancellationTokenSource();
+        var runTask = RunUntilCancelled(runner, entry, cts.Token);
+
+        var completed = await Task.WhenAny(turnRecorded.Task, Task.Delay(TimeSpan.FromSeconds(15)));
+        Assert.Same(turnRecorded.Task, completed);
+
+        cts.Cancel();
+        await runTask;
     }
 
     #region Mocks

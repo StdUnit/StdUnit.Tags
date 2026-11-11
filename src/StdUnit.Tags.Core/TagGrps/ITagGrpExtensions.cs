@@ -264,12 +264,13 @@ public static class ITagGrpExtensions
     #endregion
 
     /// <summary>
-    /// 生成测点组的定位路径（<c>TagGrp(a)/TagGrp(b)</c>），用于加载期错误消息。<br/>
+    /// 生成测点组的定位路径（<c>TagGrp(a)/TagGrp(b)</c>）。<br/>
     /// 分隔符与 <see cref="ITagGrp.Descendant"/> 的路径语法一致（都是 <c>/</c>），便于对照与复制。<br/>
-    /// 承载项目根的内部节点 <c>__main__</c> 会被省略，因此顶层组的路径就是它自己。
+    /// 承载项目根的内部节点 <c>__main__</c> 会被省略，因此顶层组的路径就是它自己。<br/>
+    /// 加载期错误消息与运行期指标（<c>stdunit.tags.*</c> 的 <c>entry</c> 维度）都用它，格式因此是<b>对外契约</b>。
     /// </summary>
     /// <param name="tagGrp">起始组（含自身），可为 null</param>
-    internal static string GetLocationPath(this ITagGrp? tagGrp)
+    public static string GetLocationPath(this ITagGrp? tagGrp)
     {
         var parts = new List<string>();
         for (var cur = tagGrp; cur is not null; cur = cur.Parent)
