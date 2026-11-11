@@ -21,7 +21,7 @@
 
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\StdUnit.Tags.BlazorLib\StdUnit.Tags.BlazorLib.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.BlazorLib.Core\StdUnit.Tags.BlazorLib.Core.csproj" />
     <ProjectReference Include="..\..\src\StdUnit.Tags.ComScanner\StdUnit.Tags.ComScanner.csproj" />
     <ProjectReference Include="..\..\src\StdUnit.Tags.Hjzk\StdUnit.Tags.Hjzk.csproj" />
     <ProjectReference Include="..\..\src\StdUnit.Tags.ModbusTcp\StdUnit.Tags.ModbusTcp.csproj" />
