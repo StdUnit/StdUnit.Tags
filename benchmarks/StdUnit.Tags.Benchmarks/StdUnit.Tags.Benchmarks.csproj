@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- 只面向 net8.0：net472 的基准只能在 Windows 本机跑，不放进这套跨平台的基准里 -->
+    <TargetFramework>net8.0</TargetFramework>
+    <!--
+      BenchmarkDotNet 的传递依赖（→ Microsoft.Diagnostics.Tracing.TraceEvent → Azure.Identity）会带进
+      比 net8.0 更新的 Microsoft.Extensions / BCL 包，SDK 因此刷"该包不支持当前 TFM"的警告。
+      这是基准工具链的问题，不影响被测代码；基准工程也不进入任何 nupkg（storage: none + IsPackable=false）。
+    -->
+    <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
+    <!-- Microsoft.CodeAnalysis.Analyzers 5.9 需要比 SDK 8.0.102 自带的 4.8 更新的编译器 -->
+    <NoWarn>$(NoWarn);CS9057</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StdUnit.Tags\StdUnit.Tags.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.ModbusTcp\StdUnit.Tags.ModbusTcp.csproj" />
+    <ProjectReference Include="..\..\src\StdUnit.Tags.S7\StdUnit.Tags.S7.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+
+</Project>

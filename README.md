@@ -78,6 +78,9 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 - `src/`: 源码，主要包括核心包、驱动包和扩展包
 - `tests/`: 自动化测试项目（`StdUnit.Tags.Tests` / `StdUnit.Tags.Tests.NetCoreOnly`）与 AOT 冒烟程序（`AotSmokeTest.*`）
 - `samples/`：放示例与喂狗程序
+- `benchmarks/`：性能基准（BenchmarkDotNet，`net8.0`）。在解决方案内，所以 `dotnet build` 会编译它以防 API 漂移；
+  **不**参与 CI 的测试与 AOT 冒烟。最新数据与解读见 [benchmarks/README.md](benchmarks/README.md)。
+  本地跑：`dotnet run -c Release --project benchmarks/StdUnit.Tags.Benchmarks -- --filter *`。
 - `.config/`
     - `dotnet-tools.json`: 本项目用到的 dotnet tools 配置
 - `paket.dependencies`: 用 [`paket`](https://github.com/fsprojects/Paket)管理的依赖声明

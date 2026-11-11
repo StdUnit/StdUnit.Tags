@@ -61,18 +61,13 @@ public static class ITagExtensions
     /// <returns></returns>
     public static TagAccessMode SearchAccessMode(this ITag tag)
     {
-        if (tag.TagDescriptor.AccessMode.HasValue)
-            return tag.TagDescriptor.AccessMode.Value;
-
-        if (tag.Parent is not null)
+        if (tag.TagDescriptor.AccessMode is { } configured)
         {
-            return tag.Parent.Map(
-                cbnt => cbnt.Descriptor.AccessMode,
-                grp => grp.Descriptor.AccessMode
-            ) ?? TagAccessMode.RW;
+            return configured;
         }
 
-        return TagAccessMode.RW;
+        // 父容器解析（本身即逐级冒泡）
+        return tag.Parent?.SearchAccessMode() ?? TagAccessMode.RW;
     }
 
     /// <summary>

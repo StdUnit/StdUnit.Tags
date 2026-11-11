@@ -34,13 +34,13 @@ public static class ITagCbntExtensions
     public static ITagChannel SearchRequiredChannel(this ITagCbnt tagcbnt) => tagcbnt.SearchChannel() ?? throw new InvalidOperationException($"Channel is not configured : TagCbnt({tagcbnt.TagName()})");
 
     /// <summary>
-    /// 获取解析后的访问模式。<br/>
-    /// 如果自身和父级均未配置，则默认返回 <see cref="TagAccessMode.RW"/>。
+    /// 获取解析后的访问模式（<b>逐级冒泡</b>：自身 → 父级 Cbnt → 各级 Grp）。<br/>
+    /// 如果自身和所有祖先均未配置，则默认返回 <see cref="TagAccessMode.RW"/>。
     /// </summary>
     /// <param name="tagcbnt"></param>
     /// <returns></returns>
     public static TagAccessMode SearchAccessMode(this ITagCbnt tagcbnt)
-        => tagcbnt.Descriptor.AccessMode ?? tagcbnt.Parent?.Descriptor.AccessMode ?? TagAccessMode.RW;
+        => tagcbnt.Descriptor.AccessMode ?? tagcbnt.Parent?.SearchAccessMode() ?? TagAccessMode.RW;
 
     /// <summary>
     /// 只读？
