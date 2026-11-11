@@ -171,6 +171,27 @@ dotnet run -c Release --project benchmarks/StdUnit.Tags.Benchmarks -- --footprin
 > 判断标准：**看"每轮分配"决定要不要优化**（它影响 GC 频率），**看"常驻内存"决定能装多少点**（它只影响一次性的堆占用）。
 > 两者都不是"点位数越多每轮越慢"的原因——每轮成本是线性的 ns/点，而分配是常数。
 
+## 7. `EnsureConnectedBenchmarks` — 每轮“我还活着吗”的成本
+
+`TagGrpRunner` 每轮、每个通道都会 `EnsureConnectedAsync(force:false)`。Modbus 的实现里原先用
+`Socket.Poll(1000, SelectRead)` 做存活探测——**1000 微秒的超时在 Windows 上实际会阻塞约 15.9 ms**
+（Windows 默认计时器粒度约 15.6 ms），而这一步发生在每轮、每个通道上。
+
+| 方法 | 修复前 | 修复后 |
+|---|---|---|
+| `EnsureConnectedAsync`（已连接） | **15.89 ms** | **2.28 µs** |
+| 原始 `Socket.Poll(1000, SelectRead)` | 15.81 ms | — |
+| 原始 `Socket.Poll(0, SelectRead)` | 1.43 µs | 1.43 µs |
+| 原始 `Socket.Connected` 标志 | 0.71 ns | 0.71 ns |
+
+**结论**：把超时从 `1000` 改成 `0`（判定逻辑 `Poll && Available == 0` 完全不变），单次探测从 **15.9 ms 降到 2.3 µs**。
+按 100 Hz、单通道估算：每轮凭空多出的 15.9 ms 变成 2.3 µs——**这是当前框架里最大的单笔开销**，
+而且它不会出现在遍历类基准里（那些用桩通道，`EnsureConnectedAsync` 是空实现）。
+
+> 剩下的 2.3 µs = `Poll(0)`（1.43 µs）+ `Available` 的 ioctl。若还要压，只能放弃"半死连接"检测、
+> 直接用 `Socket.Connected` 标志（0.7 ns），把连接失效交给"读失败 → 崩溃 → 重连"路径兜底——
+> 语义上可行，但会改变探测能力，暂不做。
+
 ---
 
 ## 结论速览
@@ -178,6 +199,7 @@ dotnet run -c Release --project benchmarks/StdUnit.Tags.Benchmarks -- --footprin
 | 关注点 | 数字 | 含义 |
 |---|---|---|
 | 框架遍历 | **8.4–9.4 ns/点、每轮 0 B** | 1 万点约 0.094 ms/轮，且不产生垃圾 |
+| **每轮存活探测（Modbus）** | **2.3 µs/通道**（原 15.9 ms） | 曾经的 15.9 ms 来自 `Poll(1000)` 的 Windows 计时器粒度 |
 | 判脏扫描（每轮一次） | 5 ns/点 | 全树干净时走完全部节点；10k ≈ 50 µs |
 | 组合分发 | 2.6 ns/点、逐点零分配 | 点位多本身不是问题 |
 | **常驻内存** | **~350–390 B/点；1k≈0.4 MB、10k≈3.5 MB、50k≈17 MB** | 与点位数线性，一次性占用，不构成部署障碍 |

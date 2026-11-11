@@ -28,6 +28,24 @@ StdUnit.Tags.S7: **通道内部简化**（公开行为不变）
     报告方式仍按既有约定：`DisconnectAsync` 失败抛出，`Dispose` 只记日志。
   - 连接/断开不再用 `Thread` 把同步调用伪装成异步；读/写本就是"调用方提供缓冲区"的同步实现，限制条件不变。
 
+StdUnit.Tags.ModbusTcp: **修复每轮存活探测的 15.9 ms 开销**
+  - `ModbusTcpChannel.Connected` 原先用 `Socket.Poll(1000, SelectRead)` 判断链路是否还活着。
+    Windows 的计时器粒度约 15.6 ms，空闲连接上这一步实测 **15.9 ms/次**；而 `TagGrpRunner`
+    **每轮、每个通道**都会调一次 `EnsureConnectedAsync`，于是扫描周期被凭空拖长（100 ms 周期下约 16% 开销，
+    多通道叠加更明显）。
+  - 改为 `Poll(0)`：判定逻辑完全不变（`Poll(SelectRead) && Available == 0` 即判定为断），
+    但不再阻塞；实测单次 **15.9 ms → 2.3 µs**。
+
+StdUnit.Tags.Core: **`access` 的继承修正为逐级冒泡**
+  - 此前只有组（`ITagGrp`）沿父链递归；`ITag` 与 `ITagCbnt` 只查"直接父级自己配了没"，于是
+    `TagGrp(access="RO") → TagCbnt(未配)` 下的测点会被判成 `RW`——同样的意图直接挂在组下却是 `RO`。
+    2.0 统一为：自身 → 父级 Cbnt → 各级 Grp → 默认 `RW`。
+  - **行为变更**：把 `access` 写在祖先上的配置现在会真正生效。原先被误判成 `RW` 的点会变成
+    `RO` / `WO` / `R1W` —— 典型影响是"只读点不再被自动轮询写入"、"`R1W` 点不再每轮重复读"。
+  - **访问模式是配置期属性**：加载完成后修改 `TagDescriptor.AccessMode`（或重新赋值 `access`）
+    不会生效，需要重新加载项目。原文没有明说，但这是既有实现的实际行为；现在把它写成显式约束，
+    运行期因此可以安全缓存解析结果（每点位只解析一次）。
+
 StdUnit.Tags: **新增运行期指标（`System.Diagnostics.Metrics`）**
   - Meter 名 `StdUnit.Tags`，四个指标：`stdunit.tags.turns`、`stdunit.tags.turn.duration`（单位 `s`）、
     `stdunit.tags.failures`、`stdunit.tags.reconnects`；维度只有 `entry`（入口定位路径）。

@@ -152,8 +152,11 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
             {
                 return false;
             }
-            // see https://stackoverflow.com/a/2661876/10091607
-            bool part1 = s.Poll(1000, SelectMode.SelectRead);
+            // 非阻塞快检：Poll(0) 立即返回，`part1 && part2` 的判定逻辑与等待版本完全一致。
+            // 绝不能带超时（原先写的是 Poll(1000)）：Windows 的计时器粒度约 15.6 ms，
+            // 空闲连接上这一步实测要 **15.9 ms**，而它发生在每轮、每个通道的 EnsureConnected 里。
+            // 基准：benchmarks/StdUnit.Tags.Benchmarks 的 EnsureConnectedBenchmarks。
+            bool part1 = s.Poll(0, SelectMode.SelectRead);
             bool part2 = s.Available == 0;
             if (part1 && part2)
                 return false;
