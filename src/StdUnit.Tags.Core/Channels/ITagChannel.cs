@@ -17,7 +17,9 @@ public interface ITagChannel : IDisposable
     Task EnsureConnectedAsync(bool force, CancellationToken ct);
 
     /// <summary>
-    /// 关闭
+    /// 关闭连接。<br/>
+    /// 约定：<b>失败时抛出</b>——调用方是运行器的清理路径，会按通道名记 Warning，也不会阻断其它通道的清理；
+    /// 而 <see cref="IDisposable.Dispose"/> <b>不抛</b>。即"显式方法报告失败，释放方法只做尽力清理并留痕"。
     /// </summary>
     /// <returns></returns>
     Task DisconnectAsync(CancellationToken ct);

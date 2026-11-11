@@ -82,4 +82,23 @@ public class ModbusTcpChannelConnectionTests
         Assert.Equal(new ushort[] { 0x9ABC }, regs);
         channel.Dispose();
     }
+
+    /// <summary>
+    /// <c>Dispose()</c> 与 <c>DisconnectAsync()</c> 是同一条释放路径：不拿 <c>Connected</c> 当守卫、
+    /// 释放后把 master 一并清空，且重复释放幂等。
+    /// </summary>
+    [Fact]
+    public async Task Dispose_ReleasesConnectionAndIsIdempotent()
+    {
+        using var server = new FakeModbusTcpServer();
+        using var channel = NewChannel(server);
+        await channel.EnsureConnectedAsync(false, CancellationToken.None);
+        Assert.NotNull(channel.ModbusMaster);
+
+        channel.Dispose();
+
+        Assert.Null(channel.ModbusMaster);
+        channel.Dispose();
+        channel.Dispose();
+    }
 }

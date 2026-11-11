@@ -23,5 +23,12 @@ public class DefaultTagGrpRunnerDisconnectStrategy : ITagGrpRunnerDisconnectStra
         // 超时定时器不用 CancellationToken——断开本身是 CancellationToken.None 发起的，
         // 超时定时器若被取消会立即抛 OCE，退化成"不等待"。
         await Task.WhenAny(disconnect, Task.Delay(Timeout));
+
+        // 超时未完成就放弃等待（后台仍会继续清理）；但"已经失败"必须让调用方看见——
+        // 否则故障任务永远没人 await（UnobservedTaskException），谁也不知道连接没断干净。
+        if (disconnect.IsCompleted)
+        {
+            await disconnect;
+        }
     }
 }
