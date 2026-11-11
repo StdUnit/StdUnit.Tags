@@ -15,6 +15,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!--
+      发布物的编译门禁：src/ 下的警告一律视为错误。
+      当前整解 `-c Release` 是 0 警告，所以开启的代价为零；进 RC 之后再开就会变成"为了过门禁临时压制"。
+      只加在 src/（tests/ 与 samples/ 不加）：AOT 冒烟项目的 `dotnet publish` 会从第三方
+      `McMaster.NETCore.Plugins` 带出 IL2104/IL3053 噪声（见 AGENTS.md），那是已知且无法修的。
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <PropertyGroup>
