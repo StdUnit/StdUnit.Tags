@@ -45,7 +45,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Dev')
 if ($packageVersion -notmatch $versionPattern)
 {
     $origin = if ($PSCmdlet.ParameterSetName -eq 'Dev') { "next-release-version.txt 与 -DevBuildNumber 拼出的版本" } else { "-packageVersion" }
-    throw "$origin 必须是 <major>.<minor>.<patch>[-<prerelease>] 形式（如 1.0.0 或 1.0.0-rc.1），当前为：$packageVersion";
+    throw "$origin 必须是 <major>.<minor>.<patch>[-<prerelease>] 形式（如 1.0.0 或 2.0.0-dev.261113.0930），当前为：$packageVersion";
 }
 
 if (-not $SkipPush)

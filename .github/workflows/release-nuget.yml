@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseVersion:
-        description: 'Release Version'
+        description: '常规版版本号：如 2.0.0（nuget.org 只收正式版；任何预发布 —— 含 -dev.<构建号> —— 一律走 baget）'
         required: true
 jobs:
   build:
@@ -19,6 +19,24 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    # nuget.org 上的版本不可撤销，而预发布已经由 release-baget.yml 推到私有源：
+    # 这里把**任何**预发布号（含 -dev.<构建号>，以及已停用的 alpha/beta/rc）直接挡掉。放在最前面，几秒内失败。
+    - name: Reject prerelease versions
+      shell: pwsh
+      env:
+        RELEASE_VERSION: ${{ inputs.releaseVersion }}
+      run: |
+        $version = "$($env:RELEASE_VERSION)".Trim()
+        if (-not $version) { throw 'releaseVersion 不能为空' }
+        if ($version.Contains('-')) {
+          throw "nuget.org 只收正式版（如 2.0.0）；预发布一律进私有源（Release (baget.stdunit.com) 的 versionKind=dev）：$version"
+        }
+        if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "版本号不合法：$version（正式版形如 2.0.0，不要带预发布后缀）" }
+
+        "EFFECTIVE_VERSION=$version" >> $env:GITHUB_ENV
+        "### 本次发布：``$version``（nuget.org）" >> $env:GITHUB_STEP_SUMMARY
+        Write-Host "effective version = $version (nuget.org)"
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
@@ -74,5 +92,5 @@ jobs:
 
     - name: push
       working-directory: ./src
-      run: dotnet pwsh ./publish-packages.ps1 -packageVersion ${{ github.event.inputs.releaseVersion }} -nugetKey ${{steps.login.outputs.NUGET_API_KEY}} -nugetSource https://api.nuget.org/v3/index.json
+      run: dotnet pwsh ./publish-packages.ps1 -packageVersion ${{ env.EFFECTIVE_VERSION }} -nugetKey ${{steps.login.outputs.NUGET_API_KEY}} -nugetSource https://api.nuget.org/v3/index.json
 

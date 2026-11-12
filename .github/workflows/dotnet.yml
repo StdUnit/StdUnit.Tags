@@ -67,10 +67,12 @@ jobs:
         verbose: true
 
     # 迭代产物通道：这**不是**发布，只是把每次构建的包全部传上来（清单见 src/publish-packages.ps1），好让现场用户/公测者提前试。
-    # 版本号故意写成"构建号"（<基础版本>-dev.<run>.<attempt>），它不是语义化版本：
+    # 版本号是 <下一个正式号>-dev.<构建号>，构建号取 UTC 的 yyMMdd.HHmm（如 2.0.0-dev.261113.0930）：
+    #   * 单调、唯一、零输入——手工发布（release-baget.yml 的 versionKind=dev）用的是同一个公式，
+    #     不要换成"run_number"或"本月第几版"：那会让 CI 与手工各有一套编号，混进同一个源后互相压过；
     #   * 落在"下一个计划发布的正式号"的预发布位上 ⇒ 排序上低于该正式号（正式版一发就自然覆盖），
-    #     又高于此前任何正式版（装了它还能正常往前走，不会出现版本降级）；
-    #   * 每次构建都唯一 ⇒ 不需要人工决定"这算 minor 还是 major"，也不占任何正式号位。
+    #     又高于此前任何正式版（装了它还能正常往前走）；
+    #   * 预发布只有这一种形态：alpha / beta / rc 已停用（`-dev.*` 天然排在它们之后）。
     # 基础版本号**不在这里写死**：唯一来源是仓库根的 next-release-version.txt，
     # 本步只传构建号，由 publish-packages.ps1 读该文件并拼成 <基础版本>-dev.<构建号>。
     # ⚠ 维护点：正式版发布后，把 next-release-version.txt 改成下一个计划发布的号
@@ -83,7 +85,7 @@ jobs:
     - name: Pack dev packages (迭代产物，不发布)
       if: github.event_name == 'push'
       working-directory: ./src
-      run: dotnet pwsh ./publish-packages.ps1 -DevBuildNumber "${{ github.run_number }}.${{ github.run_attempt }}" -SkipPush -OutputDir ../dev-packages
+      run: dotnet pwsh ./publish-packages.ps1 -DevBuildNumber "$(date -u +%y%m%d.%H%M)" -SkipPush -OutputDir ../dev-packages
 
     - name: Upload dev packages
       if: github.event_name == 'push'
