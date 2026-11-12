@@ -52,7 +52,7 @@ jobs:
     # 回归要等发版当天才发现。AOT job 已在 Linux 上跑 AspNetCore，因此这里放 ubuntu 没有平台障碍。
     # 与主测试**分两步顺序跑**（理由同 release 工作流）：`dotnet test` 直接打解决方案会并行拉起多个 testhost，
     # 4 vCPU 的 CI runner 上会把"机器忙"变成随机红。
-    - name: Test with Coverage (net8.0-only: BlazorLib.Core / WebUi)
+    - name: Test with Coverage (net8.0-only BlazorLib.Core / WebUi)
       run: dotnet test tests/StdUnit.Tags.Tests.NetCoreOnly/StdUnit.Tags.Tests.NetCoreOnly.csproj -f net8.0 -c Release --no-build --nologo --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
     - name: Upload Coverage to Codecov
