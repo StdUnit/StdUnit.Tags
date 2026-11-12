@@ -1,4 +1,5 @@
 using StdUnit.Tags.S7;
+using StdUnit.Tags.Tests.Fakes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using StdUnit.Sharp7;
@@ -123,6 +124,48 @@ public class S7TagChannelTests
 
         Assert.Equal(1, mock.ConnectToCallCount);
         Assert.Equal(0, mock.DisconnectCallCount);
+    }
+
+    /// <summary>
+    /// 强制重连时旧连接断开失败：只记日志，不能因此把重连也一起废掉
+    /// （旧 Client 已被摘下，接着照常建新连接）。
+    /// </summary>
+    [Fact]
+    public async Task EnsureConnectedAsync_Forced_WhenDisconnectThrows_ShouldLogAndStillReconnect()
+    {
+        var logs = new CapturingLoggerProvider();
+        using var factory = LoggerFactory.Create(b => b.AddProvider(logs));
+        var channel = new S7TagChannel(new S7TagChannelDescriptor { Name = "forced-throw" }, factory.CreateLogger<S7TagChannel>());
+        var mock = new MockS7Client { ConnectToResult = 0 };
+        mock.DisconnectAction = () => throw new InvalidOperationException("disconnect failed");
+        channel.ClientFactory = _ => mock;
+        channel.Client = mock;
+
+        await channel.EnsureConnectedAsync(force: true, CancellationToken.None);
+
+        Assert.Equal(1, mock.DisconnectCallCount);
+        Assert.Equal(1, mock.ConnectToCallCount);
+        Assert.Same(mock, channel.Client);
+        Assert.Contains(logs.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("强制断开异常"));
+    }
+
+    /// <summary>
+    /// 没配 <see cref="S7TagChannel.ClientFactory"/> 时走默认的 <see cref="S7Client"/>：
+    /// 连不上（本机 102 端口没人监听）也必须以带地址/机架/槽位的错误消息快速失败，而不是静默留下半成品。
+    /// </summary>
+    [Fact]
+    public async Task EnsureConnectedAsync_WithoutFactory_UsesDefaultClient_AndReportsFailure()
+    {
+        var channel = new S7TagChannel(
+            new S7TagChannelDescriptor { Name = "no-factory", IpAddr = "127.0.0.1" },
+            NullLogger<S7TagChannel>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => channel.EnsureConnectedAsync(force: false, CancellationToken.None));
+
+        Assert.Contains("no-factory", ex.Message);
+        Assert.Contains("连接PLC失败", ex.Message);
+        Assert.Null(channel.Client);
     }
 
     [Fact]

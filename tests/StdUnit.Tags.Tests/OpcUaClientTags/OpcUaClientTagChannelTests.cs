@@ -57,6 +57,15 @@ internal class TestOpcUaChannel : OpcUaClientTagChannel
     /// 暴露受保护的 <c>PrepareOpcUaAppConfig()</c>，用于校验证书等选项真的被写进了底层配置。
     /// </summary>
     public ApplicationConfiguration ExposeAppConfig() => this.PrepareOpcUaAppConfig();
+
+    /// <summary>
+    /// 暴露受保护的 <see cref="OpcUaClientTagChannel.OpcSession"/>，用于构造"已连接/未连接"的现场。
+    /// </summary>
+    public ISession? Session
+    {
+        get => this.OpcSession;
+        set => this.OpcSession = value;
+    }
 }
 
 public class OpcUaClientTagChannelTests
@@ -112,6 +121,21 @@ public class OpcUaClientTagChannelTests
         await channel.DisconnectAsync(CancellationToken.None);
 
         sessionMock.Verify(x => x.CloseAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// 从未连接过的通道（<see cref="OpcUaClientTagChannel.OpcSession"/> 为 null）也要能安全断开：
+    /// 清理路径可能对同一通道调用两次，第二次不能再触到 null。
+    /// </summary>
+    [Fact]
+    public async Task DisconnectAsync_WhenNeverConnected_ShouldBeNoOp()
+    {
+        var sessionMock = CreateSessionMock();
+        var channel = CreateChannel(sessionMock);
+
+        await channel.DisconnectAsync(CancellationToken.None);
+
+        sessionMock.Verify(x => x.CloseAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     #endregion
@@ -308,6 +332,60 @@ public class OpcUaClientTagChannelTests
         channel.Dispose();
 
         sessionMock.Verify(x => x.Close(), Times.Once);
+    }
+
+    /// <summary>
+    /// 从未连接过：没有会话可关，<see cref="IDisposable.Dispose"/> 不能因此抛。
+    /// </summary>
+    [Fact]
+    public void Dispose_WhenNeverConnected_ShouldBeNoOp()
+    {
+        var sessionMock = CreateSessionMock();
+        var channel = CreateChannel(sessionMock);
+
+        channel.Dispose();
+
+        sessionMock.Verify(x => x.Close(), Times.Never);
+        sessionMock.Verify(x => x.Dispose(), Times.Never);
+    }
+
+    /// <summary>
+    /// <c>Close()</c> 失败只留痕不外抛（释放惯例），但会话自身的 <see cref="IDisposable.Dispose"/>
+    /// 仍必须执行——否则反复启停会攒下没人认领的订阅/传输句柄。
+    /// </summary>
+    [Fact]
+    public void Dispose_WhenCloseThrows_ShouldLogAndStillReleaseSession()
+    {
+        var logs = new CapturingLoggerProvider();
+        using var factory = LoggerFactory.Create(b => b.AddProvider(logs));
+        var sessionMock = CreateSessionMock();
+        sessionMock.Setup(x => x.Close()).Throws(new InvalidOperationException("close failed"));
+        var channel = new TestOpcUaChannel("ch-close-throw", sessionMock, factory.CreateLogger<OpcUaClientTagChannel>());
+        channel.Session = sessionMock.Object;
+
+        channel.Dispose();
+
+        sessionMock.Verify(x => x.Dispose(), Times.Once);
+        Assert.Contains(logs.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("释放异常"));
+    }
+
+    /// <summary>
+    /// 会话的 <c>Dispose</c> 自己抛异常时也只留痕：它跑在 <c>finally</c> 里，抛出去会盖掉真正的失败原因。
+    /// </summary>
+    [Fact]
+    public void Dispose_WhenSessionDisposeThrows_ShouldLogWarning()
+    {
+        var logs = new CapturingLoggerProvider();
+        using var factory = LoggerFactory.Create(b => b.AddProvider(logs));
+        var sessionMock = CreateSessionMock(connected: false);
+        sessionMock.Setup(x => x.Dispose()).Throws(new InvalidOperationException("dispose failed"));
+        var channel = new TestOpcUaChannel("ch-dispose-throw", sessionMock, factory.CreateLogger<OpcUaClientTagChannel>());
+        channel.Session = sessionMock.Object;
+
+        channel.Dispose();
+
+        var warning = Assert.Single(logs.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("释放会话异常"));
+        Assert.Equal("dispose failed", warning.Exception?.Message);
     }
 
     #endregion

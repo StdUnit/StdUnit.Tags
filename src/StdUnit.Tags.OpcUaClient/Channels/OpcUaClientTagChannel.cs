@@ -413,14 +413,9 @@ public class OpcUaClientTagChannel : ITagChannel
     /// </summary>
     private void ReleaseSession(ISession session)
     {
-        if (session is not IDisposable disposable)
-        {
-            return;
-        }
-
         try
         {
-            disposable.Dispose();
+            session.Dispose();
         }
         catch (Exception e)
         {
