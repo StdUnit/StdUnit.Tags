@@ -9,7 +9,7 @@
 
 ## 2.0.0-beta9(尚未发布)
 
-2.0.0-beta9 将是最后一个2.0.0 系列的最后一个beta版，预计将在2026年12月发布，此后进入RC阶段发版。
+2.0.0-beta9 是 2.0.0 系列的最后一个 beta 版，预计将在 2026 年 12 月发布，此后进入 RC 阶段发版。
 
 - `ITagsProjectCtrl`：**修复启动/停止之间的潜在竞态问题**：`CancellationTokenSource` 与"轮询已退出"信号此前是两个字段分别发布，
   `StopAsync` 可能读到"门已开、但两个手柄都还没写"的中间态——于是取消落空、也不等退出，
@@ -27,6 +27,17 @@ StdUnit.Tags.S7: **通道内部简化**（公开行为不变）
     它是底层 Socket 的快照，半死连接上返回 `false`，恰好会把最该关的连接留下来。
     报告方式仍按既有约定：`DisconnectAsync` 失败抛出，`Dispose` 只记日志。
   - 连接/断开不再用 `Thread` 把同步调用伪装成异步；读/写本就是"调用方提供缓冲区"的同步实现，限制条件不变。
+
+StdUnit.Tags.OpcUaClient / ModbusTcp: **断开失败不再被静默，释放路径收敛**
+  - `OpcUaClientTagChannel`：`Dispose()` 与 `DisconnectAsync()` 共用同一段会话释放收尾（`ReleaseSession`）；会话在关闭后**必须** `Dispose`——
+    `Close` / `CloseAsync` 只负责"关闭会话"，不释放订阅与传输句柄，此前反复启停会攒下没人认领的对象。
+    已断开的会话不再重复 `Close`（OPC UA 栈会因此抛错），但仍然 `Dispose`。
+  - `ModbusTcpChannel`：`Dispose()` 与 `DisconnectAsync()` 收敛到唯一一条关闭路径（`TryCloseConnection`），
+    并且不再用 `TcpClient.Connected` 当守卫——它只是上次 I/O 的快照，半死连接上返回 `false`，
+    恰好会把最该关的 socket 留下来。`DisconnectAsync` 也不再 `new Thread` 把同步 `Close` 伪装成异步。
+  - `DefaultTagGrpRunnerDisconnectStrategy`：已完成的断开任务补一次 `await`，故障才能冒到 `DisconnectAllAsync` 的
+    `catch`（此前故障 `Task` 无人观察，那条 `catch` 永远不会触发，断开失败完全不可见）。
+  - `ITagChannel` 把报告方式写进公开契约：`DisconnectAsync` 失败以异常 / 故障 `Task` 报告，`Dispose` 只记日志不外抛。
 
 StdUnit.Tags: **运行器判脏改用扁平索引，干净轮次不再空写**
   - `TagGrpRunner` 在每次（重）启动时把入口子树中的 `ITag` / `ITagCbnt` 收集成扁平数组，每轮判脏
@@ -53,6 +64,13 @@ StdUnit.Tags.Core: **`access` 的继承修正为逐级冒泡**
   - **访问模式是配置期属性**：加载完成后修改 `TagDescriptor.AccessMode`（或重新赋值 `access`）
     不会生效，需要重新加载项目。原文没有明说，但这是既有实现的实际行为；现在把它写成显式约束，
     运行期因此可以安全缓存解析结果（每点位只解析一次）。
+
+StdUnit.Tags.Core: **`TagUnion` 的读写不再逐节点构造闭包**
+  - `TagUnionExtensions.ReadAsync` / `WriteAsync` 由 `Map(闭包, 闭包, 闭包)` 改为按节点类型 `switch`：
+    不再为每个节点构造委托与异步状态机，读同步完成的常见路径直接返回 `Task.CompletedTask`；
+    只有真正异步（设备 I/O）时才走"读后标记 `IsScanned`"的续体。
+  - 解析出的访问模式缓存在 `TagUnion` 上（它是配置期属性，见上一条），每个点位只解析一次。
+    公开行为不变，`R1W` / `WO` / `RO` 的跳过语义与使能门控照旧。
 
 StdUnit.Tags: **新增运行期指标（`System.Diagnostics.Metrics`）**
   - Meter 名 `StdUnit.Tags`，四个指标：`stdunit.tags.turns`、`stdunit.tags.turn.duration`（单位 `s`）、

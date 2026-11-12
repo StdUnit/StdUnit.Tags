@@ -12,7 +12,7 @@ param (
 
     [string]$nugetSource = $Env:NugetSource,
     [string]$nugetKey = $Env:NugetApiKey,
-    # 只打包、不推送：首次发版前用它验证产物（13 个包能不能 pack 出来），或排障时不污染包源；
+    # 只打包、不推送：首次发版前用它验证产物（脚本末尾 $projects 列表里的每个包都能 pack 出来），或排障时不污染包源；
     # CI 的 dev-packages 通道也用它——只产出"迭代产物"（配 -DevBuildNumber 传构建号），不推任何源。
     [switch]$SkipPush,
     # 产物输出目录（为空则沿用 dotnet pack 默认：各项目自己的 bin/Release）。
