@@ -15,6 +15,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- 这里的类库家族面向的大多都是内网离线环境。只应该保持最低要求，不要强迫开发者抬升依赖 -->
+	<NugetAudit>false</NugetAudit>
     <!--
       发布物的编译门禁：src/ 下的警告一律视为错误。
       当前整解 `-c Release` 是 0 警告，所以开启的代价为零；进 RC 之后再开就会变成"为了过门禁临时压制"。
