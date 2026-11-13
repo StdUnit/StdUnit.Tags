@@ -208,22 +208,23 @@ public class OpcUaClientTagChannel : ITagChannel
     /// <summary>
     /// 断开连接
     /// </summary>
-    /// <returns></returns>
-    /// <exception cref="NotImplementedException"></exception>
     public async Task DisconnectAsync(CancellationToken ct)
     {
+        var session = this.OpcSession;
+        this.OpcSession = null;
+        if (session is null)
+        {
+            return;
+        }
+
         try
         {
-            if (this.OpcSession != null)
-            {
-                await OpcSession.CloseAsync(ct);
-            }
+            await session.CloseAsync(ct);
         }
         finally
         {
-            this.OpcSession = null;
+            this.ReleaseSession(session);
         }
-
     }
     #endregion
 
@@ -376,23 +377,49 @@ public class OpcUaClientTagChannel : ITagChannel
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (OpcSession != null && OpcSession.Connected)
+        var session = this.OpcSession;
+        this.OpcSession = null;
+        if (session is null)
         {
-            var channelName = this.ChannelName();
-            try
+            return;
+        }
+
+        var channelName = this.ChannelName();
+        try
+        {
+            // 已断开的会话不必再 Close（Stack 侧会因此抛错），但**必须** Dispose——
+            // 这与 ModbusTcpChannel 的"无条件 Close"不同：那边 Connected==false 意味着句柄还活着。
+            if (session.Connected)
             {
                 _logger.LogInformation("通道={ChannelName} 正在断开连接...", channelName);
-                OpcSession.Close();
+                session.Close();
                 _logger.LogInformation("通道={ChannelName}  断开连接完成!", channelName);
             }
-            catch (Exception e)
-            {
-                _logger.LogWarning(e, "通道={ChannelName} 释放异常", channelName);
-            }
-            finally
-            {
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "通道={ChannelName} 释放异常", channelName);
+        }
+        finally
+        {
+            this.ReleaseSession(session);
+        }
+    }
 
-            }
+    /// <summary>
+    /// 释放 <see cref="ISession"/> 身上由 <see cref="IDisposable"/> 负责的那部分资源（订阅、传输句柄等）。
+    /// <c>Close</c>/<c>CloseAsync</c> 只负责"关闭会话"，不释放它们；漏掉这一下，反复启停会攒下没人认领的对象。<br/>
+    /// 这里只记日志、不抛：它是 <c>finally</c> 里的收尾，抛出来会盖掉真正的原因（关闭失败）。
+    /// </summary>
+    private void ReleaseSession(ISession session)
+    {
+        try
+        {
+            session.Dispose();
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "通道={ChannelName} 释放会话异常", this.ChannelName());
         }
     }
 }

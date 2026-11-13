@@ -1267,6 +1267,34 @@ public class TagsProjectCtrlTests
     }
 
     /// <summary>
+    /// 轮询不响应取消、<c>StopAsync</c> 超时返回后：那一次运行其实还活着（卡在 <c>RunAsync</c> 里），
+    /// 所以独占门必须仍然关着——否则第二次启动会与旧循环并发操作同一个控制器。
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WhenPollingNeverExits_KeepsGateClosedSoRestartIsRejected()
+    {
+        var (ctrl, sp) = CreateCtrl();
+        ctrl.PollExitWaitTimeout = TimeSpan.FromMilliseconds(100);
+        _factory.ProjectRunAsyncNeverCompletes = true;
+
+        using var started = WatchProjectStarted(ctrl);
+        _ = Task.Run(() => ctrl.StartPollAsync(
+            dir: "test_dir",
+            root: new XElement("Project"),
+            hook: (_, _, _) => Task.CompletedTask));
+
+        await started.WaitAsync();
+        await ctrl.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        // 旧循环仍在跑：不能放新的启动进来
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ctrl.StartPollAsync("dir2", new XElement("Project"), (_, _, _) => Task.CompletedTask));
+        Assert.Contains("已经启动", ex.Message);
+
+        sp.Dispose();
+    }
+
+    /// <summary>
     /// 用于验证"DI 作用域释放失败"的工厂：作用域照常提供项目工厂，但 <c>Dispose</c> 抛异常。
     /// </summary>
     private sealed class ThrowingScopeFactory(IServiceProvider provider) : IServiceScopeFactory

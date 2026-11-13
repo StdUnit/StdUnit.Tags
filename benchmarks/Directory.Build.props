@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    benchmarks/ 下所有项目的共享编译设置。与 tests/Directory.Build.props 类似，但：
+    1) 不生成 XML 文档（基准代码不对外）；
+    2) 不参与打包（IsPackable=false）。
+    基准是开发期工具，不参与 CI 的测试与 AOT 冒烟，只保证 `dotnet build` 能编译（防止 API 漂移后悄悄腐烂）。
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

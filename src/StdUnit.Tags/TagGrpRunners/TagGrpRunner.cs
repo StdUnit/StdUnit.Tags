@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 namespace StdUnit.Tags;
@@ -48,6 +48,11 @@ internal class TagGrpRunner : ITagGrpRunner
     /// <inheritdoc/>
     public virtual async Task StartAsync(ITagGrp entry, CancellationToken ct)
     {
+        // 指标维度只随入口变化，建一次、每轮复用（每轮新建 tag 数组会让"指标零分配"失效）。
+        var metricTags = TagsMetric.TagsFor(entry);
+        // 上一轮是否以崩溃收场？用于把"崩溃后的重新建连"记成一次 reconnect。
+        var recovering = false;
+
         while (!ct.IsCancellationRequested)
         {
             // 入口主通道。各回调中的 channel 参数恒为它。
@@ -68,6 +73,8 @@ internal class TagGrpRunner : ITagGrpRunner
 
                 channel = entry.SearchChannel();
                 channels = entry.CollectChannels();
+                // 判脏索引：与 CollectChannels 同生命周期（每次外层重启用重建），把每轮判脏变成两次数组扫描。
+                var dirtyIndex = DirtyNodeIndex.Build(entry);
                 // 单槽回调：先取本地再判空，避免两次读取之间被改成 null。
                 var onStarted = this.RunnerStarted;
                 if (onStarted is not null)
@@ -90,8 +97,14 @@ internal class TagGrpRunner : ITagGrpRunner
                         await ch.EnsureConnectedAsync(force: false, ct);
                     }
 
+                    if (recovering)
+                    {
+                        recovering = false;
+                        TagsMetric.RecordReconnect(metricTags);
+                    }
+
                     await this.DrainWriteIntentsAsync(entry, ct);
-                    if (entry.IsDirty())
+                    if (dirtyIndex.AnyDirty())
                     {
                         await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
                     }
@@ -101,9 +114,15 @@ internal class TagGrpRunner : ITagGrpRunner
                     {
                         await onTurn(entry, channel, ct);
                     }
-                    await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
+
+                    // 逻辑处理之后再判一次：干净时整趟跳过（WriteAsync 对干净节点本来也是空操作）。
+                    if (dirtyIndex.AnyDirty())
+                    {
+                        await entry.WriteAsync(TraversalMode.RespectEnabled, ct);
+                    }
 
                     sw.Stop();
+                    TagsMetric.RecordTurn(metricTags, sw.Elapsed);
                     var span = TimeSpan.FromMilliseconds(entry.SearchScanInterval() ?? 0);
                     var delay = this._pollDelayStrategy.GetDelay(span, sw.Elapsed);
                     if (delay > TimeSpan.Zero)
@@ -128,6 +147,8 @@ internal class TagGrpRunner : ITagGrpRunner
             {
                 aborted = true;
                 _consecutiveFailures++;
+                recovering = true;
+                TagsMetric.RecordFailure(metricTags);
 
                 var onCrashed = this.RunnerCrashed;
                 if (onCrashed is not null)

@@ -71,6 +71,31 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 - 业务逻辑插件化：`netcore`上支持逻辑组件插件(dll)，各插件的依赖相互隔离、支持卸载和热更(`netfx`上降级支持，见“netfx 的插件化限制”)。
 - 支持通过MCP方式暴露给AI：把测点项目描述作为上下文，让AI可以轻松操作你的设备
 
+## Benchmarks
+
+本类库自身的开销已经量化，并作为回归基线维护在 [benchmarks/README.md](benchmarks/README.md)（含复现命令与每个数字的边界说明）。
+下面是实测基线中的一组代表性数字（i7-8700 3.20 GHz；耗时随机器变化，只看**量级**与堆分配）：
+
+| 场景 | 开销 | 堆分配 |
+|---|---|---|
+| 轮询-读遍历（每点位） | **~9 ns** | **0 B** |
+| 轮询-组合式测点分发（每子测点） | **~2–3 ns** | **0 B** |
+| 轮询-每轮判脏（每点位） | **~2.4 ns** | **0 B** |
+| 轮询-每轮通道存活探测（Modbus） | **~2.3 µs/通道** | **0 B** |
+| 轮询-指标打点（无人订阅 / 有人订阅） | 3.8 ns / 5.7 ns | **0 B** |
+
+表中的**轮询路径**不产生托管垃圾，意味着对 `GC` 零压力；轮询循环里唯一的固定分配是轮间等待的定时器（几百字节/轮），不在本表范围内。
+而每个点位自身仍需要少量存储空间（目前约 **350–400 B/点**）——这部分属于一次性常驻内存，随点数线性增长，与是否扫描、扫描频率都无关，也不会带来 `GC` 压力。这组数字说明三点：
+
+- **类库不是瓶颈**：1 万点位的读遍历，在类库自身层面约 **0.09 ms/轮**，而一次 Modbus / OPC UA 往返是 ms 级。
+- **稳态零分配**：上述路径不产生托管垃圾，高频采集时的 GC 压力与点位数无关，也不是由 `StdUnit.Tags` 运行时自身产生的。
+- **常驻内存随点数线性增长**：1 万点位约 3.3–3.8 MB（托管对象图），5 万点位约 17–19 MB，不构成部署障碍。
+
+> 例外：直读点位（`DirectTag`，兜底用法）每点每轮有一次地址解析（约 0.8 KB 分配）；把点位组织成 `TagCbnt` 时地址只在加载期解析一次。
+>
+> 这些数字只用于版本间对比，不作为对具体现场的吞吐承诺。
+
+
 ## 文档与示例
 
 ### 文件夹结构
@@ -78,6 +103,9 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 - `src/`: 源码，主要包括核心包、驱动包和扩展包
 - `tests/`: 自动化测试项目（`StdUnit.Tags.Tests` / `StdUnit.Tags.Tests.NetCoreOnly`）与 AOT 冒烟程序（`AotSmokeTest.*`）
 - `samples/`：放示例与喂狗程序
+- `benchmarks/`：性能基准（BenchmarkDotNet，`net8.0`）。在解决方案内，所以 `dotnet build` 会编译它以防 API 漂移；
+  **不**参与 CI 的测试与 AOT 冒烟。最新数据与解读见 [benchmarks/README.md](benchmarks/README.md)。
+  本地跑：`dotnet run -c Release --project benchmarks/StdUnit.Tags.Benchmarks -- --filter *`。
 - `.config/`
     - `dotnet-tools.json`: 本项目用到的 dotnet tools 配置
 - `paket.dependencies`: 用 [`paket`](https://github.com/fsprojects/Paket)管理的依赖声明
@@ -100,11 +128,11 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 扩展包：
 - `StdUnit.Tags.RxExtensions`: `dotnet/reactive`扩展，只依赖于`StdUnit.Tags.Core`
 - `StdUnit.Tags.R3Extensions`: `Cysharp/R3`扩展，只依赖于`StdUnit.Tags.Core`
-- `StdUnit.Tags.BlazorLib.Core`: Blazor 类库，包含核心功能抽象，以及一个极简的监控页面。
 - `StdUnit.Tags.McpServer`: 这是一个把`StdUnit.Tags`暴露成 [Model Context Protocol Server](https://modelcontextprotocol.io/) 的类库。
 - `StdUnit.Tags.WebUi`: 测点项目的 **Web 界面**（ASP.NET Core，不依赖 Blazor / SignalR，可在 NativeAOT 宿主下使用）。监控侧：结构树走一次性 `GET`、值按"入口 + 轮次"以 SSE（`text/event-stream`）推送，内置极简监控页（`GET /stdunit.tags/ui`）；设计器侧：把核心 + 各驱动 schema 内省成元数据（`GET /stdunit.tags/catalog`），通道/测点设计器据此渲染表单、导入既有项目 XML 并导出（`GET /stdunit.tags/designer`，未知驱动/元素/属性原样保留）。页面都是单文件 HTML + 内嵌 JS，无需 npm 工程。另有两个写命令（`POST /stdunit.tags/value` 改值、`POST /stdunit.tags/rescan` 标记未扫描）。端点只允许改**路由前缀**（`app.MapTagsStream("/internal/tags")`），相对路径是线协议的一部分；**不内置任何鉴权**，暴露到非受信网络前请对返回的路由组加策略，例如 `app.MapTagsStream().RequireAuthorization()`。
+- `StdUnit.Tags.BlazorLib.Core`: Blazor 类库，**2.0 起进入维护模式**：不再新增功能，新的界面能力（监控 + 设计器）都做在 `StdUnit.Tags.WebUi` 上。
 
-> 备注：源码目录中还有一个 `StdUnit.Tags.BlazorLib`(不是 `StdUnit.Tags.BlazorLib.Core`)，放的是常用硬件设备的编辑器和设计器实现。这些只是我把脑子里的片段随手写下来的实验性代码——因为将来可能做成类库，里面不少东西被标成了`public`——目前它只是实验场，不对外发布。
+> 备注：2.0 起移除了实验性的 `StdUnit.Tags.BlazorLib`（各驱动通道描述符的查看器/编辑器）。它从未对外发布，功能已由 `StdUnit.Tags.WebUi` 的设计器覆盖；需要图形化配置请用 WebUi。
 
 相关测试统一放在 `tests/` 下的两个测试项目中：
 - `StdUnit.Tags.Tests`: 上述子项目的自动化测试（多目标 `net8.0` + `net472`）。
@@ -126,12 +154,45 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 | Rx扩展 | `StdUnit.Tags.RxExtensions` | ✅ 支持 |
 | R3扩展 | `StdUnit.Tags.R3Extensions` | ✅ 支持 |
 | McpServer扩展 | `StdUnit.Tags.McpServer` | ✅ 支持 |
-| BlazorLibCore扩展 | `StdUnit.Tags.BlazorLib.Core` | ✅ 支持 |
 | Web 界面（监控 + 设计器） | `StdUnit.Tags.WebUi` | 🧪 实验 |
+| BlazorLib扩展 | `StdUnit.Tags.BlazorLib.Core` | ✅ 支持（维护模式） |
 
-上表列出的包中，标记为“实验”的，`<Major>.<Minor>.<Patch>` 里的 `<Minor>` 跳变可能包含破坏性更新；标记为“支持”的，只有 `<Major>` 跳变才可能包含破坏性更新。核心包（`StdUnit.Tags`、`StdUnit.Tags.Core`）不属于驱动/扩展、因此不在此表内，按语义化版本处理——同样只有 `<Major>` 跳变才可能包含破坏性更新。
+上表列出的包中，标记为“实验”的，`<Major>.<Minor>.<Patch>` 里的 `<Minor>` 跳变可能包含破坏性更新；
+标记为“支持”的，只有 `<Major>` 跳变才可能包含破坏性更新。核心包（`StdUnit.Tags`、`StdUnit.Tags.Core`）不属于驱动/扩展、因此不在此表内，按语义化版本处理——同样只有 `<Major>` 跳变才可能包含破坏性更新。
 
 > 警告：有一些未在本仓库中列出的驱动及扩展，却由我发布到公开的`nuget.org`上以及私有的测试源上(比如[`StdUnit.Tags.LinuxFs.ProcInfo`](https://www.nuget.org/packages/StdUnit.Tags.LinuxFs.ProcInfo)、[`StdUnit.Tags.WinUsbKeyboardCodeScanners`](https://www.nuget.org/packages/StdUnit.Tags.WinUsbKeyboardCodeScanners/))，只供内部使用——那部分包不对外提供任何质量保证，请谨慎使用。
+
+### 运行期观测（Metrics）
+
+`StdUnit.Tags` 用 `System.Diagnostics.Metrics` 暴露入口的运行期指标。net8.0 用共享框架里的实现；
+**net472 会因此引入 `System.Diagnostics.DiagnosticSource` 依赖**（`StdUnit.Tags.Core` 仍是零外部依赖）。
+
+| 指标 | 类型 | 单位 | 维度 |
+|---|---|---|---|
+| `stdunit.tags.turns` | `Counter<long>` | `{turn}` | `entry` |
+| `stdunit.tags.turn.duration` | `Histogram<double>` | `s` | `entry` |
+| `stdunit.tags.failures` | `Counter<long>` | `{failure}` | `entry` |
+| `stdunit.tags.reconnects` | `Counter<long>` | `{reconnect}` | `entry` |
+
+- Meter 名固定为 `StdUnit.Tags`。
+- `entry` 是入口的定位路径（`TagGrp(a)/TagGrp(b)`，与加载期错误消息、`ITagGrpExtensions.GetLocationPath()` 同格式）。
+- **不**带测点名/地址维度（无界基数），也不带 `driver`（失败可能来自入口下的辅通道，标主通道会算错责任人）。
+- 指标名、单位与 tag 键属于对外契约：只会新增，不会改名。它们集中暴露在公开静态类
+  `TagsMetricContract`（`MeterName` / `Turns` / `TurnDurationUnit` / `EntryTag` …）里，订阅与建视图时直接引用即可。
+- 没人订阅时记录是零分配、纳秒级的，所以没有“是否启用”的开关。
+
+订阅方式二选一：
+
+```csharp
+// OpenTelemetry
+builder.Services.AddOpenTelemetry()
+       .WithMetrics(m => m.AddMeter(TagsMetricContract.MeterName));
+```
+
+```powershell
+# 或直接用 dotnet-counters 观察
+dotnet-counters monitor --counters StdUnit.Tags -p <pid>
+```
 
 ### 给人类的
 
@@ -139,12 +200,11 @@ dotnet new tags.driver -n your-project.name -D YourDriver
 1. 仓库内 [`docs/`](docs/) 放**框架性**内容：[核心模型](docs/核心模型.md)、[外部意图与死锁](docs/外部意图.md)、[扩展点](docs/扩展点.md)、[错误处理](docs/异常处理.md)、[设计决策与边界](docs/设计决策与边界/)（范围与运行期契约、[CI 取舍](docs/设计决策与边界/1.%20CI.md)、[兼容与命名](docs/设计决策与边界/2.%20兼容与命名.md)、[打包与发布](docs/设计决策与边界/3.%20打包与发布.md)）；详细使用说明见上一点。
 2. 本仓库自带的 [Samples](https://github.com/StdUnit/StdUnit.Tags/tree/dev/samples)：主要用于开发验证+喂狗。AOT 冒烟程序（`AotSmokeTest.*`）已挪到 [`tests/`](https://github.com/StdUnit/StdUnit.Tags/tree/dev/tests)。（其中 `samples/WpfDemo` 是 WPF 示例，依赖 Windows SDK，所以有意**不纳入到解决方案内**；有需要时，在本地`windows`上用 `dotnet build samples/WpfDemo/WpfDemo.csproj` 单独构建。）
 3. 供新手熟悉功能的 [WPFDemo](https://github.com/StdUnit/StdUnit.Tags.WPFDemo)：按分支演示功能。
-4. 对于已经开放给公众使用的包，每一个公开的接口、类、方法、属性都写了`XML`注释，所以通过`*.nupkg`安装后即有完整的智能提示，也就没必要另外再提供在线版的`API`文档了,有需要的可以自己用 [`docfx`](https://github.com/dotnet/docfx) 生成(唯一的例外是 `StdUnit.Tags.BlazorLib`：它是只是实验性的代码片段，只对团队内部开放，暂时不发布到公开源上)。
+4. 对于已经开放给公众使用的包，每一个公开的接口、类、方法、属性都写了`XML`注释，所以通过`*.nupkg`安装后即有完整的智能提示，也就没必要另外再提供在线版的`API`文档了,有需要的可以自己用 [`docfx`](https://github.com/dotnet/docfx) 生成。
 
 ### 给AI的
 
 AI 可以直接参考 [StdUnit.Tags —— 给 AI 的参考手册](https://tags.doc.stdunit.com/assets/999.AI.markdown)（机器可读的原始 Markdown），也可以先访问 <https://tags.doc.stdunit.com/llms.txt>，那里是文档站给 AI 准备的索引。
-
 
 ## 目标框架
 
@@ -156,7 +216,7 @@ AI 可以直接参考 [StdUnit.Tags —— 给 AI 的参考手册](https://tags.
 | `StdUnit.Tags.RxExtensions` / `StdUnit.Tags.R3Extensions` | `net8.0` + `net472` |
 | `StdUnit.Tags.S7` / `ModbusTcp` / `Hjzk` / `ZLan` / `OpcUaClient` / `ComScanner` / `SimpleFiles` | `net8.0` + `net472` |
 | `StdUnit.Tags.McpServer` | `net8.0` + `net472`（经 `ModelContextProtocol` 核心包的 `netstandard2.0` 资产） |
-| `StdUnit.Tags.BlazorLib` / `BlazorLib.Core` | 仅 `net8.0` |
+| `StdUnit.Tags.BlazorLib.Core` | 仅 `net8.0` |
 | `StdUnit.Tags.WebUi` | 仅 `net8.0`（ASP.NET Core；依赖 `Microsoft.AspNetCore.App` 框架引用） |
 | `StdUnit.Tags.SchemaGenerator` | `netstandard2.0`（源生成器） |
 

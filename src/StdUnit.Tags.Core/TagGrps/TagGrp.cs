@@ -32,7 +32,11 @@ public class TagGrp : ITagGrp
     #region 子节点
 
     /// <inheritdoc/>
-    public IDictionary<string, TagUnion> Children { get; } = new Dictionary<string, TagUnion>();
+    public IDictionary<string, TagUnion> Children => _children;
+
+    // 存具体类型：公开属性是 IDictionary（API 不变），但遍历时走具体类型的结构体枚举器。
+    // 走接口 foreach 会装箱 Dictionary.Enumerator（每次遍历一个分配），而这发生在每一轮的读/写/判脏路径上。
+    private readonly Dictionary<string, TagUnion> _children = new();
 
     /// <inheritdoc/>
     /// <exception cref="KeyNotFoundException">指定的子测点名不存在</exception>
@@ -131,7 +135,7 @@ public class TagGrp : ITagGrp
             return;
         }
 
-        foreach (var kvp in Children)
+        foreach (var kvp in _children)
         {
             var tagunion = kvp.Value;
             await tagunion.ReadAsync(mode, ct);
@@ -147,7 +151,7 @@ public class TagGrp : ITagGrp
             return;
         }
 
-        foreach (var kvp in Children)
+        foreach (var kvp in _children)
         {
             var tagunion = kvp.Value;
             await tagunion.WriteAsync(mode, ct);
@@ -157,7 +161,7 @@ public class TagGrp : ITagGrp
     /// <inheritdoc/>
     public bool IsDirty()
     {
-        foreach (var kvp in Children)
+        foreach (var kvp in _children)
         {
             var child = kvp.Value;
             if (child.IsDirty())

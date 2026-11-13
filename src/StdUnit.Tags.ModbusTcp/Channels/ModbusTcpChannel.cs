@@ -152,8 +152,11 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
             {
                 return false;
             }
-            // see https://stackoverflow.com/a/2661876/10091607
-            bool part1 = s.Poll(1000, SelectMode.SelectRead);
+            // 非阻塞快检：Poll(0) 立即返回，`part1 && part2` 的判定逻辑与等待版本完全一致。
+            // 绝不能带超时（原先写的是 Poll(1000)）：Windows 的计时器粒度约 15.6 ms，
+            // 空闲连接上这一步实测要 **15.9 ms**，而它发生在每轮、每个通道的 EnsureConnected 里。
+            // 基准：benchmarks/StdUnit.Tags.Benchmarks 的 EnsureConnectedBenchmarks。
+            bool part1 = s.Poll(0, SelectMode.SelectRead);
             bool part2 = s.Available == 0;
             if (part1 && part2)
                 return false;
@@ -179,34 +182,16 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
     }
 
     /// <summary>
-    /// 断开连接
+    /// 断开连接。<br/>
+    /// <see cref="TcpClient.Close()"/> 不阻塞，所以这里不再用 <see cref="Thread"/> 把同步调用伪装成异步；
+    /// <paramref name="ct"/> 只为接口一致，不参与等待（清理路径本来就该用 <see cref="CancellationToken.None"/>）。<br/>
+    /// 关闭失败时以故障 Task 返回（与 S7 / OpcUa / ComScanner 一致，见 <see cref="ITagChannel.DisconnectAsync"/>），
+    /// 而 <see cref="Dispose()"/> 只记日志、不抛。
     /// </summary>
-    /// <returns></returns>
-    /// <exception cref="NotImplementedException"></exception>
     public Task DisconnectAsync(CancellationToken ct)
     {
-        if (_tcpClient == null)
-            return Task.CompletedTask;
-
-        var tcs = new TaskCompletionSource<object?>();
-        var th = new Thread(() =>
-        {
-            try
-            {
-                _tcpClient.Close();
-                _tcpClient = null;
-                tcs.SetResult(null);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "通道{ChannelName}断开连接失败", this.ChannelName());
-                _tcpClient = null;
-                tcs.SetException(ex);
-            }
-        });
-        th.IsBackground = true;
-        th.Start();
-        return tcs.Task;
+        var error = this.TryCloseConnection();
+        return error is null ? Task.CompletedTask : Task.FromException(error);
     }
     #endregion
 
@@ -365,23 +350,40 @@ public class ModbusTcpChannel : IModbusRegisterChannel, IModbusBitsChannel
     /// <inheritdoc/>
     public void Dispose()
     {
-        var channelName = this.ChannelName();
-        if (_tcpClient != null && _tcpClient.Connected)
+        var error = this.TryCloseConnection();
+        if (error is not null)
         {
-            try
-            {
-                _logger.LogInformation("通道={ChannelName} 正在断开连接...", channelName);
-                _tcpClient.Close();
-                _logger.LogInformation("通道={ChannelName}  断开连接完成!", channelName);
-            }
-            catch (Exception e)
-            {
-                _logger.LogWarning(e, "通道={ChannelName} 释放异常", channelName);
-            }
-            finally
-            {
+            // Dispose 只留痕、不外抛（.NET 的释放惯例）。
+            _logger.LogWarning(error, "通道={ChannelName} 释放异常", this.ChannelName());
+        }
+    }
 
-            }
+    /// <summary>
+    /// 关闭并清空底层连接——<b>唯一</b>的释放路径，<see cref="Dispose()"/> 与 <see cref="DisconnectAsync"/> 都走它。<br/>
+    /// 有意<b>不</b>用 <see cref="TcpClient.Connected"/> 当守卫：它只是上次 I/O 的快照，半死连接上返回 <c>false</c>，
+    /// 恰好会把最该关的 socket 留下来。<br/>
+    /// 失败时把异常<b>返回</b>而不是吞掉或抛出：由调用方决定是记日志（Dispose）还是外抛（DisconnectAsync）。
+    /// </summary>
+    private Exception? TryCloseConnection()
+    {
+        var client = Interlocked.Exchange(ref _tcpClient, null);
+        this.ModbusMaster = null;
+        if (client is null)
+        {
+            return null;
+        }
+
+        var channelName = this.ChannelName();
+        try
+        {
+            _logger.LogInformation("通道={ChannelName} 正在断开连接...", channelName);
+            client.Close();
+            _logger.LogInformation("通道={ChannelName}  断开连接完成!", channelName);
+            return null;
+        }
+        catch (Exception e)
+        {
+            return e;
         }
     }
 }

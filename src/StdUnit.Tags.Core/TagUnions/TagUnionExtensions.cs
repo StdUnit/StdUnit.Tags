@@ -1,4 +1,4 @@
-﻿namespace StdUnit.Tags;
+namespace StdUnit.Tags;
 
 /// <summary>
 /// extensions for <see cref="TagUnion"/>
@@ -24,45 +24,80 @@ public static class TagUnionExtensions
     /// <param name="mode">遍历模式</param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    public static async Task ReadAsync(this TagUnion tagunion, TraversalMode mode, CancellationToken ct)
+    public static Task ReadAsync(this TagUnion tagunion, TraversalMode mode, CancellationToken ct)
     {
-        await tagunion.Map(
-            async tag =>
+        // 不要改回 TagUnion.Map：每个分支都会构造闭包 + 委托 + 异步状态机（分配）。
+        // 另外这里**不是** async 方法：常见路径（读同步完成）直接返回已完成 Task；
+        // 只有真正异步（设备 I/O）时才走下面的两个辅助方法。
+        switch (tagunion)
+        {
+            case TagUnion.TagUnit unit:
             {
-                if (tag.SearchAccessMode() == TagAccessMode.R1W && tag.IsScanned)
+                var tag = unit.Value;
+                var access = tagunion.CachedAccessMode ??= tag.SearchAccessMode();
+                if (access == TagAccessMode.R1W && tag.IsScanned)
                 {
-                    return;
+                    return Task.CompletedTask;
                 }
-                if (tag.IsWriteOnly())
+                if (access == TagAccessMode.WO)
                 {
-                    return;
+                    return Task.CompletedTask;
                 }
-                await tag.ReadAsync(ct);
-                tag.IsScanned = true;
-            },
-            async cbnt =>
+
+                var task = tag.ReadAsync(ct);
+                if (task.Status == TaskStatus.RanToCompletion)
+                {
+                    tag.IsScanned = true;
+                    return Task.CompletedTask;
+                }
+
+                return MarkScannedAfterReadAsync(tag, task);
+            }
+            case TagUnion.TagCbnt cbntUnion:
             {
+                var cbnt = cbntUnion.Value;
                 // 是否短路？
                 if (mode == TraversalMode.RespectEnabled && !cbnt.IsEnabled)
                 {
-                    return;
+                    return Task.CompletedTask;
                 }
-                if (cbnt.SearchAccessMode() == TagAccessMode.R1W && cbnt.IsScanned)
+
+                var access = tagunion.CachedAccessMode ??= cbnt.SearchAccessMode();
+                if (access == TagAccessMode.R1W && cbnt.IsScanned)
                 {
-                    return;
+                    return Task.CompletedTask;
                 }
-                if (cbnt.IsWriteOnly())
+                if (access == TagAccessMode.WO)
                 {
-                    return;
+                    return Task.CompletedTask;
                 }
-                await cbnt.ReadAsync(ct);
-                cbnt.IsScanned = true;
-            },
-            async grp =>
-            {
-                await grp.ReadAsync(mode, ct);
+
+                var task = cbnt.ReadAsync(ct);
+                if (task.Status == TaskStatus.RanToCompletion)
+                {
+                    cbnt.IsScanned = true;
+                    return Task.CompletedTask;
+                }
+
+                return MarkScannedAfterReadAsync(cbnt, task);
             }
-         );
+            case TagUnion.TagGrp grpUnion:
+                return grpUnion.Value.ReadAsync(mode, ct);
+            default:
+                return Task.FromException(new NotImplementedException($"unknown types: {tagunion.GetType()}"));
+        }
+    }
+
+    private static async Task MarkScannedAfterReadAsync(ITag tag, Task readTask)
+    {
+        await readTask.ConfigureAwait(false);
+        tag.IsScanned = true;
+    }
+
+    private static async Task MarkScannedAfterReadAsync(ITagCbnt cbnt, Task readTask)
+    {
+        await readTask.ConfigureAwait(false);
+        cbnt.IsScanned = true;
     }
 
     /// <summary>
@@ -82,42 +117,45 @@ public static class TagUnionExtensions
     /// <param name="mode">遍历模式</param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    public static async Task WriteAsync(this TagUnion tagunion, TraversalMode mode, CancellationToken ct)
+    public static Task WriteAsync(this TagUnion tagunion, TraversalMode mode, CancellationToken ct)
     {
-        await tagunion.Map(
-            async tag =>
+        // 同 ReadAsync：用 switch 而非 Map，避免逐节点构造闭包/委托/状态机；
+        // 且本方法无需"读后再标记"，所以完全不需要 async——直接把子任务的 Task 返回即可。
+        switch (tagunion)
+        {
+            case TagUnion.TagUnit unit:
             {
-                if (tag.IsReadOnly())
+                var tag = unit.Value;
+                var access = tagunion.CachedAccessMode ??= tag.SearchAccessMode();
+                if (access == TagAccessMode.RO || !tag.IsDirty)
                 {
-                    return;
+                    return Task.CompletedTask;
                 }
-                if (tag.IsDirty)
-                {
-                    await tag.WriteAsync(ct);
-                }
-            },
-            async cbnt =>
+
+                return tag.WriteAsync(ct);
+            }
+            case TagUnion.TagCbnt cbntUnion:
             {
+                var cbnt = cbntUnion.Value;
                 // 使能门控：未使能的组合整块跳过（含其下的所有测点），其脏标记会被保留到重新使能后再刷写
                 if (mode == TraversalMode.RespectEnabled && !cbnt.IsEnabled)
                 {
-                    return;
-                }
-                if (cbnt.IsReadOnly())
-                {
-                    return;
+                    return Task.CompletedTask;
                 }
 
-                if (cbnt.IsDirty)
+                var access = tagunion.CachedAccessMode ??= cbnt.SearchAccessMode();
+                if (access == TagAccessMode.RO || !cbnt.IsDirty)
                 {
-                    await cbnt.WriteAsync(ct);
+                    return Task.CompletedTask;
                 }
-            },
-            async grp =>
-            {
-                await grp.WriteAsync(mode, ct);
+
+                return cbnt.WriteAsync(ct);
             }
-         );
+            case TagUnion.TagGrp grpUnion:
+                return grpUnion.Value.WriteAsync(mode, ct);
+            default:
+                return Task.FromException(new NotImplementedException($"unknown types: {tagunion.GetType()}"));
+        }
     }
 
     /// <summary>
@@ -125,14 +163,13 @@ public static class TagUnionExtensions
     /// </summary>
     /// <param name="tagunion"></param>
     /// <returns></returns>
-    public static bool IsDirty(this TagUnion tagunion)
+    public static bool IsDirty(this TagUnion tagunion) => tagunion switch
     {
-        return tagunion.Map(
-            tag => tag.IsDirty,
-            cbnt => cbnt.IsDirty,
-            grp => grp.IsDirty()
-         );
-    }
+        TagUnion.TagUnit unit => unit.Value.IsDirty,
+        TagUnion.TagCbnt cbnt => cbnt.Value.IsDirty,
+        TagUnion.TagGrp grp => grp.Value.IsDirty(),
+        _ => throw new NotImplementedException($"unknown types: {tagunion.GetType()}")
+    };
     #endregion
 
 

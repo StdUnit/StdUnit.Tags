@@ -1,6 +1,8 @@
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using StdUnit.Tags.ModbusTcp;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NModbus;
@@ -19,9 +21,24 @@ internal class TestModbusTcpChannel : ModbusTcpChannel
     public Mock<IModbusMaster> MasterMock { get; }
 
     public TestModbusTcpChannel(ModbusTcpTagChannelDescriptor descriptor, Mock<IModbusMaster> masterMock)
-        : base(descriptor, NullLogger<ModbusTcpChannel>.Instance)
+        : this(descriptor, masterMock, NullLogger<ModbusTcpChannel>.Instance)
+    {
+    }
+
+    public TestModbusTcpChannel(ModbusTcpTagChannelDescriptor descriptor, Mock<IModbusMaster> masterMock, ILogger<ModbusTcpChannel> logger)
+        : base(descriptor, logger)
     {
         MasterMock = masterMock;
+    }
+
+    /// <summary>
+    /// 越过 <see cref="ModbusTcpChannel.CreateConnectionAsync"/> 直接塞一个底层 TCP 客户端，
+    /// 用来构造"关闭连接时抛异常"这种真实 socket 上不好复现的现场。
+    /// </summary>
+    public TcpClient? TcpClient
+    {
+        get => _tcpClient;
+        set => _tcpClient = value;
     }
 
     protected override Task<IModbusMaster> CreateConnectionAsync(int timeout, CancellationToken ct)

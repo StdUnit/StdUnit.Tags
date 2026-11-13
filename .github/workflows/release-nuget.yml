@@ -6,9 +6,15 @@ name: Release (nuget.org)
 on:
   workflow_dispatch:
     inputs:
-      releaseVersion:
-        description: 'Release Version'
-        required: true
+      # 版本号不手填：正式版取仓库根的 next-release-version.txt，dev 版在本步自动拼上构建号。
+      versionKind:
+        description: '发布类型：release=正式版（取 next-release-version.txt）；dev=公测预发布（<该文件>-dev.<UTC 构建号>）'
+        type: choice
+        options:
+          - dev
+          - release
+        # 默认 dev：误触发时最多多出一个预发布包，不会把正式版推到 nuget.org（不可撤销）
+        default: dev
 jobs:
   build:
     permissions:
@@ -19,6 +25,43 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    # 版本号解析 + 校验放在最前面，坏输入几秒内失败，不用等整解构建与测试跑完。
+    # 预发布（-dev.*）是唯一的公测途径（alpha/beta/rc 已停用）；nuget.org 上的版本不可撤销，
+    # 所以 dev 只在你明确选它时才发，日常 dev 仍建议只推私有源。
+    - name: Resolve version
+      shell: pwsh
+      env:
+        VERSION_KIND: ${{ inputs.versionKind }}
+      run: |
+        $kind = "$($env:VERSION_KIND)".Trim()
+
+        # 基线只有一个来源：仓库根的 next-release-version.txt
+        $base = (Get-Content -LiteralPath 'next-release-version.txt' -Raw).Trim()
+        if ($base -notmatch '^\d+\.\d+\.\d+$') {
+          throw "next-release-version.txt 必须是正式号 X.Y.Z（不带预发布后缀）：$base"
+        }
+
+        if ($kind -eq 'release') {
+          $version = $base
+        }
+        elseif ($kind -eq 'dev') {
+          # 与 CI / baget 同一条规则：UTC 的 yyMMdd.HHmm
+          $stamp = (Get-Date).ToUniversalTime().ToString('yyMMdd.HHmm')
+          $version = "$base-dev.$stamp"
+        }
+        else { throw "未知的 versionKind：$kind" }
+
+        "EFFECTIVE_VERSION=$version" >> $env:GITHUB_ENV
+        if ($kind -eq 'dev') {
+          "### 本次发布：``$version``（nuget.org，**预发布 / 公测**）" >> $env:GITHUB_STEP_SUMMARY
+          "> nuget.org 上的版本不可撤销。若不想让它被 ``--prerelease`` 默认选中，发布后到 nuget.org 手动 **unlist**。" >> $env:GITHUB_STEP_SUMMARY
+        }
+        else {
+          "### 本次发布：``$version``（nuget.org）" >> $env:GITHUB_STEP_SUMMARY
+        }
+
+        Write-Host "effective version = $version ($kind)"
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
@@ -74,5 +117,5 @@ jobs:
 
     - name: push
       working-directory: ./src
-      run: dotnet pwsh ./publish-packages.ps1 -packageVersion ${{ github.event.inputs.releaseVersion }} -nugetKey ${{steps.login.outputs.NUGET_API_KEY}} -nugetSource https://api.nuget.org/v3/index.json
+      run: dotnet pwsh ./publish-packages.ps1 -packageVersion ${{ env.EFFECTIVE_VERSION }} -nugetKey ${{steps.login.outputs.NUGET_API_KEY}} -nugetSource https://api.nuget.org/v3/index.json
 

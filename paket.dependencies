@@ -90,3 +90,16 @@ group SchemaGenerator
     # 用独立 group 隔离，避免主 group 的 Microsoft.CodeAnalysis.CSharp.Scripting >= 5.0（ComScanner 用）拉高版本。
     nuget Microsoft.CodeAnalysis.CSharp >= 4.8 lowest_matching: true
 
+group Benchmarks
+    # 只给 benchmarks/ 用：BenchmarkDotNet 是开发期工具，绝不应出现在任何发布包的依赖里。
+    source https://api.nuget.org/v3/index.json
+    source https://baget.stdunit.com/v3/index.json
+
+    cache ./nuget-package-caches
+    storage: none
+    # strategy: min 与 Main 组一致：否则传递依赖会解析到最新的 Azure.Core / Microsoft.Extensions 11.x，
+    # 在 net8.0 基准工程里刷出一堆"不支持当前 TFM"的警告。
+    strategy: min
+    framework: net8.0
+
+    nuget BenchmarkDotNet >= 0.15.8 lowest_matching: true

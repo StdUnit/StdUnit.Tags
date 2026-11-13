@@ -18,7 +18,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddTags();
 
 builder.Services.AddMudServices();
-builder.Services.AddTagsBlazorLib();
+builder.Services.AddTagsBlazorLibCore();
 
 
 

@@ -114,6 +114,11 @@ public struct S7Address
 /// </summary>
 public static class S7AddressParser
 {
+    // 正则构造有可观开销，而解析发生在每一轮读写路径上，所以提升为静态只读（不可变、线程安全）。
+    // 不可变、线程安全，提升为静态只读；匹配语义与逐次构造完全一致。
+    private static readonly Regex DbWithNthBitPattern = new(@"DB(?<db>[0-9]+)\.(?<start>[0-9]+)\.(?<nth>[0-9]+)$");
+    private static readonly Regex DbWithoutNthBitPattern = new(@"DB(?<db>[0-9]+)\.(?<start>[0-9]+)$");
+
     /// <summary>
     /// 把地址字符串解析成 <see cref="S7Address"/>
     /// </summary>
@@ -159,8 +164,7 @@ public static class S7AddressParser
 
     private static FSharpResult<S7Address, string> ParseDBAddressWithNthBit(string addr)
     {
-        var regex = new Regex(@"DB(?<db>[0-9]+)\.(?<start>[0-9]+)\.(?<nth>[0-9]+)$");
-        var match = regex.Match(addr);
+        var match = DbWithNthBitPattern.Match(addr);
         if (!match.Success)
         {
             return $"未能匹配模式 DB<db>.<start>.<nth>的模式".ToErrResult<S7Address, string>();
@@ -200,8 +204,7 @@ public static class S7AddressParser
 
     private static FSharpResult<S7Address, string> ParseDBAddressWithoutNthBit(string addr)
     {
-        var regex = new Regex(@"DB(?<db>[0-9]+)\.(?<start>[0-9]+)$");
-        var match = regex.Match(addr);
+        var match = DbWithoutNthBitPattern.Match(addr);
         if (!match.Success)
         {
             return $"未能匹配模式 DB<db>.<start>的模式".ToErrResult<S7Address, string>();

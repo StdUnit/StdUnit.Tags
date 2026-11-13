@@ -6,9 +6,15 @@ name: Release (baget.stdunit.com)
 on:
   workflow_dispatch:
     inputs:
-      releaseVersion:
-        description: 'Release Version'
-        required: true
+      # 与 release-nuget.yml 同一个形状：只选发布类型，版本号由工作流从文件算出，不手填。
+      versionKind:
+        description: '发布类型：release=常规版（取 next-release-version.txt）；dev=开发版（<该文件>-dev.<UTC 构建号>）'
+        type: choice
+        options:
+          - dev
+          - release
+        # 默认 dev：误触发时最多多出一个预发布包，不会误发正式版
+        default: dev
 jobs:
   build:
 
@@ -16,6 +22,36 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
+    # 版本号解析 + 校验：放在最前面，坏输入几秒内就失败，不用等整解构建与测试跑完。
+    - name: Resolve version
+      shell: pwsh
+      env:
+        VERSION_KIND: ${{ inputs.versionKind }}
+      run: |
+        $kind = "$($env:VERSION_KIND)".Trim()
+
+        # 基线只有一个来源：仓库根的 next-release-version.txt
+        $base = (Get-Content -LiteralPath 'next-release-version.txt' -Raw).Trim()
+        if ($base -notmatch '^\d+\.\d+\.\d+$') {
+          throw "next-release-version.txt 必须是正式号 X.Y.Z（不带预发布后缀）：$base"
+        }
+
+        if ($kind -eq 'release') {
+          $version = $base
+        }
+        elseif ($kind -eq 'dev') {
+          # 构建号由机器生成：UTC 的 yyMMdd.HHmm（如 261113.0930）——单调、唯一、零输入。
+          # CI 的迭代产物用同一条规则（dotnet.yml 里的 `date -u +%y%m%d.%H%M`），两边格式一致；
+          # 不要改成"人来数本月第几版"：那会变成 CI 与手工各维护一套编号，混进同一个源后互相压过。
+          $stamp = (Get-Date).ToUniversalTime().ToString('yyMMdd.HHmm')
+          $version = "$base-dev.$stamp"
+        }
+        else { throw "未知的 versionKind：$kind" }
+
+        "EFFECTIVE_VERSION=$version" >> $env:GITHUB_ENV
+        "### 本次发布：``$version``（baget, $kind）" >> $env:GITHUB_STEP_SUMMARY
+        Write-Host "effective version = $version ($kind)"
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
       with:
@@ -58,7 +94,7 @@ jobs:
 
     - name: push
       working-directory: ./src
-      run: dotnet pwsh ./publish-packages.ps1 -packageVersion ${{ github.event.inputs.releaseVersion }} 
       env:
         NugetSource: ${{ secrets.NUGET_SOURCE }}
         NugetApiKey: ${{ secrets.NUGET_KEY }}
+      run: dotnet pwsh ./publish-packages.ps1 -packageVersion ${{ env.EFFECTIVE_VERSION }}

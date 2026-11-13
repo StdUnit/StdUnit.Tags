@@ -11,9 +11,11 @@ public abstract record TagContainer
     /// </summary>
     private TagContainer() { }
 
-    private sealed record TagCbnt(ITagCbnt Value) : TagContainer();
+    // 子类型对同程序集可见（而不是 private）：让 TagContainerExtensions.SearchAccessMode 能用 switch 匹配，
+    // 从而避免 Map + 委托。外部仍然无法扩展——构造函数是私有的。
+    internal sealed record TagCbnt(ITagCbnt Value) : TagContainer();
 
-    private sealed record TagGrp(ITagGrp Value) : TagContainer();
+    internal sealed record TagGrp(ITagGrp Value) : TagContainer();
 
     /// <summary>
     /// 工厂函数

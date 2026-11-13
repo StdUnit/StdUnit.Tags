@@ -12,7 +12,7 @@ param (
 
     [string]$nugetSource = $Env:NugetSource,
     [string]$nugetKey = $Env:NugetApiKey,
-    # 只打包、不推送：首次发版前用它验证产物（13 个包能不能 pack 出来），或排障时不污染包源；
+    # 只打包、不推送：首次发版前用它验证产物（脚本末尾 $projects 列表里的每个包都能 pack 出来），或排障时不污染包源；
     # CI 的 dev-packages 通道也用它——只产出"迭代产物"（配 -DevBuildNumber 传构建号），不推任何源。
     [switch]$SkipPush,
     # 产物输出目录（为空则沿用 dotnet pack 默认：各项目自己的 bin/Release）。
@@ -45,7 +45,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Dev')
 if ($packageVersion -notmatch $versionPattern)
 {
     $origin = if ($PSCmdlet.ParameterSetName -eq 'Dev') { "next-release-version.txt 与 -DevBuildNumber 拼出的版本" } else { "-packageVersion" }
-    throw "$origin 必须是 <major>.<minor>.<patch>[-<prerelease>] 形式（如 1.0.0 或 1.0.0-rc.1），当前为：$packageVersion";
+    throw "$origin 必须是 <major>.<minor>.<patch>[-<prerelease>] 形式（如 1.0.0 或 2.0.0-dev.261113.0930），当前为：$packageVersion";
 }
 
 if (-not $SkipPush)
@@ -109,8 +109,16 @@ $projects | ForEach-Object -Process{
     try{
         Write-Host "[-] current location: $distPath"
 
-        # 用数组 splat，避免 -OutputDir 带空格时被拆成多个参数
-        $packArgs = @("-c", "Release", "-p:PackageVersion=$($packageVersion)")
+        # 用数组 splat，避免 -OutputDir 带空格时被拆成多个参数。
+        # 同时注入 InformationalVersion：它默认派生自 $(Version)（恒为 1.0.0），不注入的话每个版本发布出去的
+        # 程序集都自称 1.0.0——崩溃日志、dotnet-counters / OTel 的 scope 版本、以及任何读 AssemblyInformationalVersion
+        # 的地方都会拿到错值。只设 InformationalVersion、不动 Version，是为了让 AssemblyVersion 稳定在 1.0.0.0
+        # （程序集身份不随补丁版跳动，net472 的绑定重定向也不用跟着改）。
+        $packArgs = @(
+            "-c", "Release",
+            "-p:PackageVersion=$($packageVersion)",
+            "-p:InformationalVersion=$($packageVersion)"
+        )
         if (-not [String]::IsNullOrEmpty($OutputDir))
         {
             $packArgs += @("-o", $OutputDir)

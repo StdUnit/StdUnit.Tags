@@ -8,6 +8,13 @@
 public abstract record TagUnion
 {
     /// <summary>
+    /// 运行期缓存：解析后的访问模式（<see cref="TagAccessMode"/>）。<br/>
+    /// <b>访问模式是配置期属性</b>——加载完成后再改 <c>Descriptor.AccessMode</c> 不会反映到这里，
+    /// 需要重新加载项目。正因为它是配置期的，缓存才是安全的；命中时省掉逐级冒泡的接口跳转。
+    /// </summary>
+    internal TagAccessMode? CachedAccessMode;
+
+    /// <summary>
     /// 接收一个访问者
     /// </summary>
     /// <param name="visitor"></param>

@@ -6,6 +6,19 @@
 public static class TagContainerExtensions
 {
     /// <summary>
+    /// (冒泡式)获取访问模式（<b>逐级冒泡</b>：容器自身 → 各级祖先 → 默认 <see cref="TagAccessMode.RW"/>）。<br/>
+    /// 与 <see cref="SearchChannel"/> 同族：由容器节点继续向上追溯，而不是只看直接父级。
+    /// </summary>
+    /// <param name="tagContainer"></param>
+    /// <returns></returns>
+    public static TagAccessMode SearchAccessMode(this TagContainer tagContainer) => tagContainer switch
+    {
+        TagContainer.TagCbnt cbnt => cbnt.Value.SearchAccessMode(),
+        TagContainer.TagGrp grp => grp.Value.SearchAccessMode(),
+        _ => throw new NotImplementedException($"未预料到的{nameof(TagContainer)}子类型: {tagContainer.GetType()}")
+    };
+
+    /// <summary>
     /// (冒泡式)获取 <see cref="ITagChannel"/>。<br/>
     /// 如果没有找到，返回 null。<br/>
     /// </summary>

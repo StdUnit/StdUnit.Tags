@@ -2,8 +2,87 @@
 
 本文件记录**用户可见**的变化。版本号遵循[语义化版本](https://semver.org/lang/zh-CN/) `<major>.<minor>.<patch>`。
 
+> **版本号策略**：预发布只有一种形态 `<下一个正式号>-dev.<构建号>`（构建号是 UTC 时间戳，如 `2.0.0-dev.261113.0930`），
+> 不再使用 Alpha / Beta / RC 这类里程碑标签——它们只是 1.x 与 2.0 早先的历史版本号，不追溯改名。
+> 详见 [3. 打包与发布](docs/设计决策与边界/3.%20打包与发布.md)。
 
-## 2.0.0-beta8(尚未发布)
+## 2.0.0(尚未发布)
+
+2.0.0 预计 2026 年 12 月发布。**`2.0.0-beta9` 从未发布**：beta8 之后直接由 `2.0.0-dev.<构建号>` 预发布通道接正式版。
+
+- `ITagsProjectCtrl`：**修复启动/停止之间的潜在竞态问题**：`CancellationTokenSource` 与"轮询已退出"信号此前是两个字段分别发布，
+  `StopAsync` 可能读到"门已开、但两个手柄都还没写"的中间态——于是取消落空、也不等退出，
+  还会顺手把 `_lock` 清零，让新的启动与旧循环并发跑。
+  现在控制器的**全部可变状态收进一个不可变快照**（`State` / `Project` / `RunId` / 运行手柄 / 各类"只做一次"标记），
+  迁移一律走"构造新快照 + CAS 替换"：读者一次读取即得一致组合，"只做一次"的副作用由 CAS 认领，
+  并因此**不再使用 `volatile` 关键字、也不再需要单独的门字段**（`Handles` 非 null 即"有运行在飞"）。
+  同时**只有 `StartPollAsync` 的 finally 能释放门**，`StopAsync` 不再碰它
+  （超时兜底后旧循环仍活着时，门保持关闭，新的启动会被 `OnStartingException` 拒绝，而不是并发出第二个运行）。
+
+StdUnit.Tags.S7: **通道内部简化**（公开行为不变）
+  - `S7TagChannel.CreateClientAndConnectAsync(ct)` → **`CreateClientAndConnect(channelName)`**：`protected virtual`，
+    返回 `S7Client`、失败即抛 `InvalidOperationException`，不再泄露 F# 类型到通道代码里。
+  - `Dispose()` 与 `DisconnectAsync()` 收敛为**同一条释放路径**，且不再用 `S7Client.Connected` 当守卫——
+    它是底层 Socket 的快照，半死连接上返回 `false`，恰好会把最该关的连接留下来。
+    报告方式仍按既有约定：`DisconnectAsync` 失败抛出，`Dispose` 只记日志。
+  - 连接/断开不再用 `Thread` 把同步调用伪装成异步；读/写本就是"调用方提供缓冲区"的同步实现，限制条件不变。
+
+StdUnit.Tags.OpcUaClient / ModbusTcp: **断开失败不再被静默，释放路径收敛**
+  - `OpcUaClientTagChannel`：`Dispose()` 与 `DisconnectAsync()` 共用同一段会话释放收尾（`ReleaseSession`）；会话在关闭后**必须** `Dispose`——
+    `Close` / `CloseAsync` 只负责"关闭会话"，不释放订阅与传输句柄，此前反复启停会攒下没人认领的对象。
+    已断开的会话不再重复 `Close`（OPC UA 栈会因此抛错），但仍然 `Dispose`。
+  - `ModbusTcpChannel`：`Dispose()` 与 `DisconnectAsync()` 收敛到唯一一条关闭路径（`TryCloseConnection`），
+    并且不再用 `TcpClient.Connected` 当守卫——它只是上次 I/O 的快照，半死连接上返回 `false`，
+    恰好会把最该关的 socket 留下来。`DisconnectAsync` 也不再 `new Thread` 把同步 `Close` 伪装成异步。
+  - `DefaultTagGrpRunnerDisconnectStrategy`：已完成的断开任务补一次 `await`，故障才能冒到 `DisconnectAllAsync` 的
+    `catch`（此前故障 `Task` 无人观察，那条 `catch` 永远不会触发，断开失败完全不可见）。
+  - `ITagChannel` 把报告方式写进公开契约：`DisconnectAsync` 失败以异常 / 故障 `Task` 报告，`Dispose` 只记日志不外抛。
+
+StdUnit.Tags: **运行器判脏改用扁平索引，干净轮次不再空写**
+  - `TagGrpRunner` 在每次（重）启动时把入口子树中的 `ITag` / `ITagCbnt` 收集成扁平数组，每轮判脏
+    由"递归遍历 + `TagUnion` 分发"改为两次数组扫描；并在逻辑处理后判一次，**干净时整趟跳过 `WriteAsync`**
+    （它原本对干净节点也是空操作）。10k 点位：判脏 52 µs → 26 µs，另省掉约 81 µs/轮的空写遍历。
+  - 索引的正确性依据是 `ITagGrp.IsDirty()` 与 `WriteAsync` 的一致性契约：**`IsDirty()` 为 false 时写不得有任何动作；
+    只要存在待写节点（`ITag` / `ITagCbnt` 自身的 `IsDirty`）就必须为 true**。这**不是**"父脏必有脏子"——
+    `ITagCbnt.IsDirty` 可以独立为 true（整块缓存重写），索引收录的正是 Tag 与组合本身，因此不会漏。
+
+StdUnit.Tags.ModbusTcp: **修复每轮存活探测的 15.9 ms 开销**
+  - `ModbusTcpChannel.Connected` 原先用 `Socket.Poll(1000, SelectRead)` 判断链路是否还活着。
+    Windows 的计时器粒度约 15.6 ms，空闲连接上这一步实测 **15.9 ms/次**；而 `TagGrpRunner`
+    **每轮、每个通道**都会调一次 `EnsureConnectedAsync`，于是扫描周期被凭空拖长（100 ms 周期下约 16% 开销，
+    多通道叠加更明显）。
+  - 改为 `Poll(0)`：判定逻辑完全不变（`Poll(SelectRead) && Available == 0` 即判定为断），
+    但不再阻塞；实测单次 **15.9 ms → 2.3 µs**。
+
+StdUnit.Tags.Core: **`access` 的继承修正为逐级冒泡**
+  - 此前只有组（`ITagGrp`）沿父链递归；`ITag` 与 `ITagCbnt` 只查"直接父级自己配了没"，于是
+    `TagGrp(access="RO") → TagCbnt(未配)` 下的测点会被判成 `RW`——同样的意图直接挂在组下却是 `RO`。
+    2.0 统一为：自身 → 父级 Cbnt → 各级 Grp → 默认 `RW`。
+  - **行为变更**：把 `access` 写在祖先上的配置现在会真正生效。原先被误判成 `RW` 的点会变成
+    `RO` / `WO` / `R1W` —— 典型影响是"只读点不再被自动轮询写入"、"`R1W` 点不再每轮重复读"。
+  - **访问模式是配置期属性**：加载完成后修改 `TagDescriptor.AccessMode`（或重新赋值 `access`）
+    不会生效，需要重新加载项目。原文没有明说，但这是既有实现的实际行为；现在把它写成显式约束，
+    运行期因此可以安全缓存解析结果（每点位只解析一次）。
+
+StdUnit.Tags.Core: **`TagUnion` 的读写不再逐节点构造闭包**
+  - `TagUnionExtensions.ReadAsync` / `WriteAsync` 由 `Map(闭包, 闭包, 闭包)` 改为按节点类型 `switch`：
+    不再为每个节点构造委托与异步状态机，读同步完成的常见路径直接返回 `Task.CompletedTask`；
+    只有真正异步（设备 I/O）时才走"读后标记 `IsScanned`"的续体。
+  - 解析出的访问模式缓存在 `TagUnion` 上（它是配置期属性，见上一条），每个点位只解析一次。
+    公开行为不变，`R1W` / `WO` / `RO` 的跳过语义与使能门控照旧。
+
+StdUnit.Tags: **新增运行期指标（`System.Diagnostics.Metrics`）**
+  - Meter 名 `StdUnit.Tags`，四个指标：`stdunit.tags.turns`、`stdunit.tags.turn.duration`（单位 `s`）、
+    `stdunit.tags.failures`、`stdunit.tags.reconnects`；维度只有 `entry`（入口定位路径）。
+    指标名 / 单位 / tag 键属于对外契约，只增不改；无监听者时零分配，也没有开关。
+  - 新增**公开静态类 `TagsMetricContract`**：上述契约（名称 / 单位 / tag 键）以常量形式集中暴露
+    （`MeterName` / `Turns` / `TurnDurationUnit` / `EntryTag` …），订阅与建视图时不用抄字面量。
+  - **net472 因此多一个依赖** `System.Diagnostics.DiagnosticSource`（net8.0 由共享框架提供）；
+    `StdUnit.Tags.Core` 仍然零外部依赖。
+  - 新增公开扩展 `ITagGrpExtensions.GetLocationPath()`：返回 `TagGrp(a)/TagGrp(b)` 形式的定位路径。
+    它此前只是加载期错误消息的内部工具，现在错误消息与指标的 `entry` 维度共用这一种格式。
+
+## 2.0.0-beta8
 
 > 本批仍是 `2.0.0` 的预发布——`2.0.0` 正式版保持未发布。
 

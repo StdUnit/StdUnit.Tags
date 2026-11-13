@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -42,6 +43,23 @@ public class TagGrpRunnerTests
         }
     }
 
+    /// <summary>
+    /// 往 mock 入口挂一个子测点。<c>MockTagGrp.IsDirty()</c> 按 <see cref="ITagGrp"/> 的契约汇总子节点，
+    /// 所以"入口是否脏"必须通过子节点表达。
+    /// </summary>
+    private static FakedTag AddTag(MockTagGrp entry, bool dirty = false)
+    {
+        var tag = new FakedTag(
+            new TagDescriptor { TagName = $"t{entry.Children.Count}" },
+            new FakedChannel(new TagChannelDescriptor { Name = "ch" }),
+            entry)
+        {
+            IsDirty = dirty,
+        };
+        entry.Children.Add(tag.TagName(), new TagUnion.TagUnit(tag));
+        return tag;
+    }
+
     [Fact]
     public async Task StartAsync_NormalLoop_CallsReadWriteAndEvents()
     {
@@ -49,6 +67,7 @@ public class TagGrpRunnerTests
         var (runner, entry, _, _) = CreateRunner();
         entry.Descriptor!.ScanInterval = 20;
         entry.IsEnabled = true;
+        AddTag(entry, dirty: true);   // 有脏数据才会触发写
 
         using var cts = new CancellationTokenSource();
         var turnStartedCalled = false;
@@ -195,6 +214,8 @@ public class TagGrpRunnerTests
 
         using var cts = new CancellationTokenSource();
         var processOrder = new List<string>();
+        // 先干净，逻辑处理时才变脏——这样第一次写必然发生在 Read/Process 之后。
+        var tag = AddTag(entry);
 
         entry.OnRead = () => processOrder.Add("Read");
         entry.OnWrite = () => processOrder.Add("Write");
@@ -202,6 +223,7 @@ public class TagGrpRunnerTests
         runner.TurnProcess += (grp, ch, _) =>
         {
             processOrder.Add("Process");
+            tag.IsDirty = true;
             cts.Cancel();
             return Task.CompletedTask;
         };
@@ -225,7 +247,7 @@ public class TagGrpRunnerTests
         var (runner, entry, _, _) = CreateRunner();
         entry.Descriptor!.ScanInterval = 20;
         entry.IsEnabled = true;
-        entry.IsDirtyReturn = true;
+        AddTag(entry, dirty: true);
 
         using var cts = new CancellationTokenSource();
         var callOrder = new List<string>();
@@ -818,6 +840,56 @@ public class TagGrpRunnerTests
         Assert.Equal(1, enabled.WriteCount);
     }
 
+    /// <summary>
+    /// 运行器把每轮记进 Metrics：<c>stdunit.tags.turns</c> 至少有一条带该入口路径的测量。
+    /// 用 MeterListener 的完成信号而不是"等一会儿再断言"，避免机器忙时的随机红。
+    /// </summary>
+    [Fact]
+    public async Task StartAsync_RecordsTurnMetrics()
+    {
+        var (runner, entry, _, _) = CreateRunner();
+        entry.Descriptor!.Name = "metrics-" + Guid.NewGuid().ToString("N");
+        entry.Descriptor!.ScanInterval = 10;
+        entry.IsEnabled = true;
+        var expectedEntry = entry.GetLocationPath();
+
+        var turnRecorded = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == TagsMetricContract.MeterName)
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, value, tagList, state) =>
+        {
+            if (instrument.Name != "stdunit.tags.turns")
+            {
+                return;
+            }
+
+            foreach (var tag in tagList)
+            {
+                if (tag.Key == "entry" && Equals(tag.Value, expectedEntry))
+                {
+                    turnRecorded.TrySetResult(true);
+                    return;
+                }
+            }
+        });
+        listener.Start();
+
+        using var cts = new CancellationTokenSource();
+        var runTask = RunUntilCancelled(runner, entry, cts.Token);
+
+        var completed = await Task.WhenAny(turnRecorded.Task, Task.Delay(TimeSpan.FromSeconds(15)));
+        Assert.Same(turnRecorded.Task, completed);
+
+        cts.Cancel();
+        await runTask;
+    }
+
     #region Mocks
 
     /// <summary>
@@ -909,7 +981,6 @@ public class TagGrpRunnerTests
         /// 如果不为 null，则 ReadAsync 会抛出此异常。
         /// </summary>
         public Exception? ReadAsyncThrows { get; set; }
-        public bool IsDirtyReturn { get; set; }
         public Action? OnRead { get; set; }
         public Action? OnWrite { get; set; }
 
@@ -931,7 +1002,19 @@ public class TagGrpRunnerTests
             return Task.CompletedTask;
         }
 
-        public bool IsDirty() => IsDirtyReturn;
+        /// <summary>按契约实现：等价于"子树中任一 Tag/Cbnt 已脏"，组自身不持有脏标记。</summary>
+        public bool IsDirty()
+        {
+            foreach (var child in this.Children.Values)
+            {
+                if (child.IsDirty())
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     private class MockProject : ITagsProject

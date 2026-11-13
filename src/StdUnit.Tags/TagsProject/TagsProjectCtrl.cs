@@ -24,22 +24,23 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
     }
 
     /// <inheritdoc/>
-    public ITagsProject? Project => this._project;
+    public ITagsProject? Project => this.Read().Project;
 
     /// <inheritdoc/>
-    public TagsProjectState State => (TagsProjectState)Volatile.Read(ref this._state);
+    public TagsProjectState State => this.Read().State;
 
     /// <inheritdoc/>
-    public long RunId => Volatile.Read(ref this._runId);
+    public long RunId => this.Read().RunId;
 
     /// <inheritdoc/>
     public bool TryGetRunning(out ITagsProject project, out long runId)
     {
-        // 单次 volatile 读：Project 与 RunId 来自同一个不可变快照，绝不会拼出"旧项目 + 新 RunId"。
-        if (this._running is { } snapshot)
+        // 一次读快照：状态、项目、运行号必然来自同一次运行。
+        var current = this.Read();
+        if (current.State == TagsProjectState.Running && current.Project is { } running)
         {
-            project = snapshot.Project;
-            runId = snapshot.RunId;
+            project = running;
+            runId = current.RunId;
             return true;
         }
 
@@ -48,71 +49,107 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
         return false;
     }
 
-    /// <summary>
-    /// "正在运行的项目 + 它的运行标识"的不可变快照。只在 <see cref="TagsProjectState.Running"/> 期间非 null，
-    /// 用于让 <see cref="TryGetRunning"/> 能用<b>一次</b>读取取到配对的一对值。
-    /// </summary>
-    private sealed class RunSnapshot
+    #region 状态快照
+    // 控制器的<b>全部</b>可变状态集中在一个不可变快照里，只有这一个字段。
+    // 任何迁移 = 构造一个新快照 + CAS 替换，因此：
+    //   * 读者一次读取就拿到"状态 + 项目 + 运行标识 + 运行手柄"的一致组合，不会撕裂；
+    //   * "只做一次"的副作用（派发事件、断开通道）靠 CAS 认领，只有一个赢家；
+    //   * 不再需要 volatile 关键字，也不再需要单独的"门"字段（Handles 非 null 即表示有运行在飞）。
+
+    /// <summary>一次运行的两个手柄：取消源 + "轮询已退出"信号。</summary>
+    private sealed class RunHandle
     {
-        internal RunSnapshot(ITagsProject project, long runId)
+        internal RunHandle(CancellationTokenSource cts, TaskCompletionSource<bool> exitSource)
         {
-            this.Project = project;
-            this.RunId = runId;
+            this.Cts = cts;
+            this.ExitSource = exitSource;
         }
 
-        internal ITagsProject Project { get; }
+        internal CancellationTokenSource Cts { get; }
 
-        internal long RunId { get; }
+        /// <summary>轮询循环已退出的信号：由 <see cref="StartPollAsync"/> 的 finally 置位。</summary>
+        internal TaskCompletionSource<bool> ExitSource { get; }
     }
 
-    private volatile RunSnapshot? _running;
+    /// <summary>
+    /// 控制器状态的一次快照（不可变）。所有字段一起发布、一起替换。
+    /// </summary>
+    private sealed record Snapshot
+    {
+        /// <summary>当前状态。</summary>
+        internal TagsProjectState State { get; init; } = TagsProjectState.Stopped;
 
-    private volatile ITagsProject? _project;
+        /// <summary>当前（或最近一次）运行的标识；每次启动递增。</summary>
+        internal long RunId { get; init; }
+
+        /// <summary>当前项目：<see cref="TagsProjectState.Starting"/> / <see cref="TagsProjectState.Running"/> 期间非 null。</summary>
+        internal ITagsProject? Project { get; init; }
+
+        /// <summary>当前运行的手柄；<b>非 null 即表示"有运行在飞"</b>，也就是旧实现里的那道门。</summary>
+        internal RunHandle? Handles { get; init; }
+
+        /// <summary>导致本次运行结束的异常；正常停机为 null。</summary>
+        internal Exception? Failure { get; init; }
+
+        /// <summary>本次运行是否已对外派发过"已启动"。</summary>
+        internal bool StartedRaised { get; init; }
+
+        /// <summary>本次运行是否已派发过"已停止"。</summary>
+        internal bool StoppedRaised { get; init; }
+
+        /// <summary>本次运行的通道是否已断开。</summary>
+        internal bool ChannelsDisconnected { get; init; }
+
+        /// <summary>收尾是否已由 <see cref="StopAsync"/> 接管（<see cref="StartPollAsync"/> 的 finally 据此跳过重复收尾）。</summary>
+        internal bool StopOwnsCleanup { get; init; }
+    }
+
+    private Snapshot _snapshot = new();
+
+    private Snapshot Read() => Volatile.Read(ref this._snapshot);
 
     /// <summary>
-    /// <see cref="TagsProjectState"/> 的底层存储（用 <see cref="Volatile"/> 读写，保证 <see cref="State"/> 可跨线程查询）。
+    /// 读取当前状态 curr，计算 mutate(curr) 得到新的状态 next，然后以CAS的手法更新快照。<br/>
+    /// <br/>
+    /// 函数 <paramref name="mutate"/> 返回 <c>null</c> 表示"条件不成立、什么也不做"； 返回非<c>null</c>表述需要把它的结果 CAS 进去。<br/>
+    /// 如果 CAS 失败，就基于最新快照重试。<br/>
+    /// <br/>
+    /// <b>约定</b>：<paramref name="mutate"/> 必须是<b>纯函数</b>(只看快照、不产生副作用)，
+    /// 因为它可能被反复重试。
     /// </summary>
-    private int _state = (int)TagsProjectState.Stopped;
+    private bool TryUpdate(Func<Snapshot, Snapshot?> mutate)
+    {
+        while (true)
+        {
+            var current = this.Read();
+            var next = mutate(current);
+            if (next is null)
+            {
+                return false;
+            }
 
-    CancellationTokenSource? _cts;
+            if (this.TryOptimSwap(current, next))
+            {
+                return true;
+            }
 
-    private int _lock = 0;
+            // 运行至此，说明有人抢先改了快照，重试
+        }
+    }
 
-    #region 单次运行的会话状态
-    // 下面这些字段都由 _lock 串行化：同一时刻最多只有一次运行，所以进入 StartPollAsync 后重置即可。
-    // 但清理路径可能由 StartPollAsync 的 finally 或 StopAsync 之一执行，故用 Interlocked 保证"只做一次"。
-
-    /// <summary>运行标识，每次启动递增；"已启动"/"已停止"携带同一个值，便于配对。</summary>
-    private long _runId;
-
-    /// <summary>本次运行是否已对外派发过"已启动"（只有派发过才需要补"已停止"）。</summary>
-    private int _startedNotified;
-
-    /// <summary>本次运行是否已派发过"已停止"（保证最多一次）。</summary>
-    private int _stopNotified;
-
-    /// <summary>通道是否已断开（保证最多一次）。</summary>
-    private int _channelsDisconnected;
-
-    /// <summary>是否已由 <see cref="StopAsync"/> 接管收尾（此时 <see cref="StartPollAsync"/> 的 finally 不再重复断开通道/派发事件）。</summary>
-    private int _stopping;
-
-    /// <summary>导致本次运行结束的异常；正常停机为 null。会随"已停止"事件一起派发。</summary>
-    private volatile Exception? _failure;
+    /// <summary>
+    /// 乐观锁实现：仅当快照仍是 <paramref name="expected"/> 时，才替换为 <paramref name="next"/>。
+    /// </summary>
+    /// <param name="expected">期望当前版本</param>
+    /// <param name="next">要替换的新快照</param>
+    /// <returns>如果替换成功返回 true，否则返回 false</returns>
+    private bool TryOptimSwap(Snapshot expected, Snapshot next)
+    {
+        var original = Interlocked.CompareExchange(ref this._snapshot, next, expected);
+        // 对于record，必须用 object.ReferenceEquals(a, b)，不能用 ==
+        return ReferenceEquals(original, expected);
+    }
     #endregion
-
-    /// <summary>
-    /// 离开 <see cref="TagsProjectState.Running"/> 时清空快照：此后 <see cref="TryGetRunning"/> 立刻返回 false，
-    /// 不会在停机过程中继续交出项目。
-    /// </summary>
-    private void ClearRunning() => this._running = null;
-
-    private void SetState(TagsProjectState state) => Volatile.Write(ref this._state, (int)state);
-
-    /// <summary>
-    /// "轮询循环已退出"的信号：由 <see cref="StartPollAsync"/> 的 finally 置位，<see cref="StopAsync"/> 等它。
-    /// </summary>
-    private TaskCompletionSource<bool>? _pollExitSource;
 
     /// <summary>
     /// <see cref="StopAsync"/> 等待轮询循环退出的上限。<br/>
@@ -125,9 +162,26 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
     /// <inheritdoc/>
     public async Task StartPollAsync(string? dir, XElement? root, Func<ITagsProject, IServiceProvider, CancellationToken, Task> hook)
     {
-        // 防止重复启动
-        if (Interlocked.CompareExchange(ref _lock, 1, 0) != 0)
+        // 抢门
+        var cts = new CancellationTokenSource();
+        var exitSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!this.TryUpdate(current => current.Handles is null ? 
+            current with {
+                    State = TagsProjectState.Starting,
+                    RunId = current.RunId + 1,
+                    Handles = new RunHandle(cts, exitSource),
+                    Project = null,
+                    Failure = null,
+                    StartedRaised = false,
+                    StoppedRaised = false,
+                    ChannelsDisconnected = false,
+                    StopOwnsCleanup = false,
+                }
+            : null)
+        )
         {
+            // 失败
+            cts.Dispose();
             // 取一次快照再用：属性可能在启动过程中被替换
             var onStartingException = this.OnStartingException;
             if (onStartingException != null)
@@ -142,41 +196,25 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
             throw new InvalidOperationException("当前测点项目已经启动！");
         }
 
-        var runId = Interlocked.Increment(ref this._runId);
-        this._startedNotified = 0;
-        this._stopNotified = 0;
-        this._channelsDisconnected = 0;
-        this._stopping = 0;
-        this._failure = null;
-        this._running = null;
-        this.SetState(TagsProjectState.Starting);
+        // 运行至此，说明抢门成功，之后的整组值都从这里读，保证是"本次运行"的。
+        var run = this.Read();
+        var runId = run.RunId;
+        var handles = run.Handles!;
+        var ct = handles.Cts.Token;
 
-        // 先登记"轮询已退出"信号：StopAsync 靠它把"已停止"变成确定性信号（见 StopAsync 的注释）
-        var exitSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        this._pollExitSource = exitSource;
-
-        // 这两个声明在 try 之外：
-        // - ct 供 catch 的 when 过滤条件使用（try 块内声明的局部变量在 catch 里不在作用域内）；
-        // - scope 交给 finally 释放（项目里的对象可能引用作用域内的服务，所以必须先放项目、再放作用域）。
-        CancellationToken ct = default;
         IServiceScope? scope = null;
-
         try
         {
             scope = this._ssf.CreateScope();
             var sp = scope.ServiceProvider;
 
-            var cts = new CancellationTokenSource();
-            this._cts = cts;
-            ct = cts.Token;
             var project = sp.MakeProject(dir, root);
-            this._project = project;
+            this.TryUpdate(current => current with { Project = project });
             await hook(project, sp, ct);
 
-            // hook 已执行完、轮询即将开始：这是唯一的"已就绪"时刻
-            this.SetState(TagsProjectState.Running);
-            this._running = new RunSnapshot(project, runId);
-            Volatile.Write(ref this._startedNotified, 1);
+            // hook 已执行完、轮询即将开始：这是唯一的"已就绪"时刻。
+            // 一次迁移同时完成"进入 Running"与"已宣告启动"标记——只有本次运行的所有者会执行到这里，且只执行一次。
+            this.TryUpdate(current => current with { State = TagsProjectState.Running, StartedRaised = true });
             this.RaiseStartedOrStopped(new TagsProjectEventArgs(TagsProjectState.Running, project, runId, null));
 
             await project.RunAsync(ct);
@@ -188,7 +226,7 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
         }
         catch (Exception ex)
         {
-            this._failure = ex;
+            this.TryUpdate(current => current with { Failure = ex });
             this._logger.LogError(ex, "TagsProjectCtrl.StartPollAsync error");
 
             // 取一次快照再用：属性可能在启动过程中被替换
@@ -210,7 +248,9 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
         }
         finally
         {
-            var project = this._project;
+            var current = this.Read();
+            var project = current.Project;
+
             if (project is not null)
             {
                 try
@@ -224,32 +264,30 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
                 }
                 finally
                 {
-                    this._project = null;
+                    this.TryUpdate(s => s with { Project = null });
                 }
             }
-
-            this._cts = null;
 
             // 正常停机由 StopAsync 接管收尾（它要在断开通道之后才派发"已停止"）。
             // 其余路径（启动失败、RunAsync 自行结束）没有 StopAsync，必须由这里补上收尾——
             // 否则"已启动"永远等不到"已停止"，观察者的状态会永远停在 Running，通道也不会断开。
-            if (Volatile.Read(ref this._stopping) == 0)
+            if (!current.StopOwnsCleanup)
             {
-                this.SetState(TagsProjectState.Stopping);
-                this.ClearRunning();
+                this.TryUpdate(s => s with { State = TagsProjectState.Stopping });
                 await this.DisconnectChannelsAsync(project);
                 this.RaiseStoppedOnce();
-                this.SetState(TagsProjectState.Stopped);
             }
 
-            Interlocked.Exchange(ref this._lock, 0);
-
-            // 最后才置位：保证等到它的 StopAsync 看到的是"项目已释放、锁已释放"的完整状态
-            exitSource.TrySetResult(true);
-            if (ReferenceEquals(this._pollExitSource, exitSource))
+            // 结束这次运行：清手柄（= 释放门）、状态归位。门只在这里释放，StopAsync 绝不碰。
+            this.TryUpdate(s => s with
             {
-                this._pollExitSource = null;
-            }
+                State = TagsProjectState.Stopped,
+                Handles = null,
+                Project = null,
+            });
+
+            // 最后才置位：保证等到它的 StopAsync 看到的是"项目已释放、门已释放"的完整状态
+            handles.ExitSource.TrySetResult(true);
 
             // DI 作用域放在最后释放：通道实例可能来自作用域内的服务，必须先让它们断开（上面那步）、
             // 再放作用域。这也保持了原来 `using var scope` 的"方法结束才释放"的时序。
@@ -272,26 +310,24 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
     /// <inheritdoc/>
     public async Task StopAsync()
     {
-        // 如果测点项目尚未运行，直接返回：重复调用也不应该重复派发"已停止"事件——观察者不该看到一次没人宣布过的停止。
-        if (Volatile.Read(ref this._lock) == 0)
+        // 一次读快照就拿到"有没有运行 + 手柄 + 项目"，不会读到半成品。
+        var current = this.Read();
+        var handles = current.Handles;
+        if (handles is null)
         {
+            // 未运行（或刚结束）：空操作，不派生"已停止"——观察者不该看到一次没人宣布过的停止。
             return;
         }
 
         // 声明"收尾由我负责"：StartPollAsync 的 finally 会据此跳过断开通道/派发事件，
         // 保证"已停止"发生在通道断开之后（调用方拿它当"可以复用通道/目录"的信号）。
-        Interlocked.Exchange(ref this._stopping, 1);
-        this.SetState(TagsProjectState.Stopping);
-        this.ClearRunning();
+        // 同时进入 Stopping：TryGetRunning 立刻返回 false，不再交出正在拆的项目。
+        this.TryUpdate(s => s with { State = TagsProjectState.Stopping, StopOwnsCleanup = true });
 
-        var project = this._project;
-        var exitSource = this._pollExitSource;
+        var project = current.Project;
         try
         {
-            if (this._cts != null)
-            {
-                this._cts.Cancel();
-            }
+            handles.Cts.Cancel();
         }
         catch (Exception ex)
         {
@@ -303,14 +339,14 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
 
         // 取消是协作式的：先等轮询循环真正退出。不等它就直接释放/断开，会与循环里的读/写/重连并发——
         // "已停止"之后仍有通道活动，而调用方往往正是拿这个事件当"可以复用通道/目录/换配置"的信号。
-        if (exitSource is not null && !await this.WaitPollExitAsync(exitSource))
+        if (!await this.WaitPollExitAsync(handles.ExitSource))
         {
             // 超时兜底：循环没能退出 ⇒ StartPollAsync 的 finally 还没机会释放项目，这里代为释放。
             // 正常路径下项目已由 StartPollAsync 的 finally 释放并清空，不需要（也不能）重复释放。
-            var timedOutProject = this._project;
+            var timedOutProject = this.Read().Project;
             if (timedOutProject is not null)
             {
-                this._project = null;
+                this.TryUpdate(s => s with { Project = null });
                 try
                 {
                     timedOutProject.Dispose();
@@ -325,9 +361,12 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
 
         await this.DisconnectChannelsAsync(project);
         this.RaiseStoppedOnce();
-        this.SetState(TagsProjectState.Stopped);
+        this.TryUpdate(s => s with { State = TagsProjectState.Stopped });
 
-        Interlocked.Exchange(ref _lock, 0);
+        // 有意不碰 Handles：那是 StartPollAsync 的独占门，只有它的 finally 能释放。
+        // 这里若顺手清掉，会开出两个真实的洞：
+        //   ① 启动窗口里进来时（手柄刚发布、hook 还没跑）→ 替一次"还没开始"的运行开了门，新的启动就能挤进来并发跑；
+        //   ② 正常停机时这里若在 StartPollAsync 之后才执行 → 把"刚启动的另一次运行"的门关回去。
     }
 
     /// <summary>
@@ -364,21 +403,17 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
     /// </summary>
     private void RaiseStoppedOnce()
     {
-        if (Interlocked.Exchange(ref this._stopNotified, 1) != 0)
+        if (!this.TryUpdate(s => s.StoppedRaised || !s.StartedRaised ? null : s with { StoppedRaised = true }))
         {
             return;
         }
 
-        if (Volatile.Read(ref this._startedNotified) == 0)
-        {
-            return;
-        }
-
+        var current = this.Read();
         var args = new TagsProjectEventArgs(
             TagsProjectState.Stopped,
             project: null,
-            Volatile.Read(ref this._runId),
-            this._failure);
+            current.RunId,
+            current.Failure);
 
         this.RaiseStartedOrStopped(args);
     }
@@ -394,12 +429,8 @@ internal class TagsProjectCtrl : ITagsProjectCtrl
             return;
         }
 
-        if (Interlocked.Exchange(ref this._channelsDisconnected, 1) != 0)
-        {
-            return;
-        }
-
-        if (Volatile.Read(ref this._startedNotified) == 0)
+        // 认领"由我来断"：CAS 失败说明已经断过（或本次从未宣告过启动，通道根本没连过）。
+        if (!this.TryUpdate(s => s.ChannelsDisconnected || !s.StartedRaised ? null : s with { ChannelsDisconnected = true }))
         {
             return;
         }

@@ -68,7 +68,11 @@ internal abstract class TagCbnt<T> : ITagCbnt where T : unmanaged
 
     #region 子节点
     /// <inheritdoc/>
-    public IDictionary<string, ITagCbntor> Children { get; } = new Dictionary<string, ITagCbntor>();
+    public IDictionary<string, ITagCbntor> Children => _children;
+
+    // 同 TagGrp：公开属性保持 IDictionary（API 不变），但遍历走具体类型的结构体枚举器，
+    // 避免每次 NotifyChildrenRead/Write 都装箱一个 Dictionary.Enumerator。
+    private readonly Dictionary<string, ITagCbntor> _children = new();
 
     /// <inheritdoc/>
     public ITagCbntor this[string tagName] => this.Children.TryGetValue(tagName, out var tag) ?
@@ -93,7 +97,7 @@ internal abstract class TagCbnt<T> : ITagCbnt where T : unmanaged
     /// </summary>
     protected void NotifyChildrenRead()
     {
-        foreach (var kv in this.Children)
+        foreach (var kv in _children)
         {
             kv.Value.NotifyTagRead();
         }
@@ -104,7 +108,7 @@ internal abstract class TagCbnt<T> : ITagCbnt where T : unmanaged
     /// </summary>
     protected void NotifyChildrenWritten()
     {
-        foreach (var kv in this.Children)
+        foreach (var kv in _children)
         {
             kv.Value.NotifyTagWritten();
             kv.Value.IsDirty = false;
