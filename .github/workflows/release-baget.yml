@@ -11,9 +11,10 @@ on:
         description: '发布类型：release=常规版（取 next-release-version.txt）；dev=开发版（<该文件>-dev.<UTC 构建号>）'
         type: choice
         options:
-          - release
           - dev
-        default: release
+          - release
+        # 默认 dev：误触发时最多多出一个预发布包，不会误发正式版
+        default: dev
 jobs:
   build:
 
