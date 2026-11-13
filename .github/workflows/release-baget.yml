@@ -6,18 +6,14 @@ name: Release (baget.stdunit.com)
 on:
   workflow_dispatch:
     inputs:
-      # 界面上只选"发哪种版本"，版本串由 Resolve version / publish-packages.ps1 组出来：
-      # 基线永远读仓库根的 next-release-version.txt，构建号自动取 UTC 时间戳——两边都不要人填。
+      # 与 release-nuget.yml 同一个形状：只选发布类型，版本号由工作流从文件算出，不手填。
       versionKind:
-        description: '发布类型：release=常规版（语义化版本）；dev=开发版（<next-release-version.txt>-dev.<构建号>，构建号自动取 UTC 时间戳）'
+        description: '发布类型：release=常规版（取 next-release-version.txt）；dev=开发版（<该文件>-dev.<UTC 构建号>）'
         type: choice
         options:
           - release
           - dev
         default: release
-      releaseVersion:
-        description: '常规版版本号（versionKind=release 时填）：如 2.0.0'
-        required: false
 jobs:
   build:
 
@@ -27,38 +23,33 @@ jobs:
     - uses: actions/checkout@v3
 
     # 版本号解析 + 校验：放在最前面，坏输入几秒内就失败，不用等整解构建与测试跑完。
-    # 输入是外部可控文本，所以走 env 传进脚本，不直接内插到 PowerShell 源码里（内插即注入面）。
     - name: Resolve version
       shell: pwsh
       env:
         VERSION_KIND: ${{ inputs.versionKind }}
-        RELEASE_VERSION: ${{ inputs.releaseVersion }}
       run: |
         $kind = "$($env:VERSION_KIND)".Trim()
-        if ($kind -eq 'dev') {
+
+        # 基线只有一个来源：仓库根的 next-release-version.txt
+        $base = (Get-Content -LiteralPath 'next-release-version.txt' -Raw).Trim()
+        if ($base -notmatch '^\d+\.\d+\.\d+$') {
+          throw "next-release-version.txt 必须是正式号 X.Y.Z（不带预发布后缀）：$base"
+        }
+
+        if ($kind -eq 'release') {
+          $version = $base
+        }
+        elseif ($kind -eq 'dev') {
           # 构建号由机器生成：UTC 的 yyMMdd.HHmm（如 261113.0930）——单调、唯一、零输入。
           # CI 的迭代产物用同一条规则（dotnet.yml 里的 `date -u +%y%m%d.%H%M`），两边格式一致；
           # 不要改成"人来数本月第几版"：那会变成 CI 与手工各维护一套编号，混进同一个源后互相压过。
           $stamp = (Get-Date).ToUniversalTime().ToString('yyMMdd.HHmm')
-          # 基线只有一个来源：仓库根的 next-release-version.txt
-          $base = (Get-Content -LiteralPath 'next-release-version.txt' -Raw).Trim()
-          if ($base -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') { throw "next-release-version.txt 内容不合法：$base" }
           $version = "$base-dev.$stamp"
-          "DEV_BUILD_NUMBER=$stamp" >> $env:GITHUB_ENV
-        }
-        elseif ($kind -eq 'release') {
-          $version = "$($env:RELEASE_VERSION)".Trim()
-          if (-not $version) { throw 'versionKind=release 时必须填 releaseVersion' }
-          if ($version -match '-dev') { throw "常规版不能用 -dev 号；开发版请把 versionKind 选成 dev：$version" }
-          if ($version -match '-(alpha|beta|rc)') { throw "预发布只允许 -dev.<构建号>（alpha/beta/rc 已停用）：$version" }
         }
         else { throw "未知的 versionKind：$kind" }
 
-        # 与 publish-packages.ps1 的口径保持一致：坏号在推送前就失败（两个包源上的版本都不可撤销）
-        if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') { throw "版本号不合法：$version" }
-
         "EFFECTIVE_VERSION=$version" >> $env:GITHUB_ENV
-        "### 本次发布：``$version``（$kind）" >> $env:GITHUB_STEP_SUMMARY
+        "### 本次发布：``$version``（baget, $kind）" >> $env:GITHUB_STEP_SUMMARY
         Write-Host "effective version = $version ($kind)"
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
@@ -102,22 +93,7 @@ jobs:
 
     - name: push
       working-directory: ./src
-      shell: pwsh
       env:
-        VERSION_KIND: ${{ inputs.versionKind }}
-        RELEASE_VERSION: ${{ inputs.releaseVersion }}
         NugetSource: ${{ secrets.NUGET_SOURCE }}
         NugetApiKey: ${{ secrets.NUGET_KEY }}
-      run: |
-        # 开发版交给脚本的 -DevBuildNumber（它自己读 next-release-version.txt 拼号），常规版直接给整串：
-        # 两条路都只保留"一处版本真相"。DEV_BUILD_NUMBER 由 Resolve version 注入（UTC 时间戳）。
-        if ($env:VERSION_KIND -eq 'dev' -and -not $env:DEV_BUILD_NUMBER) {
-          throw 'DEV_BUILD_NUMBER 未注入（应由 Resolve version 步写进 GITHUB_ENV）'
-        }
-        $packArgs = if ($env:VERSION_KIND -eq 'dev') {
-          @('-DevBuildNumber', $env:DEV_BUILD_NUMBER)
-        } else {
-          @('-packageVersion', $env:RELEASE_VERSION)
-        }
-        & dotnet pwsh ./publish-packages.ps1 @packArgs
-        exit $LASTEXITCODE
+      run: dotnet pwsh ./publish-packages.ps1 -packageVersion ${{ env.EFFECTIVE_VERSION }}

@@ -6,9 +6,14 @@ name: Release (nuget.org)
 on:
   workflow_dispatch:
     inputs:
-      releaseVersion:
-        description: '常规版版本号：如 2.0.0（nuget.org 只收正式版；任何预发布 —— 含 -dev.<构建号> —— 一律走 baget）'
-        required: true
+      # 版本号不手填：正式版取仓库根的 next-release-version.txt，dev 版在本步自动拼上构建号。
+      versionKind:
+        description: '发布类型：release=正式版（取 next-release-version.txt）；dev=公测预发布（<该文件>-dev.<UTC 构建号>）'
+        type: choice
+        options:
+          - release
+          - dev
+        default: release
 jobs:
   build:
     permissions:
@@ -20,23 +25,42 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # nuget.org 上的版本不可撤销，而预发布已经由 release-baget.yml 推到私有源：
-    # 这里把**任何**预发布号（含 -dev.<构建号>，以及已停用的 alpha/beta/rc）直接挡掉。放在最前面，几秒内失败。
-    - name: Reject prerelease versions
+    # 版本号解析 + 校验放在最前面，坏输入几秒内失败，不用等整解构建与测试跑完。
+    # 预发布（-dev.*）是唯一的公测途径（alpha/beta/rc 已停用）；nuget.org 上的版本不可撤销，
+    # 所以 dev 只在你明确选它时才发，日常 dev 仍建议只推私有源。
+    - name: Resolve version
       shell: pwsh
       env:
-        RELEASE_VERSION: ${{ inputs.releaseVersion }}
+        VERSION_KIND: ${{ inputs.versionKind }}
       run: |
-        $version = "$($env:RELEASE_VERSION)".Trim()
-        if (-not $version) { throw 'releaseVersion 不能为空' }
-        if ($version.Contains('-')) {
-          throw "nuget.org 只收正式版（如 2.0.0）；预发布一律进私有源（Release (baget.stdunit.com) 的 versionKind=dev）：$version"
+        $kind = "$($env:VERSION_KIND)".Trim()
+
+        # 基线只有一个来源：仓库根的 next-release-version.txt
+        $base = (Get-Content -LiteralPath 'next-release-version.txt' -Raw).Trim()
+        if ($base -notmatch '^\d+\.\d+\.\d+$') {
+          throw "next-release-version.txt 必须是正式号 X.Y.Z（不带预发布后缀）：$base"
         }
-        if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "版本号不合法：$version（正式版形如 2.0.0，不要带预发布后缀）" }
+
+        if ($kind -eq 'release') {
+          $version = $base
+        }
+        elseif ($kind -eq 'dev') {
+          # 与 CI / baget 同一条规则：UTC 的 yyMMdd.HHmm
+          $stamp = (Get-Date).ToUniversalTime().ToString('yyMMdd.HHmm')
+          $version = "$base-dev.$stamp"
+        }
+        else { throw "未知的 versionKind：$kind" }
 
         "EFFECTIVE_VERSION=$version" >> $env:GITHUB_ENV
-        "### 本次发布：``$version``（nuget.org）" >> $env:GITHUB_STEP_SUMMARY
-        Write-Host "effective version = $version (nuget.org)"
+        if ($kind -eq 'dev') {
+          "### 本次发布：``$version``（nuget.org，**预发布 / 公测**）" >> $env:GITHUB_STEP_SUMMARY
+          "> nuget.org 上的版本不可撤销。若不想让它被 ``--prerelease`` 默认选中，发布后到 nuget.org 手动 **unlist**。" >> $env:GITHUB_STEP_SUMMARY
+        }
+        else {
+          "### 本次发布：``$version``（nuget.org）" >> $env:GITHUB_STEP_SUMMARY
+        }
+
+        Write-Host "effective version = $version ($kind)"
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
